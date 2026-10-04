@@ -60,7 +60,7 @@ container image), and Claude Code (`claude`) for the agents.
    ```
 3. **Genesis**: push the demo app (with its `canon.json`) as the first world:
    ```sh
-   export CANON_URL=https://canon-referee.<subdomain>.workers.dev
+   export CANON_URL=https://canon.rodeo   # or https://canon-referee.<subdomain>.workers.dev
    ./scripts/genesis.sh
    ```
    Open `$CANON_URL`. When the genesis preview satisfies every fact in its `canon.json`, it becomes canon.
@@ -83,7 +83,8 @@ write tokens for new forks.
 ## Where the code lives
 
 The main remote for this repo is a Cloudflare Artifacts repo, and the referee deploys from it with Workers Builds.
-GitHub hosts a mirror so anyone can browse it.
+Canon serves its own source from Artifacts at https://canon.rodeo (browse it, or `git clone https://canon.rodeo/canon.git`).
+GitHub hosts a mirror as the archive.
 
 ## License
 

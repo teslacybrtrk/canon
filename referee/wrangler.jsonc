@@ -6,6 +6,11 @@
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./public", "binding": "ASSETS" },
 
+  // The board, the API and (day 7) read-only Git clones live at https://canon.rodeo.
+  // workers_dev stays on as a fallback URL.
+  "routes": [{ "pattern": "canon.rodeo", "custom_domain": true }],
+  "workers_dev": true,
+
   // Every world is a repo in this namespace: "<project>-genesis", "<project>-<id>".
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "canon" }],
 
