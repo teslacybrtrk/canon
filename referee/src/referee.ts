@@ -258,6 +258,11 @@ export class Referee extends DurableObject<Env> {
     const claim = this.claim(claimId);
     if (!claim) throw new ProtocolError(404, "no such claim");
     if (claim.status !== "ready") throw new ProtocolError(409, `claim is ${claim.status}, not ready`);
+    if (this.fact(claim.factId)?.status !== "proposed") {
+      this.setClaimStatus(claim.id, "superseded");
+      this.broadcast();
+      throw new ProtocolError(409, `"${claim.factId}" is no longer proposed; another world already settled it`);
+    }
     const world = this.world(claim.worldId)!;
     const verdict = this.latestVerdict(world.id);
     const canon = this.currentCanon()!;
@@ -454,7 +459,10 @@ export class Referee extends DurableObject<Env> {
       judgedAt: now,
     };
     this.sql.exec(`INSERT OR REPLACE INTO verdicts (world_id, sha, json, at) VALUES (?, ?, ?, ?)`, world.id, sha, JSON.stringify(verdict), now);
-    if (claim && LIVE.includes(claim.status)) this.setClaimStatus(claim.id, verdict.outcome as ClaimStatus);
+    // Re-read the claim: the checks above awaited the network, and meanwhile another world may have been
+    // accepted (superseding this claim). Never resurrect a settled claim with a stale status.
+    const current = claim ? this.claim(claim.id) : null;
+    if (current && LIVE.includes(current.status)) this.setClaimStatus(current.id, verdict.outcome as ClaimStatus);
     return verdict;
   }
 
