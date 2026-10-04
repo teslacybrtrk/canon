@@ -80,6 +80,12 @@ node scripts/test-ledger.ts                         # canon.json tampering rules
 The referee has no login. Put it behind Cloudflare Access before sharing the URL, because `declare` hands out
 write tokens for new forks.
 
+## Notes for Cloudflare
+
+Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
+(for example, Previews that pin Durable Object code per commit, and Workers Builds for forks). They are in
+[docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+
 ## Where the code lives
 
 The main remote for this repo is a Cloudflare Artifacts repo, and the referee deploys from it with Workers Builds.
