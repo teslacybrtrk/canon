@@ -18,7 +18,7 @@ export type ClaimStatus =
   | "contradicts" // a canon fact broke on this world (rejected without reading the diff)
   | "unproven" //    canon held, but the claimed fact does not hold yet
   | "ready" //       canon held and the claimed fact holds; waiting on a human
-  | "behind" //      ready, but canon gained a fact after this world forked; declare a fresh world
+  | "behind" //      canon gained a fact after this world forked; `canon refresh` onto the current canon
   | "accepted" //    a human accepted the fact; this world is canon
   | "superseded"; // another world made the same fact true first
 
@@ -106,6 +106,7 @@ export interface CanonState {
 export type DeclareRequest = {
   agent: string;
   why: string;
+  replaces?: string; // an earlier claim on the same fact that this one supersedes (canon refresh)
 } & (
   | { fact: { id: string; sentence: string; check: Check } } // propose a new fact
   | { join: string } // race for a fact someone else already proposed
@@ -141,7 +142,8 @@ export interface Verdict {
   canonSeq: number; // the canon this verdict was judged against
   outcome: Outcome;
   kept: string[]; // canon facts that held
-  lost: Array<{ factId: string; detail: string }>; // canon facts that broke
+  lost: Array<{ factId: string; detail: string }>; // facts canon at the fork that broke: a contradiction
+  stale: Array<{ factId: string; detail: string }>; // facts accepted after the fork that fail: refresh needed
   claimed: { factId: string; held: boolean; detail: string };
   offers: string[]; // other proposed facts this world happens to make true
   ledger: Ledger; // the world's canon.json against canon

@@ -128,6 +128,8 @@ export class Referee extends DurableObject<Env> {
       claimId, req.agent, factId, req.why, worldId, now,
     );
     if (!("join" in req)) this.sql.exec(`UPDATE facts SET proposed_by = ? WHERE id = ?`, claimId, factId);
+    const replaced = req.replaces ? this.claim(req.replaces) : null;
+    if (replaced && replaced.factId === factId && LIVE.includes(replaced.status)) this.setClaimStatus(replaced.id, "superseded");
     this.broadcast();
     return { claim: this.claim(claimId)!, world: { id: worldId, remote, token, expiresAt, branch: "main" } };
   }
@@ -322,22 +324,23 @@ export class Referee extends DurableObject<Env> {
       );
     }
     const canonFacts = facts.filter((f) => f.status === "canon");
-    const lost = canonFacts.filter((f) => !results.get(f.id)!.held).map((f) => ({ factId: f.id, detail: results.get(f.id)!.detail }));
+    const failed = canonFacts.filter((f) => !results.get(f.id)!.held).map((f) => ({ fact: f, detail: results.get(f.id)!.detail }));
+    // Breaking a fact that was canon when this world forked is a contradiction. Failing a fact
+    // accepted after the fork only means the world is behind: it predates that code. Whether its
+    // own change truly conflicts shows once it is refreshed onto the current canon.
+    const lost = failed.filter((x) => (x.fact.acceptedAt ?? 0) <= world.createdAt).map((x) => ({ factId: x.fact.id, detail: x.detail }));
+    const stale = failed.filter((x) => (x.fact.acceptedAt ?? 0) > world.createdAt).map((x) => ({ factId: x.fact.id, detail: x.detail }));
     const ledger: Ledger = forced ? { status: "ok", detail: "not read: build failed" } : await this.checkLedger(world, sha, claim, canonFacts);
     if (ledger.status === "tampered") lost.push({ factId: "canon.json", detail: ledger.detail });
     const claimed = claim ? results.get(claim.factId) : undefined;
+    const behind = stale.length > 0 || ledger.status === "behind";
     const verdict: Verdict = {
       worldId: world.id,
       sha,
       previewUrl,
       canonSeq,
-      outcome: lost.length
-        ? "contradicts"
-        : claim && !claimed?.held
-          ? "unproven"
-          : ledger.status === "behind"
-            ? "behind"
-            : "ready",
+      outcome: lost.length ? "contradicts" : behind ? "behind" : claim && !claimed?.held ? "unproven" : "ready",
+      stale,
       kept: canonFacts.filter((f) => results.get(f.id)!.held).map((f) => f.id),
       lost,
       claimed: claim

@@ -87,6 +87,7 @@
       const v = c.verdict;
       const diff = v ? [
         ...v.lost.map((l) => `<span class="lost" title="${esc(l.detail)}">✗ ${esc(l.factId)}</span>`),
+        ...(v.stale ?? []).map((l) => `<span class="new" title="${esc(l.detail)}">↻ needs ${esc(l.factId)}</span>`),
         `<span class="${v.claimed.held ? "kept" : "new"}" title="${esc(v.claimed.detail)}">${v.claimed.held ? "+" : "?"} ${esc(v.claimed.factId)}</span>`,
         ...v.offers.map((id) => `<span class="new">+ ${esc(id)}</span>`),
         `<span class="kept">✓ ${v.kept.length} kept</span>`,

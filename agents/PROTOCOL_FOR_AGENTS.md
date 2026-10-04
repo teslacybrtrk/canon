@@ -18,7 +18,9 @@ Use the `canon` command for the protocol and plain `git` for code.
    - CONTRADICTS: you broke a canon fact. Read which one and why, and fix your world.
      Never weaken a canon fact. If your fact cannot coexist with it, stop and say so.
    - UNPROVEN: canon held but your fact does not. Fix and push again.
-   - BEHIND: another fact became canon after you forked. Stop and report it; a fresh world is needed.
+   - BEHIND: another fact became canon after you forked. Run `canon refresh` inside your world: it makes a
+     fresh world from the current canon with your changes re-applied. cd into it, resolve any conflict,
+     push, and read the verdict again.
    - READY: stop. A human decides whether your fact becomes canon.
 
 Rules: never push anywhere except your own world. Do not edit the fact's check to make it pass;

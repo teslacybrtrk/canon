@@ -6,6 +6,7 @@
 //   canon claim --join <fact-id>   --why "..."     ...or race for a fact someone already proposed
 //   git push                                    3. push the world (plain Git, from inside the world)
 //   canon verdict [--wait]                      4. which facts held, which broke, accepted or not
+//   canon refresh                               a BEHIND world: new world from current canon + your changes
 //   canon why <fact-id>                         the fact chain: who made it true, which worlds failed it
 //
 // Env: CANON_URL (referee origin), CANON_PROJECT (e.g. farmstand), CANON_AGENT (e.g. agent-3),
@@ -24,11 +25,12 @@ const [cmd, ...rest] = process.argv.slice(2);
 const args = parseArgs(rest);
 
 try {
-  if (!["read", "claim", "verdict", "why"].includes(cmd)) usage();
+  if (!["read", "claim", "verdict", "refresh", "why"].includes(cmd)) usage();
   if (!URL_BASE) fail("set CANON_URL to the referee origin");
   if (cmd === "read") await read();
   else if (cmd === "claim") await claim();
   else if (cmd === "verdict") await verdict();
+  else if (cmd === "refresh") await refresh();
   else if (cmd === "why") await why(args._[0]);
   else usage();
 } catch (err) {
@@ -57,6 +59,16 @@ async function claim() {
 
   const { claim, world } = await api("POST", "/claims", body);
   const dir = resolve(process.env.CANON_WORKDIR ?? "worlds", world.id);
+  await setupWorld(dir, claim, world, body.fact ?? (await api("GET", "/canon")).facts.find((f) => f.id === claim.factId));
+
+  console.log(`Claim ${claim.id}: ${AGENT} is trying to make "${claim.factId}" true.`);
+  console.log(`World ${world.id} cloned to ${dir} (your fact is already in its canon.json; do not edit that file).`);
+  console.log(`Work there, commit, then: git push origin main && canon verdict --wait`);
+}
+
+// Clone a new world, mark it as Canon's, and commit the claimed fact into its canon.json.
+// The fact travels with the code; the referee rejects a world whose canon.json changes anything else.
+async function setupWorld(dir, claim, world, fact) {
   const remote = new URL(world.remote);
   remote.username = "x";
   remote.password = world.token;
@@ -65,19 +77,44 @@ async function claim() {
   git(["-C", dir, "config", "user.email", `${AGENT}@canon.local`]);
   writeFileSync(join(dir, ".git", "canon.json"), JSON.stringify({ project: PROJECT, claimId: claim.id, worldId: world.id, factId: claim.factId, agent: AGENT }, null, 2));
   installTrailerHook(dir, claim);
-
-  // The claimed fact travels with the code: add it to the world's canon.json and commit.
-  // The referee rejects a world whose canon.json changes anything else.
-  const fact = body.fact ?? (await api("GET", "/canon")).facts.find((f) => f.id === claim.factId);
   const ledgerPath = join(dir, "canon.json");
   const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
   if (!ledger.facts.some((f) => f.id === fact.id)) ledger.facts.push({ id: fact.id, sentence: fact.sentence, check: fact.check });
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2) + "\n");
   git(["-C", dir, "commit", "--quiet", "-am", `canon: claim "${fact.sentence}"`]);
+}
 
-  console.log(`Claim ${claim.id}: ${AGENT} is trying to make "${claim.factId}" true.`);
-  console.log(`World ${world.id} cloned to ${dir} (your fact is already in its canon.json; do not edit that file).`);
-  console.log(`Work there, commit, then: git push origin main && canon verdict --wait`);
+// A world that is BEHIND was built on an older canon. Make a fresh world from the current
+// canon for the same fact, and re-apply this world's own changes on top of it. The agent
+// (not the referee) resolves any conflict; nothing is merged on the server.
+async function refresh() {
+  const old = worldContext();
+  const head = git(["-C", old.root, "rev-parse", "HEAD"]).trim();
+  const claimCommit = git(["-C", old.root, "log", "--format=%H", "--grep=^canon: claim", "-n", "1"]).trim();
+  if (!claimCommit) fail("cannot find this world's claim commit");
+  const patch = git(["-C", old.root, "diff", "--binary", `${claimCommit}..${head}`, "--", ".", ":(exclude)canon.json"]);
+
+  const { claim, world } = await api("POST", "/claims", {
+    agent: AGENT,
+    why: `refresh of ${old.worldId}: canon moved`,
+    join: old.factId,
+    replaces: old.claimId,
+  });
+  const dir = resolve(dirname(old.root), world.id);
+  await setupWorld(dir, claim, world, (await api("GET", "/canon")).facts.find((f) => f.id === claim.factId));
+
+  if (patch.trim()) {
+    const patchFile = join(dir, ".git", "canon-refresh.patch");
+    writeFileSync(patchFile, patch);
+    try {
+      execFileSync("git", ["-C", dir, "apply", "--3way", patchFile], { stdio: ["ignore", "pipe", "pipe"] });
+      git(["-C", dir, "commit", "--quiet", "-am", `Re-apply ${old.worldId} on the current canon`]);
+      console.log(`Re-applied your changes from ${old.worldId}.`);
+    } catch {
+      console.log(`Your changes from ${old.worldId} conflict with the current canon. Resolve the conflict markers in ${dir}, then commit.`);
+    }
+  }
+  console.log(`New world ${world.id} at ${dir}. cd there, then: git push origin main && canon verdict --wait`);
 }
 
 async function verdict() {
@@ -99,12 +136,13 @@ async function verdict() {
   if (v.previewUrl) console.log(`preview  ${v.previewUrl}`);
   for (const id of v.kept) console.log(`  kept     ${id}`);
   for (const l of v.lost) console.log(`  LOST     ${l.factId}: ${l.detail}`);
+  for (const l of v.stale ?? []) console.log(`  NEWER    ${l.factId} became canon after you forked: ${l.detail}`);
   console.log(`  claimed  ${v.claimed.factId}: ${v.claimed.held ? "holds" : v.claimed.detail}`);
   for (const id of v.offers) console.log(`  offers   ${id}`);
   if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.`);
   if (v.outcome === "contradicts") console.log(`\nThis world contradicts canon. Make the lost facts hold again (or drop the change), then push.`);
   if (v.outcome === "unproven") console.log(`\nCanon held, but your fact does not hold yet. Fix and push again.`);
-  if (v.outcome === "behind") console.log(`\n${v.ledger.detail}.`);
+  if (v.outcome === "behind") console.log(`\nCanon moved after this world forked. Run: canon refresh`);
   process.exit(v.outcome === "ready" ? 0 : 2);
 }
 
@@ -172,7 +210,7 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  console.log(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 13).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  console.log(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 14).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
   process.exit(1);
 }
 
