@@ -2,12 +2,14 @@
 # Reset a project after a rehearsal: delete its world repos and their Previews, put
 # production back to the local demo app, then bump REFEREE_EPOCH and redeploy the referee
 # so the board starts empty. Afterwards run scripts/genesis.sh again.
-#   ./scripts/reset-project.sh farmstand
+#   ./scripts/reset-project.sh farmstand rodeo
+# REFEREE_EPOCH is global, so every project's board empties; list every project you use.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PROJECT="${1:?usage: reset-project.sh <project>}"
+[ $# -ge 1 ] || { echo "usage: reset-project.sh <project> [project...]"; exit 1; }
 NAMESPACE=canon
 CANON_URL="${CANON_URL:-https://canon.rodeo}"
+for PROJECT in "$@"; do
 
 # Every Preview the referee judged (one per pushed commit), before the board is reset.
 previews="$(curl -sf "$CANON_URL/p/$PROJECT/previews" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{for(const n of JSON.parse(s))console.log(n)}catch{}})')"
@@ -20,6 +22,8 @@ repos="$(cd referee && npx wrangler artifacts repos list --namespace "$NAMESPACE
 for repo in $repos; do
   (cd referee && npx wrangler artifacts repos delete "$repo" --namespace "$NAMESPACE" --force >/dev/null 2>&1) && echo "deleted repo $repo"
   (cd demo-app && npx wrangler preview delete --name "$repo" >/dev/null 2>&1) && echo "deleted preview $repo" || true
+done
+
 done
 
 (cd demo-app && npx wrangler deploy >/dev/null 2>&1) && echo "production reset to the local demo app"
