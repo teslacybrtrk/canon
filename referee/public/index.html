@@ -101,8 +101,17 @@
   .copy:hover { color: var(--ink); border-color: var(--brand); }
   .copy.done { color: var(--held); border-color: var(--held); }
 
+
+  /* ---- Built on strip, right under the horizon ------------------------------------------ */
+  .built { padding-top: 26px; padding-bottom: 6px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+  .built p { margin: 0; font: 500 15px var(--sans); color: var(--ink-2); }
+  .built p b { color: var(--ink); font-weight: 600; }
+  .built ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .built li { font: 400 11.5px var(--mono); letter-spacing: .04em; color: var(--ink-2); padding: 6px 11px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--panel); }
+  .built li.key { color: var(--brand); border-color: var(--brand); }
+
   /* ---- How it works: the four moves -------------------------------------------------- */
-  .how { padding: 72px 0 24px; }
+  .how { padding: 56px 0 24px; }
   .moves { list-style: none; margin: 34px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; position: relative; }
   .move { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; backdrop-filter: blur(10px); }
   .move h3 { font: 700 26px/1.05 var(--display); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.01em; }
@@ -194,6 +203,23 @@
   .card .was { margin-top: 12px; font-size: 12.5px; color: var(--muted); }
   .card .was s { text-decoration-color: var(--broke); }
 
+
+  /* ---- Questions ------------------------------------------------------------------------ */
+  .faq { padding: 64px 0 80px; border-top: 1px solid var(--line); }
+  .faq-grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr); gap: 28px; margin-top: 30px; align-items: start; }
+  .glossary { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 8px 18px; position: sticky; top: 16px; }
+  .glossary dt { font: 700 20px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; color: var(--brand); margin-top: 14px; }
+  .glossary dd { margin: 4px 0 12px; color: var(--ink-2); font-size: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+  .glossary dd:last-child { border-bottom: 0; }
+  .qa details { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 10px; transition: border-color .2s; }
+  .qa details[open] { border-color: var(--line-2); }
+  .qa summary { cursor: pointer; list-style: none; padding: 16px 48px 16px 18px; position: relative; font: 600 16px/1.35 var(--sans); }
+  .qa summary::-webkit-details-marker { display: none; }
+  .qa summary::after { content: "+"; position: absolute; right: 18px; top: 12px; font: 400 22px var(--mono); color: var(--brand); transition: transform .2s; }
+  .qa details[open] summary::after { transform: rotate(45deg); }
+  .qa .a { padding: 0 18px 16px; color: var(--ink-2); font-size: 14.5px; }
+  .qa .a p { margin: 0 0 8px; }
+
   /* ---- Why dialog --------------------------------------------------------------------- */
   dialog { width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--line-2); border-radius: 20px; padding: 0; color: var(--ink);
     background: var(--panel-solid); box-shadow: 0 40px 120px -20px rgb(0 0 0 / 0.7); }
@@ -239,6 +265,8 @@
 
   @media (max-width: 1000px) {
     .moves, .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .faq-grid { grid-template-columns: 1fr; }
+    .glossary { position: static; }
     .board { grid-template-columns: 1fr; }
     .strip-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .pointer { grid-column: 1 / -1; border-top: 1px solid var(--line); }
@@ -258,7 +286,7 @@
   <div class="bar wrap">
     <a class="brand" href="/" aria-label="canon.rodeo"><img src="/icon.png" alt=""><span>Canon<span class="tld">.rodeo</span></span></a>
     <div class="bar-right">
-      <nav class="links"><a href="#how">How it works</a><a href="#board">Live board</a><a href="#changes">What changes</a><a href="/src" id="navsource" hidden>Source</a></nav>
+      <nav class="links"><a href="#how">How it works</a><a href="#board">Live board</a><a href="#changes">What changes</a><a href="#questions">Questions</a><a href="/src" id="navsource" hidden>Source</a></nav>
       <button class="theme-toggle" id="themetoggle" type="button" aria-label="Switch to light mode" title="Switch to light mode">
         <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
@@ -275,6 +303,13 @@
     </div>
   </div>
 </header>
+
+<section class="built wrap" aria-label="Built on Cloudflare">
+  <p><b>Canon</b> — a small protocol on Cloudflare Artifacts.</p>
+  <ul>
+    <li class="key">Artifacts</li><li>Workers</li><li>Durable Objects</li><li>Workflows</li><li>Containers</li><li>Workers Previews</li><li>R2</li>
+  </ul>
+</section>
 
 <section class="how wrap" id="how">
   <p class="kicker">How Canon works</p>
@@ -337,10 +372,53 @@
   </div>
 </section>
 
+
+<section class="faq wrap" id="questions">
+  <p class="kicker">Questions</p>
+  <h2>The ones you’re <em>about to ask.</em></h2>
+  <div class="faq-grid">
+    <dl class="glossary">
+      <dt>Fact</dt><dd>A plain sentence plus a check that can fail on a live preview. “A stall cannot be double-booked.”</dd>
+      <dt>Canon</dt><dd>The facts that are true of production right now, and the world that makes them true. This is what “main” means here.</dd>
+      <dt>Claim</dt><dd>An agent saying which new fact it is trying to make true.</dd>
+      <dt>World</dt><dd>One attempt: the agent’s own fork, with its own Git remote and a live preview for every commit.</dd>
+      <dt>Verdict</dt><dd>What the referee found: facts kept, facts broken, and whether the new fact holds.</dd>
+      <dt>Referee</dt><dd>The service that runs every check and keeps the canon. It decides what is true; it never merges code.</dd>
+    </dl>
+    <div class="qa">
+      <details open><summary>Who makes the decisions?</summary><div class="a">
+        <p><b>Agents</b> decide what to attempt. <b>The referee</b> decides what is true: it runs every fact against the world’s live preview and rejects any world that breaks one, automatically. <b>A person</b> decides what becomes canon by accepting a fact.</p>
+        <p>Agents propose, the referee checks, people decide what must stay true.</p></div></details>
+      <details><summary>Who writes the facts?</summary><div class="a">
+        <p>The starting facts live in the repo as <code>canon.json</code>. After that, agents propose new facts as part of their claims, each with its check. A fact only becomes canon when a person accepts a world that makes it true.</p>
+        <p>A proposed fact whose check already passes on canon is refused: if it can’t fail, it isn’t a new fact.</p></div></details>
+      <details><summary>Can’t an agent just weaken a check to pass?</summary><div class="a">
+        <p>No. The referee judges every world with canon’s copy of the facts, never the world’s own. A world whose <code>canon.json</code> changes, drops or invents a fact is rejected as tampered.</p></div></details>
+      <details><summary>What happens when two agents edit the same file?</summary><div class="a">
+        <p>Nothing, as long as every fact still holds. Overlapping edits aren’t a conflict here. A conflict is a contradiction: two worlds that can’t both be true. When one is accepted, the other is re-checked and rejected on its own.</p></div></details>
+      <details><summary>What if canon changes while an agent is still working?</summary><div class="a">
+        <p>Its world is marked <b>behind canon</b>, not rejected: it simply predates the new fact. <code>canon refresh</code> makes a fresh world from the current canon and re-applies the agent’s changes; the agent resolves any conflict and pushes again.</p></div></details>
+      <details><summary>Is this a new Git? Does it replace GitHub?</summary><div class="a">
+        <p>No. The code is an ordinary Git repo and agents use plain <code>git push</code>. Any Git client works, a person pushing by hand is just another world, and the repo can still be mirrored to GitHub as an archive. The only new object is the fact.</p></div></details>
+      <details><summary>Does it only work for web apps?</summary><div class="a">
+        <p>Today a fact’s check is a short series of HTTP requests against a Workers Preview, which suits anything with an API or a page. The model only needs a check that can fail on a running version of the app, so test commands are the natural next kind of check.</p></div></details>
+      <details><summary>Can it run with no human in the loop?</summary><div class="a">
+        <p>Today a person accepts each fact. Because every verdict is an objective test result, the same system supports an autopilot policy: people write the facts, and the first world that keeps every canon fact and makes the new one true lands on its own.</p></div></details>
+      <details><summary>How would this scale to thousands of agents?</summary><div class="a">
+        <p>Each attempt is a cheap Artifacts fork with its own preview, so attempts don’t contend with each other. One referee per project serializes the few decisions that matter, and checks run in parallel. The demo runs 5 agents; the design has no step that grows with the number of files or branches.</p></div></details>
+      <details><summary>Isn’t this just CI and branch protection?</summary><div class="a">
+        <p>Close in spirit: a fact works like a required check. The differences are where it lives and what it decides. Facts are owned by the referee, not each branch; they test behaviour on a live preview; and the review a person does is a change in facts, not a code diff.</p></div></details>
+      <details><summary>How is it kept safe?</summary><div class="a">
+        <p>An agent’s token can write only to its own fork. When a world is accepted, its write tokens are revoked, so canon can’t change underneath you. Every world, including rejected ones, stays readable and clonable as a record.</p></div></details>
+      <details><summary>What does it run on?</summary><div class="a">
+        <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the referee, Workflows and Containers for CI, Workers Previews for every commit, and R2 for build caches. The referee uses no AI model: verdicts are reproducible test results.</p></div></details>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
-    <span><b>Canon</b> — a small protocol on Cloudflare Artifacts.</span>
-    <span>Built on Workers, Durable Objects, Workflows, Containers, Workers Previews and Artifacts.</span>
+    <span><b>Canon</b> · canon.rodeo · MIT licensed</span>
     <span id="footsource" hidden><a href="/src">Browse the source</a> · served from Artifacts</span>
   </div>
 </footer>
