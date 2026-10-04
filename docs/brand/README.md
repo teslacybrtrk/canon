@@ -1,7 +1,8 @@
 # Brand
 
-`canon-rodeo-icon.png` is the source icon. `referee/public/icon.png`, `apple-touch-icon.png` and `favicon-32.png`
-are generated from it (padded to square, resized).
+`canon-rodeo-icon.png` is the icon with a transparent background and its own rounded corners (radius about 18%),
+cut from the designer's original. `referee/public/icon.png` and `favicon-32.png` are resized from it;
+`apple-touch-icon.png` is a full-bleed square because iOS rounds home-screen icons itself.
 
 | Role | Color |
 |---|---|
