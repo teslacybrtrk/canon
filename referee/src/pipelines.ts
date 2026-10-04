@@ -1,6 +1,7 @@
 import { CIWorkflow, isCiRunnerFailure, type CiContext, type CiParams, type CiRunnerResult, type CloudflareArtifacts } from "@cloudflare/ci";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { Env } from "./env";
+import { refereeForRepo } from "./stub";
 
 // Started by the cf.artifacts.repo.pushed trigger for every repo in the namespace.
 // Builds the pushed world as a Workers Preview, then hands it to the referee to judge.
@@ -8,7 +9,7 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
   protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
     const { repo, sha, branch } = event.payload;
     if (branch !== "main") return;
-    const referee = refereeFor(this.env, repo);
+    const referee = refereeForRepo(this.env, repo);
     const worldId = await step.do("register push", () => referee.pushed(repo, sha));
     if (!worldId) return;
 
@@ -55,14 +56,8 @@ export class PromoteWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     } catch {
       ok = false;
     }
-    await step.do("record promotion", () => refereeFor(this.env, repo).promoted(seq, ok));
+    await step.do("record promotion", () => refereeForRepo(this.env, repo).promoted(seq, ok));
   }
-}
-
-/** World repos are named "<project>-<suffix>"; one referee per project. */
-export function refereeFor(env: Env, repo: string) {
-  const project = repo.slice(0, repo.lastIndexOf("-"));
-  return env.REFEREE.get(env.REFEREE.idFromName(project));
 }
 
 // `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. Judge the

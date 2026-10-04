@@ -9,6 +9,8 @@ export type Env = CiBindings & {
   PROMOTE_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   ASSETS: Fetcher;
   ARTIFACTS_NAMESPACE: string;
+  // Part of each referee's name; bump it to reset every project's board.
+  REFEREE_EPOCH: string;
   // Preview origin for a world, e.g. "https://{name}-farmstand.<subdomain>.workers.dev".
   // Used when `wrangler preview --json` output cannot be parsed.
   PREVIEW_URL_TEMPLATE: string;

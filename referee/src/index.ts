@@ -1,6 +1,7 @@
 import { CiSandbox } from "@cloudflare/ci/worker";
 import type { Env } from "./env";
 import { errorStatus, type DeclareRequest } from "./protocol";
+import { refereeForProject } from "./stub";
 
 export { CiSandbox };
 export { Referee } from "./referee";
@@ -23,7 +24,7 @@ export default {
     const m = url.pathname.match(/^\/p\/([a-z0-9]+)(\/.*)$/);
     if (!m) return env.ASSETS.fetch(request);
     const [, project, rest] = m;
-    const referee = env.REFEREE.get(env.REFEREE.idFromName(project));
+    const referee = refereeForProject(env, project);
     const route = `${request.method} ${rest}`;
 
     try {
