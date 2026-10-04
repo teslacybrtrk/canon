@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#010e20">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Instrument+Sans:wght@400..700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..800&family=Archivo:ital,wdth,wght@0,100..125,400..700;1,100..125,400..600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   /* Palette from the canon.rodeo icon: midnight #01132A, sunset #FD6F16 / #ED5616, sun gold #FDC86D.
      Orange is the brand; status colours (held green, lost crimson, pending amber) stay distinct. */
@@ -20,7 +20,7 @@
     --brand: #fd6f16; --brand-2: #ed5616; --gold: #fdc86d; --link: #fd9a55;
     --held: #4cc38a; --held-bg: rgb(76 195 138 / 0.12); --broke: #ff6b86; --broke-bg: rgb(255 107 134 / 0.12);
     --pending: #fdc86d; --pending-bg: rgb(253 200 109 / 0.12);
-    --serif: "Fraunces", Georgia, serif; --sans: "Instrument Sans", system-ui, sans-serif; --mono: "Martian Mono", ui-monospace, monospace;
+    --display: "Big Shoulders Display", "Archivo", sans-serif; --serif: "Archivo", system-ui, sans-serif; --sans: "Archivo", system-ui, sans-serif; --mono: "Martian Mono", ui-monospace, monospace;
     --sky: radial-gradient(120% 90% at 50% 100%, #fd6f16 0%, #ed5616 18%, #7a2a1d 38%, #1b1a33 60%, transparent 78%);
   }
   @media (prefers-color-scheme: light) {
@@ -42,9 +42,9 @@
   code { font: 12.5px var(--mono); }
   .wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px; }
   .kicker { font: 500 12px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin: 0 0 14px; }
-  h2 { font: 500 clamp(28px, 3.4vw, 40px)/1.08 var(--serif); letter-spacing: -0.02em; margin: 0; }
-  h2 em { font-style: italic; font-weight: 400; color: var(--brand); }
-  .sub { color: var(--ink-2); font: 400 18px/1.5 var(--serif); margin: 12px 0 0; max-width: 40em; }
+  h2 { font: 700 clamp(34px, 4vw, 52px)/1 var(--display); letter-spacing: 0.005em; margin: 0; text-transform: uppercase; }
+  h2 em { font-style: normal; color: var(--brand); }
+  .sub { color: var(--ink-2); font: 400 17px/1.55 var(--sans); margin: 14px 0 0; max-width: 42em; }
 
   /* ---- Hero: the sun on the horizon is the canon ---------------------------------- */
   .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
@@ -55,16 +55,16 @@
   .horizon { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--brand) 30%, var(--gold) 50%, var(--brand) 70%, transparent); opacity: 0.8; }
   .ridge { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; color: var(--bg); }
   .bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 14px; padding-top: 18px; padding-bottom: 18px; }
-  .brand { display: flex; align-items: center; gap: 10px; font: 600 18px/1 var(--sans); color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 800 24px/1 var(--display); text-transform: uppercase; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
   .brand img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 0 0 1px var(--line-2), 0 8px 24px -8px rgb(253 111 22 / 0.6); }
   .brand small { font: 400 13px var(--mono); color: var(--muted); }
   nav.links { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
   nav.links a { color: var(--ink-2); text-decoration: none; }
   nav.links a:hover { color: var(--ink); }
-  .hero-body { position: relative; z-index: 2; padding-top: 40px; padding-bottom: 170px; max-width: 880px; text-align: center; margin: 0 auto; }
-  h1 { font: 500 clamp(44px, 7vw, 88px)/0.96 var(--serif); letter-spacing: -0.03em; margin: 0; font-variation-settings: "opsz" 144, "SOFT" 50; }
-  h1 em { font-style: italic; font-weight: 400; color: var(--brand); }
-  .lede { font: 400 20px/1.5 var(--serif); color: var(--ink-2); margin: 22px auto 0; max-width: 36em; }
+  .hero-body { position: relative; z-index: 2; padding-top: 40px; padding-bottom: 170px; max-width: 1160px; text-align: center; margin: 0 auto; }
+  h1 { font: 800 clamp(52px, 7.6vw, 112px)/0.9 var(--display); letter-spacing: 0.005em; margin: 0; text-transform: uppercase; }
+  h1 em { font-style: normal; color: var(--brand); display: block; }
+  .lede { font: 400 19px/1.55 var(--sans); font-variation-settings: "wdth" 100; color: var(--ink-2); margin: 26px auto 0; max-width: 38em; }
   .lede b { color: var(--ink); font-weight: 600; }
   .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; align-items: center; }
   .btn { display: inline-flex; align-items: center; gap: 8px; font: 600 14.5px var(--sans); text-decoration: none; padding: 11px 18px; border-radius: 12px; border: 0; cursor: pointer; }
@@ -83,7 +83,7 @@
   .move { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; backdrop-filter: blur(10px); }
   .move .n { position: relative; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 500 11px var(--mono); color: #1a0b02;
     background: radial-gradient(circle at 50% 35%, var(--gold), var(--brand) 75%); box-shadow: 0 0 0 6px var(--bg), 0 0 18px -2px rgb(253 111 22 / .8); margin-bottom: 14px; }
-  .move h3 { font: 500 21px/1.2 var(--serif); margin: 0 0 6px; letter-spacing: -0.01em; }
+  .move h3 { font: 700 26px/1.05 var(--display); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.01em; }
   .move p { margin: 0; color: var(--ink-2); font-size: 14px; }
   .example { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--bg-2); border: 1px dashed var(--line-2); font: 400 11.5px/1.6 var(--mono); color: var(--ink-2); }
   .example .ok { color: var(--held); } .example .bad { color: var(--broke); } .example .dim { color: var(--muted); }
@@ -94,7 +94,7 @@
   .strip-inner { margin-top: 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr); background: var(--panel); border: 1px solid var(--line-2);
     border-radius: 16px; backdrop-filter: blur(16px); overflow: hidden; }
   .stat { padding: 16px 18px; border-right: 1px solid var(--line); }
-  .stat b { display: block; font: 500 30px/1.1 var(--serif); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat b { display: block; font: 700 40px/1 var(--display); font-variant-numeric: tabular-nums; }
   .stat span, .pointer > span { font: 400 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
   .pointer { padding: 16px 18px; display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
   #canonline { font: 400 13px var(--mono); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 10px; }
@@ -106,7 +106,7 @@
   /* ---- Board -------------------------------------------------------------------------- */
   .board { padding-top: 28px; padding-bottom: 40px; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); gap: 28px; align-items: start; }
   .col-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
-  .col-head h3 { font: 500 24px/1.1 var(--serif); letter-spacing: -0.015em; margin: 0; }
+  .col-head h3 { font: 700 30px/1 var(--display); text-transform: uppercase; letter-spacing: 0.01em; margin: 0; }
   .count { font: 400 12px var(--mono); color: var(--muted); }
   .hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
   .ledger { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 6px; backdrop-filter: blur(10px); position: sticky; top: 16px; }
@@ -117,7 +117,7 @@
   .fact:hover .go { opacity: 1; color: var(--link); }
   .glyph { width: 16px; height: 16px; margin-top: 3px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, var(--gold), var(--brand) 70%); box-shadow: 0 0 12px -2px rgb(253 111 22 / 0.8); }
   .fact.proposed .glyph { background: transparent; box-shadow: none; border: 1.5px dashed var(--muted); }
-  .fact .text { font: 500 16px/1.35 var(--serif); }
+  .fact .text { font: 500 15.5px/1.4 var(--sans); }
   .fact.proposed .text { color: var(--ink-2); font-weight: 400; }
   .fact small { display: flex; gap: 8px; margin-top: 4px; font: 400 11px var(--mono); color: var(--muted); }
   .divider { font: 400 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 14px 12px 6px; }
@@ -138,7 +138,7 @@
   .chip.s-contradicts { color: var(--broke); background: var(--broke-bg); }
   .chip.s-unproven, .chip.s-behind, .chip.s-checking, .chip.s-open { color: var(--pending); background: var(--pending-bg); }
   .chip.s-superseded { color: var(--muted); }
-  .sentence { font: 500 22px/1.25 var(--serif); letter-spacing: -0.01em; margin: 10px 0 6px; }
+  .sentence { font: 600 21px/1.25 var(--sans); font-variation-settings: "wdth" 92; letter-spacing: -0.005em; margin: 10px 0 6px; }
   .status-line { margin: 0 0 12px; font-size: 13.5px; color: var(--ink-2); }
   .verdict { display: flex; flex-wrap: wrap; gap: 6px; }
   .verdict span, .legend i { font: 400 11.5px var(--mono); padding: 4px 8px; border-radius: 6px; border: 1px solid transparent; font-style: normal; }
@@ -149,7 +149,7 @@
   .claim-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
   .claim-foot a { font-size: 13.5px; font-weight: 500; }
   .claim-foot .world { font: 400 11px var(--mono); color: var(--muted); }
-  .reason { margin: 12px 0 0; font: italic 400 15px/1.4 var(--serif); color: var(--ink-2); }
+  .reason { margin: 12px 0 0; font: italic 400 14.5px/1.45 var(--sans); color: var(--ink-2); }
   .reason::before { content: "Why: "; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-style: normal; }
   .accept { margin-left: auto; font: 600 14px var(--sans); border: 0; border-radius: 10px; padding: 9px 16px; cursor: pointer; color: #1a0b02;
     background: linear-gradient(180deg, #fdac5c, var(--brand) 55%, var(--brand-2)); box-shadow: 0 10px 24px -10px rgb(253 111 22 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.35); transition: transform .15s; }
@@ -160,14 +160,14 @@
   details.settled summary::before { content: "+ "; color: var(--brand); }
   details.settled[open] summary::before { content: "− "; }
   details.settled .claim { opacity: 0.8; }
-  .empty { padding: 28px; text-align: center; color: var(--muted); font: italic 400 16px var(--serif); border: 1px dashed var(--line-2); border-radius: 16px; }
+  .empty { padding: 28px; text-align: center; color: var(--muted); font: italic 400 15px var(--sans); border: 1px dashed var(--line-2); border-radius: 16px; }
 
   /* ---- What changes: Cloudflare's four problems ------------------------------------- */
   .changes { padding: 64px 0 72px; border-top: 1px solid var(--line); margin-top: 24px; }
   .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 30px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
   .card .k { font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--brand); }
-  .card h3 { font: 500 20px/1.25 var(--serif); margin: 10px 0 8px; letter-spacing: -0.01em; }
+  .card h3 { font: 700 24px/1.05 var(--display); margin: 10px 0 8px; text-transform: uppercase; letter-spacing: 0.01em; }
   .card p { margin: 0; color: var(--ink-2); font-size: 14px; }
   .card .was { margin-top: 12px; font-size: 12.5px; color: var(--muted); }
   .card .was s { text-decoration-color: var(--broke); }
@@ -180,7 +180,7 @@
   .why-head { position: relative; padding: 28px 28px 22px; border-bottom: 1px solid var(--line); overflow: hidden; }
   .why-head::before { content: ""; position: absolute; inset: 0; background: var(--sky); opacity: 0.25; }
   .why-head > * { position: relative; }
-  .why-head h3 { font: 500 34px/1.1 var(--serif); letter-spacing: -0.02em; margin: 6px 0 10px; }
+  .why-head h3 { font: 800 44px/0.98 var(--display); text-transform: uppercase; letter-spacing: 0.005em; margin: 6px 0 12px; }
   .why-head p { margin: 0; color: var(--ink-2); }
   .why-head p b { color: var(--ink); }
   .worlds { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 22px 28px; }
