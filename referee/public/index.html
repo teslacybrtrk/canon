@@ -4,25 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Canon Board</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#01132a">
 <style>
+  /* Palette from the canon.rodeo icon: midnight #01132A, sunset #FD6F16 / #ED5616, sun gold #FDC86D.
+     Orange is the brand only; status colours (held green, lost crimson, pending amber) stay distinct. */
   :root {
-    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1c1a; --muted: #6b6860; --line: #e3e0d8;
-    --held: #2f7d4a; --held-bg: #e6f3ea; --broke: #b3261e; --broke-bg: #fbe9e7;
-    --pending: #8a6d1d; --pending-bg: #fbf3dc; --accent: #1f4fd1;
+    --bg: #fbf7f2; --panel: #ffffff; --ink: #01132a; --muted: #5b6577; --line: #e7e1d8;
+    --brand: #ed5616; --link: #c2410c;
+    --held: #1e7b4f; --held-bg: #e3f4ea; --broke: #c0264e; --broke-bg: #fbe7ec;
+    --pending: #8a5a00; --pending-bg: #fff1d6;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #141413; --panel: #1d1d1b; --ink: #ecebe6; --muted: #9c998f; --line: #2f2e2a;
-      --held: #6cc68b; --held-bg: #1b2c21; --broke: #ff8a80; --broke-bg: #33201e;
-      --pending: #e6c35c; --pending-bg: #2e2816; --accent: #8fb0ff;
+      --bg: #010e20; --panel: #06182f; --ink: #f3eee6; --muted: #93a1b5; --line: #16304f;
+      --brand: #fd6f16; --link: #fd8a3d;
+      --held: #4cc38a; --held-bg: #0c2a26; --broke: #ff6b86; --broke-bg: #331426;
+      --pending: #fdc86d; --pending-bg: #2b2414;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 ui-sans-serif, system-ui, sans-serif; }
-  header { display: flex; align-items: baseline; gap: 12px; padding: 20px 16px 8px; max-width: 1280px; margin: 0 auto; flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  header { display: flex; align-items: center; gap: 12px; padding: 20px 16px 8px; max-width: 1280px; margin: 0 auto; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+  header h1 img { width: 36px; height: 36px; border-radius: 9px; }
+  header h1 span { color: var(--muted); font-weight: 400; font-size: 15px; }
   header p { margin: 0; color: var(--muted); }
   #canonline { margin-left: auto; color: var(--muted); font: 13px ui-monospace, monospace; }
+  #canonline::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); margin-right: 8px; }
   main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; padding: 8px 16px 32px; max-width: 1280px; margin: 0 auto; }
   @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
   section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
@@ -46,8 +56,9 @@
   .lost { background: var(--broke-bg); color: var(--broke); }
   .new { border: 1px dashed var(--pending); color: var(--pending); }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  a { color: var(--accent); }
-  button { font: inherit; border: 0; border-radius: 8px; padding: 6px 12px; background: var(--held); color: #fff; cursor: pointer; }
+  a { color: var(--link); }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 6px 14px; background: var(--brand); color: #fff; cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: default; }
   .why { margin-top: 6px; color: var(--muted); font-style: italic; }
   dialog { width: min(1100px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); padding: 16px; }
   dialog::backdrop { background: rgb(0 0 0 / 0.4); }
@@ -59,7 +70,7 @@
 </head>
 <body>
 <header>
-  <h1>Canon</h1>
+  <h1><img src="/icon.png" alt="">Canon <span>canon.rodeo</span></h1>
   <p>Main is the set of facts that must stay true of the running app.</p>
   <span id="canonline">connecting…</span>
 </header>

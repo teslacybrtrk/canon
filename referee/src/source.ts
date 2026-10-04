@@ -104,9 +104,10 @@ function page(title: string, body: string, status = 200) {
   return new Response(
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)} · Canon</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <style>
-  :root { --bg:#f6f5f1; --panel:#fff; --ink:#1d1c1a; --muted:#6b6860; --line:#e3e0d8; --accent:#1f4fd1; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#141413; --panel:#1d1d1b; --ink:#ecebe6; --muted:#9c998f; --line:#2f2e2a; --accent:#8fb0ff; } }
+  :root { --bg:#fbf7f2; --panel:#fff; --ink:#01132a; --muted:#5b6577; --line:#e7e1d8; --accent:#c2410c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#010e20; --panel:#06182f; --ink:#f3eee6; --muted:#93a1b5; --line:#16304f; --accent:#fd8a3d; } }
   * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 ui-sans-serif,system-ui,sans-serif }
   main { max-width:960px; margin:0 auto; padding:20px 16px 40px } h1 { font-size:22px; margin:0 0 8px }
   a { color:var(--accent) } nav { margin:12px 0; color:var(--muted) } code, pre { font:13px/1.5 ui-monospace,monospace }
