@@ -96,14 +96,17 @@ async function refresh() {
   if (!claimCommit) fail("cannot find this world's claim commit");
   const patch = git(["-C", old.root, "diff", "--binary", `${claimCommit}..${head}`, "--", ".", ":(exclude)canon.json"]);
 
+  // The agent's original reason carries over: the why belongs to the change, not to the refresh.
+  const state = await api("GET", "/canon");
+  const original = state.claims.find((c) => c.id === old.claimId)?.why ?? "";
   const { claim, world } = await api("POST", "/claims", {
     agent: AGENT,
-    why: `refresh of ${old.worldId}: canon moved`,
+    why: `${original} (refreshed onto canon ${state.canon.seq})`.trim(),
     join: old.factId,
     replaces: old.claimId,
   });
   const dir = resolve(dirname(old.root), world.id);
-  await setupWorld(dir, claim, world, (await api("GET", "/canon")).facts.find((f) => f.id === claim.factId));
+  await setupWorld(dir, claim, world, state.facts.find((f) => f.id === claim.factId));
 
   if (patch.trim()) {
     const patchFile = join(dir, ".git", "canon-refresh.patch");
