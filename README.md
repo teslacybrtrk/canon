@@ -44,8 +44,8 @@ human ──accept fact──▶ Referee DO ──freeze world, move canon point
 
 ## Run it
 
-Requirements: a Workers Paid account with Artifacts (open beta), Node 20+, Docker (wrangler builds the CI
-container image), and Claude Code (`claude`) for the agents.
+Requirements: a Workers Paid account with Artifacts (open beta), Node 20+, and Claude Code (`claude`) for the
+agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image straight from Docker Hub.
 
 1. **Configure the referee**: in `referee/wrangler.jsonc`, set `CLOUDFLARE_ACCOUNT_ID` and replace
    `REPLACE_WITH_SUBDOMAIN` with your workers.dev subdomain.
