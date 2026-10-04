@@ -8,6 +8,14 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#010e20">
+<script>
+  (() => {
+    let saved = null;
+    try { saved = localStorage.getItem("canon-theme"); } catch {}
+    const theme = saved ?? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    document.documentElement.dataset.theme = theme;
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..800&family=Archivo:ital,wdth,wght@0,100..125,400..700;1,100..125,400..600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -23,6 +31,14 @@
     --display: "Big Shoulders Display", "Archivo", sans-serif; --serif: "Archivo", system-ui, sans-serif; --sans: "Archivo", system-ui, sans-serif; --mono: "Martian Mono", ui-monospace, monospace;
     --sky: radial-gradient(1100px 560px at 50% 100%, #fd6f16 0%, #ed5616 18%, #7a2a1d 38%, #1b1a33 60%, transparent 78%);
   }
+  :root[data-theme="light"] {
+      --bg: #fbf6ef; --bg-2: #f6eee3; --panel: rgb(255 255 255 / 0.8); --panel-solid: #ffffff;
+      --ink: #01132a; --ink-2: #2a3a52; --muted: #5b6577; --line: rgb(1 19 42 / 0.10); --line-2: rgb(1 19 42 / 0.2);
+      --brand: #ed5616; --brand-2: #c2410c; --gold: #b7791f; --link: #c2410c;
+      --held: #1e7b4f; --held-bg: rgb(30 123 79 / 0.1); --broke: #c0264e; --broke-bg: rgb(192 38 78 / 0.09);
+      --pending: #8a5a00; --pending-bg: rgb(183 121 31 / 0.12);
+      --sky: radial-gradient(1100px 560px at 50% 100%, #fd8f3e 0%, #fdb36d 22%, #fde3c4 45%, transparent 75%);
+    }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
       --bg: #fbf6ef; --bg-2: #f6eee3; --panel: rgb(255 255 255 / 0.8); --panel-solid: #ffffff;
@@ -49,6 +65,8 @@
   /* ---- Hero: the sun on the horizon is the canon ---------------------------------- */
   .hero { position: relative; overflow: hidden; }
   .hero::before { content: ""; position: absolute; inset: 0; background: var(--sky); opacity: 0.55; }
+  /* Seals the sub-pixel seam where the stretched ridge meets the edge, so no sunlight leaks below it. */
+  .hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--bg); }
   .sun { position: absolute; left: 50%; bottom: -370px; width: 500px; height: 500px; margin-left: -250px; border-radius: 50%;
     background: radial-gradient(circle at 50% 40%, #fdc86d 0%, #fd8a2c 38%, #ed5616 64%, rgb(237 86 22 / 0) 71%);
     animation: rise 1.6s cubic-bezier(.2,.7,.1,1) both, breathe 9s ease-in-out 1.6s infinite; }
@@ -56,8 +74,16 @@
   .bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 14px; padding-top: 18px; padding-bottom: 18px; }
   .brand { display: flex; align-items: center; gap: 10px; font: 800 24px/1 var(--display); text-transform: uppercase; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
   .brand img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 0 0 1px var(--line-2), 0 8px 24px -8px rgb(253 111 22 / 0.6); }
-  .brand small { font: 400 13px var(--mono); color: var(--muted); }
-  nav.links { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
+  .brand .tld { color: var(--brand); }
+  .bar-right { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+  nav.links { display: flex; gap: 20px; font-size: 14px; }
+  .theme-toggle { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; cursor: pointer; color: var(--ink-2);
+    background: var(--panel); border: 1px solid var(--line-2); backdrop-filter: blur(10px); transition: color .2s, border-color .2s; }
+  .theme-toggle:hover { color: var(--brand); border-color: var(--brand); }
+  .theme-toggle svg { width: 18px; height: 18px; }
+  .theme-toggle .icon-moon { display: none; }
+  :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+  :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
   nav.links a { color: var(--ink-2); text-decoration: none; }
   nav.links a:hover { color: var(--ink); }
   .hero-body { position: relative; z-index: 2; padding-top: 40px; padding-bottom: 180px; max-width: 1160px; text-align: center; margin: 0 auto; }
@@ -229,8 +255,14 @@
   <div class="sun" aria-hidden="true"></div>
   <svg class="ridge" viewBox="0 0 1440 46" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 46V30l60-6 70 8 90-14 80 10 70-6 110 12 90-16 70 8 120-10 80 12 100-6 90 10 80-14 110 10 70-4 80 8 70-6v34z"/></svg>
   <div class="bar wrap">
-    <a class="brand" href="/"><img src="/icon.png" alt="">Canon <small>canon.rodeo</small></a>
-    <nav class="links"><a href="#how">How it works</a><a href="#board">Live board</a><a href="#changes">What changes</a><a href="/src" id="navsource" hidden>Source</a></nav>
+    <a class="brand" href="/" aria-label="canon.rodeo"><img src="/icon.png" alt=""><span>Canon<span class="tld">.rodeo</span></span></a>
+    <div class="bar-right">
+      <nav class="links"><a href="#how">How it works</a><a href="#board">Live board</a><a href="#changes">What changes</a><a href="/src" id="navsource" hidden>Source</a></nav>
+      <button class="theme-toggle" id="themetoggle" type="button" aria-label="Switch to light mode" title="Switch to light mode">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>
+      </button>
+    </div>
   </div>
   <div class="hero-body wrap reveal">
     <p class="kicker">Git for a world of coding agents</p>
@@ -454,6 +486,21 @@
     ws.onmessage = (m) => { state = JSON.parse(m.data); render(); };
     ws.onclose = () => { $("canonline").classList.add("off"); $("canonline").textContent = "reconnecting…"; setTimeout(connect, 1500); };
   }
+
+  // Light/dark toggle: remembered per browser; without a saved choice the system setting decides.
+  function syncToggle() {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    $("themetoggle").setAttribute("aria-label", `Switch to ${next} mode`);
+    $("themetoggle").title = `Switch to ${next} mode`;
+    document.querySelector('meta[name="theme-color"]').content = next === "light" ? "#010e20" : "#fbf6ef";
+  }
+  $("themetoggle").addEventListener("click", () => {
+    const theme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("canon-theme", theme); } catch {}
+    syncToggle();
+  });
+  syncToggle();
 
   // Canon's own source is published on submission day; until then the clone command stays hidden.
   fetch("/meta").then((r) => r.json()).then((m) => {
