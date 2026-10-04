@@ -69,6 +69,7 @@ async function read() {
 async function claim() {
   if (!args.why) fail('--why "<reason>" is required: it becomes part of the fact chain');
   const body = { agent: AGENT, why: args.why };
+  if (args.join && args.fact) fail("use either --fact <file.json> (a new fact or a revision) or --join <fact-id>, not both");
   if (args.join) body.join = args.join;
   else if (args.fact) body.fact = JSON.parse(readFileSync(args.fact, "utf8"));
   else fail("pass --fact <file.json> (id, sentence, check) or --join <fact-id>");
@@ -171,7 +172,11 @@ async function verdict() {
   console.log(`  claimed  ${v.claimed.factId}: ${v.claimed.held ? "holds" : v.claimed.detail}`);
   for (const id of v.offers) console.log(`  offers   ${id}`);
   if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.`);
-  if (v.outcome === "contradicts") console.log(`\nThis world contradicts canon. Make the lost facts hold again, or, if your goal is to change that rule on purpose, propose a revision (a fact with "replaces"), then push.`);
+  if (v.outcome === "contradicts") {
+    const lostIds = v.lost.map((l) => l.factId).filter((id) => id !== "canon.json");
+    console.log(`\nThis world contradicts canon. Make the lost facts hold again and push.`);
+    if (lostIds.length) console.log(`If your goal is to change ${lostIds.join(", ")} on purpose, this world cannot land. Propose a revision instead:\n  canon claim --fact <revision.json> --why "<why the rule changes>"\n(a fact file with "replaces": "${lostIds[0]}"). That gives you a new world; implement the change there.`);
+  }
   if (v.outcome === "unproven") console.log(`\nCanon held, but your fact does not hold yet. Fix and push again.`);
   if (v.outcome === "behind") console.log(`\nCanon moved after this world forked. Run: canon refresh`);
   process.exit(v.outcome === "ready" ? 0 : 2);
