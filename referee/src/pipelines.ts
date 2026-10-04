@@ -65,7 +65,21 @@ export function refereeFor(env: Env, repo: string) {
   return env.REFEREE.get(env.REFEREE.idFromName(project));
 }
 
+// `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. Judge the
+// deployment URL: it is immutable, so a rejected world stays viewable exactly as judged,
+// while the preview URL follows the world's latest push.
 function previewUrlFrom(logs: CiRunnerResult["logs"]): string | null {
   if (typeof logs.stdout !== "string") return null;
-  return logs.stdout.match(/https:\/\/[a-z0-9.-]+\.workers\.dev/i)?.[0] ?? null;
+  const out = logs.stdout;
+  try {
+    const json = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)) as {
+      preview?: { urls?: string[] };
+      deployment?: { urls?: string[] };
+    };
+    const url = json.deployment?.urls?.[0] ?? json.preview?.urls?.[0];
+    if (url) return url;
+  } catch {
+    // not JSON; fall through to the first workers.dev URL in the output
+  }
+  return out.match(/https:\/\/[a-z0-9.-]+\.workers\.dev/i)?.[0] ?? null;
 }

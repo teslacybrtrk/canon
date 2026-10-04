@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "canon-referee",
+  "account_id": "2d9aba350caa70abf3ce6c910950ffd0",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -49,10 +50,10 @@
   "vars": {
     "ARTIFACTS_NAMESPACE": "canon",
     "BACKUP_BUCKET_NAME": "canon-ci-snapshots",
-    "CLOUDFLARE_ACCOUNT_ID": "REPLACE_WITH_ACCOUNT_ID",
+    "CLOUDFLARE_ACCOUNT_ID": "2d9aba350caa70abf3ce6c910950ffd0",
     // Preview URLs are "<preview-name>-<worker-name>.<your-subdomain>.workers.dev".
-    "PREVIEW_URL_TEMPLATE": "https://{name}-farmstand.REPLACE_WITH_SUBDOMAIN.workers.dev",
-    "PRODUCTION_URL": "https://farmstand.REPLACE_WITH_SUBDOMAIN.workers.dev"
+    "PREVIEW_URL_TEMPLATE": "https://{name}-farmstand.philipemanuele.workers.dev",
+    "PRODUCTION_URL": "https://farmstand.philipemanuele.workers.dev"
   },
   // Secrets (wrangler secret put): CF_TOKEN, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
   "observability": { "enabled": true, "logs": { "enabled": true } }

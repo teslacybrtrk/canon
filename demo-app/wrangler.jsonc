@@ -1,11 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "farmstand",
+  "account_id": "2d9aba350caa70abf3ce6c910950ffd0",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "durable_objects": { "bindings": [{ "name": "MARKET", "class_name": "Market" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Market"] }],
   // Each Preview automatically gets its own Durable Object namespace, so every
-  // world's state is isolated without extra config.
-  "previews": {}
+  // world's state is isolated. The binding is repeated here because the code
+  // reads it from env.
+  "previews": {
+    "durable_objects": { "bindings": [{ "name": "MARKET", "class_name": "Market" }] }
+  }
 }
