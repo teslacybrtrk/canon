@@ -68,13 +68,22 @@ agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image str
 4. **Start five agents**: `./agents/run.sh`. Claims appear on the board, then verdicts.
 5. **Accept a fact** on the board. The world becomes canon and production updates.
    Click a fact to see the world that made it true beside the worlds that failed it.
+   After an accept, `./agents/refresh.sh agent-3 agent-4 agent-5` lets worlds that are now behind rebase themselves.
+6. **Autopilot** (optional): a second project whose `canon.json` carries a backlog of facts written by people and
+   `"autoAccept": "backlog"`. Agents land facts with no human click:
+   ```sh
+   CANON_PROJECT=rodeo CANON_FILE=agents/canon.autopilot.json ./scripts/genesis.sh
+   CANON_PROJECT=rodeo AGENTS=8 ./agents/autopilot.sh      # watch https://canon.rodeo/?p=rodeo
+   ```
 
 Work on the demo app locally:
 
 ```sh
 cd demo-app && npm install && npx wrangler dev
 node scripts/check-local.ts http://localhost:8787   # canon.json facts hold; demo claims must not hold yet
-node scripts/test-ledger.ts                         # canon.json tampering rules
+node scripts/test-ledger.ts                         # canon.json rules: tampering, revisions, retirement
+node scripts/test-scope.ts                          # fact scopes and changed-file detection
+node scripts/test-probe.ts                          # retries and latency budgets
 ```
 
 The referee has no login. Put it behind Cloudflare Access before sharing the URL, because `declare` hands out

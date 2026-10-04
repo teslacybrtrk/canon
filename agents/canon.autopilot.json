@@ -1,0 +1,407 @@
+{
+  "version": 1,
+  "facts": [
+    {
+      "id": "market-lists-stalls",
+      "sentence": "The market page lists every stall",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/",
+            "expect": {
+              "status": 200,
+              "bodyIncludes": "Two Oaks Greens"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "products-have-prices",
+      "sentence": "All six products are for sale with a price",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/api/products",
+            "expect": {
+              "status": 200,
+              "json": {
+                "length": 6,
+                "0.priceCents": {
+                  "$exists": true
+                },
+                "5.priceCents": {
+                  "$exists": true
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "cart-starts-empty",
+      "sentence": "A new shopper's basket is empty",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/api/cart",
+            "expect": {
+              "status": 200,
+              "json": {
+                "items.length": 0,
+                "totalCents": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "price-is-listed",
+      "sentence": "The basket charges the listed price for every unit",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "eggs",
+              "qty": 12
+            },
+            "expect": {
+              "status": 200
+            }
+          },
+          {
+            "path": "/api/cart",
+            "expect": {
+              "status": 200,
+              "json": {
+                "totalCents": 4800
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "unknown-product-refused",
+      "sentence": "A product that does not exist cannot be added",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "turnip",
+              "qty": 1
+            },
+            "expect": {
+              "status": 400
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-is-fast",
+      "sentence": "The market page answers in under 400 ms (p95 of 20 requests)",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/",
+            "repeat": 20,
+            "expect": {
+              "status": 200,
+              "p95Ms": 400
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "code-typechecks",
+      "sentence": "The code type-checks with no errors",
+      "check": {
+        "kind": "command",
+        "run": "npx tsc --noEmit -p tsconfig.json"
+      },
+      "scope": [
+        "src/**",
+        "tsconfig.json",
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "id": "code-lints",
+      "sentence": "The code passes the linter",
+      "check": {
+        "kind": "command",
+        "run": "npx biome lint src"
+      },
+      "scope": [
+        "src/**",
+        "biome.json",
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "id": "tooling-locked",
+      "sentence": "Lint and type-check settings only change by revision",
+      "check": {
+        "kind": "command",
+        "run": "printf '%s  %s\\n' 59a84695d901baa34c3e99fbdd740360528a175aac378dcf15ac29992af8dade biome.json a1ddb318478c949d6dea887eafb411b99e9cc602305330ff161315d6b33f9daa tsconfig.json | sha256sum -c --quiet -"
+      },
+      "scope": [
+        "biome.json",
+        "tsconfig.json"
+      ]
+    }
+  ],
+  "backlog": [
+    {
+      "id": "sold-out-refused",
+      "sentence": "A sold-out product cannot be added to the basket",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "honey",
+              "qty": 1
+            },
+            "expect": {
+              "status": 409
+            }
+          },
+          {
+            "path": "/api/cart",
+            "expect": {
+              "json": {
+                "items.length": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "search-by-name",
+      "sentence": "Shoppers can search products by name",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/api/products?q=egg",
+            "expect": {
+              "status": 200,
+              "json": {
+                "length": 2,
+                "0.id": "eggs"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "stall-hours",
+      "sentence": "Every stall shows its opening hours",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/api/stalls",
+            "expect": {
+              "status": 200,
+              "json": {
+                "0.hours": {
+                  "$exists": true
+                },
+                "2.hours": {
+                  "$exists": true
+                }
+              }
+            }
+          },
+          {
+            "path": "/",
+            "expect": {
+              "bodyIncludes": "Open"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "no-double-booking",
+      "sentence": "A stall cannot be double-booked",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "method": "POST",
+            "path": "/api/reservations",
+            "body": {
+              "stallId": 1,
+              "date": "2026-10-17",
+              "name": "Ada"
+            },
+            "expect": {
+              "status": 201
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/api/reservations",
+            "body": {
+              "stallId": 1,
+              "date": "2026-10-17",
+              "name": "Bo"
+            },
+            "expect": {
+              "status": 409
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/api/reservations",
+            "body": {
+              "stallId": 1,
+              "date": "2026-10-24",
+              "name": "Bo"
+            },
+            "expect": {
+              "status": 201
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "line-limit",
+      "sentence": "A single basket line can't exceed 99 units",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "eggs",
+              "qty": 100
+            },
+            "expect": {
+              "status": 400
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "eggs",
+              "qty": 99
+            },
+            "expect": {
+              "status": 200
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "remove-from-basket",
+      "sentence": "Shoppers can remove an item from the basket",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "eggs",
+              "qty": 2
+            },
+            "expect": {
+              "status": 200
+            }
+          },
+          {
+            "method": "DELETE",
+            "path": "/api/cart/eggs",
+            "expect": {
+              "status": 200
+            }
+          },
+          {
+            "path": "/api/cart",
+            "expect": {
+              "json": {
+                "items.length": 0,
+                "totalCents": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "product-page",
+      "sentence": "Each product has its own API page with its price",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/api/products/honey",
+            "expect": {
+              "status": 200,
+              "json": {
+                "id": "honey",
+                "priceCents": 1200
+              }
+            }
+          },
+          {
+            "path": "/api/products/turnip",
+            "expect": {
+              "status": 404
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "stall-products",
+      "sentence": "Each stall lists its own products",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/api/stalls/2/products",
+            "expect": {
+              "status": 200,
+              "json": {
+                "length": 2,
+                "0.stallId": 2
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "policy": {
+    "autoAccept": "backlog"
+  }
+}

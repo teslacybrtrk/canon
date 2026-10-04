@@ -42,16 +42,32 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     // Command facts (lint, types, tests, budgets) run on this commit's checkout, each in its own
     // container from the installed snapshot. The commands come from canon, never from the world.
     const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
+    // In parallel: each runs in its own container from the same snapshot, and each failure is caught on its own.
     const results: Record<string, CheckResult> = {};
-    for (const { factId, run } of commands) {
-      const started = Date.now();
-      try {
-        await deps.runner({ name: `fact ${factId}`, command: run, config: { retries: { limit: 0, delay: 1_000 }, timeout: 5 * 60_000 } });
-        results[factId] = { held: true, detail: "ok", ms: Date.now() - started };
-      } catch (err) {
-        results[factId] = { held: false, detail: commandFailure(run, err), ms: Date.now() - started };
-      }
-    }
+    await Promise.all(
+      commands.map(async ({ factId, run }) => {
+        const started = Date.now();
+        // A command that exits non-zero is a verdict. A platform error (container or Workflows
+        // trouble) is not: retry it in a fresh container, and never blame the code for it.
+        for (let attempt = 0; ; attempt++) {
+          try {
+            const name = attempt ? `fact ${factId} (retry ${attempt})` : `fact ${factId}`;
+            await deps.runner({ name, command: run, config: { retries: { limit: 0, delay: 1_000 }, timeout: 5 * 60_000 } });
+            results[factId] = { held: true, detail: "ok", ms: Date.now() - started };
+            return;
+          } catch (err) {
+            if (exitedNonZero(err)) {
+              results[factId] = { held: false, detail: commandFailure(run, err), ms: Date.now() - started };
+              return;
+            }
+            if (attempt >= 2) {
+              results[factId] = { held: false, detail: `\`${run}\` could not run (platform error, not your code): ${String((err as Error).message).slice(0, 120)}. Push again.`, ms: Date.now() - started };
+              return;
+            }
+          }
+        }
+      }),
+    );
 
     await step.do("judge", { retries: { limit: 4, delay: 10_000, backoff: "linear" }, timeout: 5 * 60_000 }, async () => {
       await referee.judge(repo, sha, previewUrl, results);
@@ -83,6 +99,12 @@ export class PromoteWorld extends CIWorkflow<CloudflareArtifacts, Env> {
 
 // `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. The Preview is
 // already per commit, so its stable URL is the one to keep.
+// The CI library reports a command's own failure as "<name> failed with exit code N".
+function exitedNonZero(err: unknown): boolean {
+  const text = isCiRunnerFailure(err) ? err.output : String((err as Error)?.message ?? err);
+  return /failed with exit code \d+/.test(text);
+}
+
 // The useful part of a failed command for a verdict: the first "file:line:col rule" location if the
 // tool printed one (lint and type errors do), plus its summary line; otherwise its last output lines.
 function commandFailure(run: string, err: unknown): string {

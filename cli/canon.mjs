@@ -13,7 +13,7 @@
 //      CANON_WORKDIR (where worlds are cloned; default ./worlds)
 
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const URL_BASE = process.env.CANON_URL?.replace(/\/$/, "");
@@ -205,7 +205,17 @@ function worldContext() {
   let dir = process.cwd();
   while (!existsSync(join(dir, ".git", "canon.json"))) {
     const up = dirname(dir);
-    if (up === dir) fail("not inside a Canon world (run `canon claim` first, then cd into the world)");
+    if (up === dir) {
+      // Not inside a world: use this agent's most recently claimed world under CANON_WORKDIR (default ./worlds).
+      const root = resolve(process.env.CANON_WORKDIR ?? "worlds");
+      const worlds = existsSync(root)
+        ? readdirSync(root).map((d) => join(root, d)).filter((d) => existsSync(join(d, ".git", "canon.json")))
+        : [];
+      if (!worlds.length) fail("not inside a Canon world (run `canon claim` first, then cd into the world)");
+      dir = worlds.sort((a, b) => statSync(join(b, ".git", "canon.json")).mtimeMs - statSync(join(a, ".git", "canon.json")).mtimeMs)[0];
+      console.error(`(using your latest world: ${dir})`);
+      break;
+    }
     dir = up;
   }
   return { root: dir, ...JSON.parse(readFileSync(join(dir, ".git", "canon.json"), "utf8")) };

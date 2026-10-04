@@ -78,7 +78,7 @@ builds the world as a Workers Preview (`wrangler preview --name <world>`) and as
 |---|---|
 | `contradicts` | a canon fact broke on this world. Rejected without anyone opening the diff. |
 | `unproven` | canon held; the claimed fact does not hold yet. |
-| `behind` | would be ready, but canon gained a fact after this world forked. |
+| `behind` | canon gained (or retired) a fact after this world forked; `canon refresh` re-applies its changes on the current canon. |
 | `ready` | canon held and the claimed fact holds. A human decides. |
 
 ## canon.json
@@ -99,6 +99,43 @@ cannot weaken a fact. A world's canon.json must equal canon plus the fact it cla
 Genesis is the exception: before any canon exists, the genesis world's own canon.json defines the facts, and
 genesis becomes canon only when its preview satisfies all of them. Genesis can be an empty repo you push to,
 or an import of an existing Git repo (`{"importUrl": "https://github.com/…"}`) that contains canon.json.
+
+## Revisions: changing a rule on purpose
+
+Behaviour may change, but never by accident. A claim's fact can `replace` a canon fact:
+
+```json
+{ "id": "price-with-bulk-discount", "replaces": "price-is-listed",
+  "sentence": "The basket charges the listed price, with 10% off any line of 10 or more", "check": { … } }
+```
+
+That world may break the replaced fact; its verdict lists it under `retires`. When a person accepts the revision,
+the old fact is retired (kept in history with the world and reason that retired it) and the new one becomes canon.
+Worlds that still carry the old fact are behind and refresh. Without a revision, breaking a canon fact is a contradiction.
+
+## Kinds of check, scopes and budgets
+
+| Check | Runs | Good for |
+|---|---|---|
+| `{"kind":"probe","steps":[…]}` | HTTP requests against the commit's live Preview | behaviour, API contracts, latency budgets |
+| `{"kind":"command","run":"…"}` | a shell command on the commit's checkout, in a clean CI container | lint, type-check, tests, coverage thresholds, bundle size, pinned config |
+
+- **Latency budget:** a probe step with `"repeat": 20` and `"expect": {"p95Ms": 400}` sends one warm-up request, then 20 timed ones.
+- **Scope:** `"scope": ["src/db/**", "migrations/**"]` judges a fact only on worlds that change a matching file. The referee diffs
+  the world's Git tree against the commit it forked from (in Artifacts), skipping identical subtrees. `canon read --for <path>`
+  lists the facts that govern a file.
+- Commands are owned by canon, not by the world: they call tools directly (not package scripts), and a fact can pin tool
+  configuration by hash so it only changes by revision.
+
+## Autopilot: people write the facts, agents land them
+
+```json
+{ "version": 1, "facts": [ … ], "backlog": [ { "id": "line-limit", … } ], "policy": { "autoAccept": "backlog" } }
+```
+
+`backlog` facts are written by people. Agents claim them with `canon claim --join <id>`. With `autoAccept: "backlog"`, the first
+world that keeps every canon fact and makes a backlog fact true is accepted automatically; the rest re-judge and refresh. Facts
+proposed by agents themselves still wait for a person, so an agent cannot lower the bar by inventing an easy rule.
 
 ## Review and promotion
 

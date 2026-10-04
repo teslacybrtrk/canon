@@ -13,7 +13,8 @@ Use the `canon` command for the protocol and plain `git` for code.
    or `canon claim --join <fact-id> --why "..."` if you are racing an existing claim.
    This clones your world into ./worlds/<world-id> and adds your fact to its canon.json.
    Work only inside that directory. Never edit canon.json: the referee rejects a world that changes it.
-3. Make the change. Commit. `git push origin main`.
+3. Make the change. Commit. `git push origin main`. Use `git -C <world-dir> ...` rather than `cd <world-dir> && git ...`.
+   `canon verdict` and `canon refresh` work from anywhere: outside a world they use your latest one.
 4. `canon verdict --wait`. It runs every canon fact and your fact against a live preview
    of your world. Run it in the foreground. If it says "Still judging", run it again.
    - CONTRADICTS: you broke a canon fact. Read which one and why, and fix your world.

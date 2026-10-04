@@ -55,6 +55,12 @@ Found while building, Oct 4–13, 2026.
 10. **A brand-new Preview can answer 5xx for a moment while its Durable Objects start.**
     *We did:* checks retry only on network errors or unexpected 5xx, never on real failures.
 
+11. **A CI runner step can fail with `WorkflowInternalError: Attempt failed due to internal workflows error`** after
+    several minutes, indistinguishable from a command failure unless you parse the message.
+    *We did:* treat only "failed with exit code N" as the command's verdict; retry anything else in a fresh container,
+    and report "could not run (platform error)" rather than blaming the code.
+    *Would help:* a typed error (`exitCode` on the thrown runner failure) so callers can tell the two apart.
+
 ## Things that worked especially well
 
 - `fork()` returns in about a second, and a fork's `source` field records lineage (`artifacts:canon/<parent>`),

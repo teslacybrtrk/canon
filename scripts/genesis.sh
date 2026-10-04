@@ -2,6 +2,8 @@
 # One-time setup: create the genesis world and push the demo app (which carries canon.json) into it.
 # The referee builds a Preview of genesis and makes it canon once every fact in its canon.json holds.
 #   CANON_URL=https://canon-referee.<you>.workers.dev ./scripts/genesis.sh
+# A different canon.json for this project (e.g. a backlog with autopilot):
+#   CANON_PROJECT=rodeo CANON_FILE=agents/canon.autopilot.json ./scripts/genesis.sh
 # To start from an existing repo instead (it must contain canon.json at its root):
 #   CANON_URL=... IMPORT_URL=https://github.com/<you>/<repo>.git ./scripts/genesis.sh
 set -euo pipefail
@@ -20,6 +22,7 @@ remote="$(node -e 'const r=JSON.parse(process.argv[1]); const u=new URL(r.remote
 work="$(mktemp -d)"
 cp -R demo-app/. "$work/"
 rm -rf "$work/node_modules" "$work/.wrangler"
+[ -n "${CANON_FILE:-}" ] && cp "$CANON_FILE" "$work/canon.json"
 git -C "$work" init -q -b main
 git -C "$work" add -A
 git -C "$work" -c user.name=canon -c user.email=canon@canon.local commit -qm "genesis: farmstand"
