@@ -7,11 +7,12 @@
   const SOLD_OUT = GENESIS;
   const now = Date.now();
   const check = { kind: "probe", steps: [] };
-  const fact = (id, sentence, status, extra = {}) => ({ id, sentence, status, check, proposedBy: null, madeTrueBy: null, createdAt: now, acceptedAt: status === "canon" ? now : null, ...extra });
-  const KEPT = ["market-lists-stalls", "products-have-prices", "cart-starts-empty", "price-is-listed", "unknown-product-refused", "sold-out-refused"];
+  const fact = (id, sentence, status, extra = {}) => ({ id, sentence, status, check, scope: null, replaces: null, origin: "seed", proposedBy: null, madeTrueBy: null, retiredBy: null, retiredAt: null, createdAt: now, acceptedAt: status === "canon" ? now : null, ...extra });
+  const cmd = (run) => ({ kind: "command", run });
+  const KEPT = ["market-lists-stalls", "products-have-prices", "cart-starts-empty", "price-is-listed", "unknown-product-refused", "page-is-fast", "code-typechecks", "code-lints", "sold-out-refused"];
   const verdict = (worldId, previewUrl, outcome, claimed, lost = [], extra = {}) => ({
     worldId, sha: "3cf7cec5a1b2c3d4e5f60718293a4b5c6d7e8f90", previewUrl, canonSeq: 2, outcome,
-    kept: KEPT.filter((k) => !lost.some((l) => l.factId === k)), lost, claimed, offers: [],
+    kept: KEPT.filter((k) => !lost.some((l) => l.factId === k)), lost, claimed, offers: [], retires: [], skipped: ["tooling-locked"], stale: [],
     ledger: { status: outcome === "behind" ? "behind" : "ok", detail: outcome === "behind" ? "canon gained sold-out-refused after this world forked; declare a fresh world" : "ok" },
     judgedAt: now, ...extra,
   });
@@ -21,21 +22,30 @@
     state: {
       project: "farmstand",
       canon: { worldId: "farmstand-yplv6l", sha: "14c534b25cd601f7187aed13e6ba50fd923d4634", seq: 2, previewUrl: SOLD_OUT },
+      policy: { autoAccept: "off" },
       facts: [
         fact("market-lists-stalls", "The market page lists every stall", "canon"),
         fact("products-have-prices", "All six products are for sale with a price", "canon"),
         fact("cart-starts-empty", "A new shopper's basket is empty", "canon"),
         fact("price-is-listed", "The basket charges the listed price for every unit", "canon"),
         fact("unknown-product-refused", "A product that does not exist cannot be added", "canon"),
+        fact("page-is-fast", "The market page answers in under 400 ms (p95 of 20 requests)", "canon"),
+        fact("code-typechecks", "The code type-checks with no errors", "canon", { check: cmd("npx tsc --noEmit -p tsconfig.json"), scope: ["src/**", "tsconfig.json"] }),
+        fact("code-lints", "The code passes the linter", "canon", { check: cmd("npx biome lint src"), scope: ["src/**", "biome.json"] }),
+        fact("tooling-locked", "Lint and type-check settings only change by revision", "canon", { check: cmd("printf … | sha256sum -c"), scope: ["biome.json", "tsconfig.json"] }),
         fact("sold-out-refused", "A sold-out product cannot be added to the basket", "canon", { madeTrueBy: "farmstand-yplv6l" }),
         fact("bulk-discount", "Buying 10 or more of one item takes 10% off that line", "proposed"),
         fact("no-double-booking", "A stall cannot be double-booked", "proposed"),
         fact("search-by-name", "Shoppers can search products by name", "proposed"),
-        fact("stall-hours", "Every stall shows its opening hours", "proposed"),
+        fact("stall-hours", "Every stall shows its opening hours", "proposed", { origin: "backlog" }),
+        fact("price-with-bulk-discount", "The basket charges the listed price, with 10% off any line of 10 or more", "proposed", { origin: "agent", replaces: "price-is-listed" }),
+        fact("free-delivery", "Orders over $50 ship free", "retired", { retiredBy: "farmstand-x1y2z3", retiredAt: now }),
       ],
       claims: [
         claim("c-1", "agent-1", "bulk-discount", "Buying 10 or more of one item takes 10% off that line", "contradicts", "Wholesale buyers asked for a discount", "farmstand-dkw3cr",
           verdict("farmstand-dkw3cr", DISCOUNT, "contradicts", { factId: "bulk-discount", held: true, detail: "ok" }, [{ factId: "price-is-listed", detail: "step 2: totalCents is 4320, expected 4800" }])),
+        claim("c-9", "agent-1", "price-with-bulk-discount", "The basket charges the listed price, with 10% off any line of 10 or more", "ready", "The business is changing its pricing rule for wholesale buyers", "farmstand-r3v1s0",
+          { ...verdict("farmstand-r3v1s0", DISCOUNT, "ready", { factId: "price-with-bulk-discount", held: true, detail: "ok" }), kept: KEPT.filter((k) => k !== "price-is-listed"), retires: ["price-is-listed"] }),
         claim("c-2", "agent-2", "no-double-booking", "A stall cannot be double-booked", "ready", "Vendors keep fighting over stall 1", "farmstand-p2q8zz",
           verdict("farmstand-p2q8zz", SOLD_OUT, "ready", { factId: "no-double-booking", held: true, detail: "ok" })),
         claim("c-3", "agent-3", "no-double-booking", "A stall cannot be double-booked", "unproven", "Joining the reservation race", "farmstand-m4n1aa",
