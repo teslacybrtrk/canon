@@ -89,7 +89,9 @@ Building Canon surfaced a few places where the platform could make agent-scale G
 ## Where the code lives
 
 The main remote for this repo is a Cloudflare Artifacts repo, and the referee deploys from it with Workers Builds.
-Canon serves its own source from Artifacts at https://canon.rodeo (browse it, or `git clone https://canon.rodeo/canon.git`).
+Canon serves its own source from Artifacts: browse https://canon.rodeo/src or `git clone https://canon.rodeo/canon.git`
+(no token; read-only). Any world clones the same way: `git clone https://canon.rodeo/w/<world-id>.git`.
+`scripts/push.sh` pushes to both remotes.
 GitHub hosts a mirror as the archive.
 
 ## License

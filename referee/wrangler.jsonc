@@ -13,7 +13,11 @@
   "workers_dev": true,
 
   // Every world is a repo in this namespace: "<project>-genesis", "<project>-<id>".
-  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "canon" }],
+  "artifacts": [
+    { "binding": "ARTIFACTS", "namespace": "canon" },
+    // Canon's own source, served read-only at canon.rodeo/canon.git and /src.
+    { "binding": "SOURCE", "namespace": "canon-src" }
+  ],
 
   // Referee: one SQLite-backed Durable Object per project.
   // CiSandbox: containers that build Previews and run production deploys.
@@ -50,6 +54,8 @@
   "vars": {
     "ARTIFACTS_NAMESPACE": "canon",
     // Bump to give every project a fresh referee (see scripts/reset-project.sh).
+    // Flip to "true" on submission day to publish canon.rodeo/canon.git and /src.
+    "SOURCE_PUBLIC": "false",
     "REFEREE_EPOCH": "6",
     "BACKUP_BUCKET_NAME": "canon-ci-snapshots",
     "CLOUDFLARE_ACCOUNT_ID": "2d9aba350caa70abf3ce6c910950ffd0",

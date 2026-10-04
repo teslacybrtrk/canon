@@ -23,6 +23,9 @@ Found while building, Oct 4–13, 2026.
 
 3. **No public, read-only Artifacts repos.**
    Every clone needs a token, so an open-source project cannot be cloned or browsed from Artifacts alone.
+   *We did:* a Worker that proxies Git smart-HTTP (`info/refs`, `git-upload-pack`) with a 5-minute read token
+   minted per request and refuses `git-receive-pack`: `git clone https://canon.rodeo/canon.git` works with no
+   token, and every world clones the same way. About 40 lines.
    *Would help:* a per-repo public-read flag (clone and browse without a token, never push).
 
 4. **Importing a repo emits no `pushed` event.**

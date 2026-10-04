@@ -1,6 +1,7 @@
 import { CiSandbox } from "@cloudflare/ci/worker";
 import type { Env } from "./env";
 import { errorStatus, type DeclareRequest } from "./protocol";
+import { serveGit, serveSource } from "./source";
 import { refereeForProject } from "./stub";
 
 export { CiSandbox };
@@ -18,10 +19,13 @@ export { VerifyWorld, PromoteWorld } from "./pipelines";
 //   GET  /p/:project/facts/:id/why            the fact chain
 //   GET  /p/:project/ws                       live board
 //   GET  /p/:project/previews                 Preview names used (for reset)
+//   git clone https://canon.rodeo/canon.git   Canon's own source, read-only (also /w/<world>.git, /src)
 //   POST /p/:project/genesis                  one-time setup (empty repo, or {"importUrl": "<git url>"})
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const served = (await serveGit(request, env)) ?? (await serveSource(request, env));
+    if (served) return served;
     const m = url.pathname.match(/^\/p\/([a-z0-9]+)(\/.*)$/);
     if (!m) return env.ASSETS.fetch(request);
     const [, project, rest] = m;

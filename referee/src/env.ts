@@ -8,6 +8,8 @@ export type Env = CiBindings & {
   REFEREE: DurableObjectNamespace<Referee>;
   PROMOTE_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   ASSETS: Fetcher;
+  SOURCE: Artifacts; // namespace canon-src: Canon's own source
+  SOURCE_PUBLIC: string; // "true" publishes canon.git and /src (flip on submission day)
   ARTIFACTS_NAMESPACE: string;
   // Part of each referee's name; bump it to reset every project's board.
   REFEREE_EPOCH: string;
