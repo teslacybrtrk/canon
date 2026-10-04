@@ -13,6 +13,9 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     const worldId = await step.do("register push", () => referee.pushed(repo, sha));
     if (!worldId) return;
 
+    // One Preview per pushed commit. Within a single Preview, Durable Objects always run the
+    // latest push, so only a Preview of its own keeps a judged attempt exactly as it was.
+    const previewName = `${repo}-${sha.slice(0, 7)}`;
     let previewUrl: string;
     try {
       const deps = await ci.runner({
@@ -23,11 +26,11 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
       });
       const preview = await deps.runner({
         name: "preview",
-        command: `npx wrangler preview --name ${repo} --json`,
+        command: `npx wrangler preview --name ${previewName} --json`,
         cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
         config: { retries: { limit: 1, delay: 5_000 } },
       });
-      previewUrl = previewUrlFrom(preview.logs) ?? this.env.PREVIEW_URL_TEMPLATE.replace("{name}", repo);
+      previewUrl = previewUrlFrom(preview.logs) ?? this.env.PREVIEW_URL_TEMPLATE.replace("{name}", previewName);
     } catch (err) {
       const detail = isCiRunnerFailure(err) ? err.message : String(err);
       await step.do("build failed", () => referee.buildFailed(repo, sha, detail));
@@ -60,9 +63,8 @@ export class PromoteWorld extends CIWorkflow<CloudflareArtifacts, Env> {
   }
 }
 
-// `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. Judge the
-// deployment URL: it is immutable, so a rejected world stays viewable exactly as judged,
-// while the preview URL follows the world's latest push.
+// `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. The Preview is
+// already per commit, so its stable URL is the one to keep.
 function previewUrlFrom(logs: CiRunnerResult["logs"]): string | null {
   if (typeof logs.stdout !== "string") return null;
   const out = logs.stdout;
@@ -71,7 +73,7 @@ function previewUrlFrom(logs: CiRunnerResult["logs"]): string | null {
       preview?: { urls?: string[] };
       deployment?: { urls?: string[] };
     };
-    const url = json.deployment?.urls?.[0] ?? json.preview?.urls?.[0];
+    const url = json.preview?.urls?.[0] ?? json.deployment?.urls?.[0];
     if (url) return url;
   } catch {
     // not JSON; fall through to the first workers.dev URL in the output

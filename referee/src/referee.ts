@@ -187,6 +187,13 @@ export class Referee extends DurableObject<Env> {
     this.broadcast();
   }
 
+  /** Names of every Preview this project's verdicts used, so a reset can delete them. */
+  previews(): string[] {
+    const [head, tail] = this.env.PREVIEW_URL_TEMPLATE.split("{name}");
+    const urls = this.rows(`SELECT DISTINCT json_extract(json, '$.previewUrl') AS url FROM verdicts`).map((r) => String(r.url ?? ""));
+    return urls.filter((u) => u.startsWith(head) && u.endsWith(tail)).map((u) => u.slice(head.length, u.length - tail.length));
+  }
+
   verdict(worldId: string): Verdict | null {
     return this.latestVerdict(worldId);
   }
@@ -248,11 +255,21 @@ export class Referee extends DurableObject<Env> {
   why(factId: string) {
     const fact = this.fact(factId);
     if (!fact) throw new ProtocolError(404, "no such fact");
+    // A fact's history is the worlds that tried to make it true, plus the worlds that broke it
+    // while it was canon. Each trial links the Preview of the exact commit judged, not the
+    // world's latest one, so a rejected attempt stays viewable as it was.
+    const canonSince = fact.acceptedAt ?? Number.MAX_SAFE_INTEGER;
     const trials = this.rows(
-      `SELECT r.world_id, r.sha, r.held, r.detail, r.at, w.preview_url, c.agent, c.why, c.status
-         FROM results r JOIN worlds w ON w.id = r.world_id LEFT JOIN claims c ON c.id = w.claim_id
-        WHERE r.fact_id = ? ORDER BY r.at DESC`,
-      factId,
+      `SELECT r.world_id, r.sha, r.held, r.detail, r.at,
+              COALESCE(NULLIF(json_extract(v.json, '$.previewUrl'), ''), w.preview_url) AS preview_url,
+              c.agent, c.why, c.status
+         FROM results r
+         JOIN worlds w ON w.id = r.world_id
+         LEFT JOIN claims c ON c.id = w.claim_id
+         LEFT JOIN verdicts v ON v.world_id = r.world_id AND v.sha = r.sha
+        WHERE r.fact_id = ? AND (c.fact_id = ? OR r.at >= ?)
+        ORDER BY r.at DESC`,
+      factId, factId, canonSince,
     );
     const madeTrueBy = fact.madeTrueBy ? { world: this.world(fact.madeTrueBy), claim: this.rows(`SELECT * FROM claims WHERE world_id = ?`, fact.madeTrueBy).map(toClaim)[0] ?? null } : null;
     return {

@@ -17,6 +17,7 @@ export { VerifyWorld, PromoteWorld } from "./pipelines";
 //   POST /p/:project/claims/:id/accept        review: a human accepts a fact
 //   GET  /p/:project/facts/:id/why            the fact chain
 //   GET  /p/:project/ws                       live board
+//   GET  /p/:project/previews                 Preview names used (for reset)
 //   POST /p/:project/genesis                  one-time setup (empty repo, or {"importUrl": "<git url>"})
 export default {
   async fetch(request, env) {
@@ -31,6 +32,7 @@ export default {
       let match: RegExpMatchArray | null;
       if (route === "GET /ws") return referee.fetch(request);
       if (route === "GET /canon") return json(await referee.read());
+      if (route === "GET /previews") return json(await referee.previews());
       if (route === "POST /genesis") {
         const body = await request.json<{ importUrl?: string }>().catch(() => ({}) as { importUrl?: string });
         return json(await referee.genesis(project, body.importUrl), 201);
