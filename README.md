@@ -84,6 +84,7 @@ node scripts/check-local.ts http://localhost:8787   # canon.json facts hold; dem
 node scripts/test-ledger.ts                         # canon.json rules: tampering, revisions, retirement
 node scripts/test-scope.ts                          # fact scopes and changed-file detection
 node scripts/test-probe.ts                          # retries and latency budgets
+node scripts/test-page.mjs                          # board page: unique element ids
 ```
 
 The referee has no login. Put it behind Cloudflare Access before sharing the URL, because `declare` hands out
