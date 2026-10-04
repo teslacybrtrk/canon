@@ -17,8 +17,12 @@ model_for() {
   esac
 }
 
+# Agents may run only the protocol, Git, the app's toolchain and read-only shell commands.
+TOOLS=(Read Edit Write Glob Grep "Bash(canon:*)" "Bash(git:*)" "Bash(npm:*)" "Bash(npx:*)" "Bash(node:*)" "Bash(cd:*)" "Bash(ls:*)" "Bash(cat:*)" "Bash(pwd)" "Bash(sleep:*)")
+
 for prompt in agents/prompts/*.md; do
   name="$(basename "$prompt" .md)"           # agent-1-discount
+  [ -n "${ONLY:-}" ] && [[ "$name" != "$ONLY"* ]] && continue   # ONLY=agent-4 runs one agent
   agent="$(echo "$name" | cut -d- -f1-2)"     # agent-1
   dir="runs/$name"
   rm -rf "$dir" && mkdir -p "$dir"
@@ -27,7 +31,9 @@ for prompt in agents/prompts/*.md; do
     cd "$dir"
     CANON_AGENT="$agent" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md" "$ROOT/$prompt")" \
       --model "$(model_for "$name")" \
-      --allowedTools "Bash,Read,Edit,Write,Glob,Grep" \
+      --allowedTools "${TOOLS[@]}" \
+      --strict-mcp-config --disable-slash-commands \
+      --output-format stream-json --verbose \
       > agent.log 2>&1 && echo "$agent done" || echo "$agent exited non-zero (see $dir/agent.log)"
   ) &
   sleep 3 # stagger so claims land on the board one at a time
