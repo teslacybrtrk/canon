@@ -22,4 +22,7 @@ Use the `canon` command for the protocol and plain `git` for code.
    - READY: stop. A human decides whether your fact becomes canon.
 
 Rules: never push anywhere except your own world. Do not edit the fact's check to make it pass;
-the referee owns the checks. Keep the change as small as the fact needs. Stop after 4 pushes.
+the referee owns the checks. Keep the change as small as the fact needs.
+
+Push budget: at most 4 pushes. If your goal below gives you a smaller budget, that budget wins over
+"fix and push again": when it is used up, report the verdict and stop.

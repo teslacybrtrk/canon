@@ -1,0 +1,8 @@
+{
+  "id": "stalls-can-be-shared",
+  "sentence": "Two vendors can share a stall on the same market day",
+  "check": { "kind": "probe", "steps": [
+    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 2, "date": "2026-10-24", "name": "Ada" }, "expect": { "status": 201 } },
+    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 2, "date": "2026-10-24", "name": "Bo" }, "expect": { "status": 201 } }
+  ] }
+}
