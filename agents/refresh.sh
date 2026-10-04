@@ -10,7 +10,8 @@ ROOT="$PWD"
 TOOLS=(Read Edit Write Glob Grep "Bash(canon:*)" "Bash(git:*)" "Bash(npm:*)" "Bash(npx:*)" "Bash(node:*)" "Bash(cd:*)" "Bash(ls:*)" "Bash(cat:*)" "Bash(pwd)" "Bash(sleep:*)")
 PROMPT="Canon has moved since you finished: another fact was accepted. Your world in ./worlds is now behind canon.
 cd into your world, run \`canon refresh\`, then cd into the new world it prints, resolve any conflict,
-push, and run \`canon verdict --wait\`. Then follow the protocol for the verdict you get."
+push, and run \`canon verdict --wait\`. When resolving conflicts, keep your own fact's behaviour as well as
+canon's. Then follow the protocol for the verdict you get."
 
 for agent in "$@"; do
   dir="$(ls -d runs/"$agent"-* 2>/dev/null | head -1)"

@@ -54,7 +54,7 @@
       "price-is-listed": {
         fact: fact("price-is-listed", "The basket charges the listed price for every unit", "canon"),
         madeTrueBy: null,
-        rejected: [{ world_id: "farmstand-dkw3cr", sha: "3cf7cec5", held: 0, detail: "step 2: totalCents is 4320, expected 4800", at: now, preview_url: DISCOUNT, agent: "agent-1", why: "Wholesale buyers asked for a discount", status: "contradicts" }],
+        rejected: [{ world_id: "farmstand-dkw3cr", sha: "3cf7cec5", held: 0, detail: "step 2: totalCents is 4320, expected 4800", at: now, preview_url: DISCOUNT, agent: "agent-1", why: "Wholesale buyers asked for a discount", status: "contradicts", kind: "contradiction" }],
         held: [],
       },
       "sold-out-refused": {
@@ -63,7 +63,7 @@
           world: { id: "farmstand-yplv6l", previewUrl: SOLD_OUT },
           claim: { id: "c-7", agent: "agent-4", why: "Honey keeps getting oversold", factId: "sold-out-refused", status: "accepted" },
         },
-        rejected: [{ world_id: "farmstand-genesis", sha: "aac567fd", held: 0, detail: "step 1: POST /api/cart returned 200, expected 409", at: now, preview_url: GENESIS, agent: null, why: null, status: null }],
+        rejected: [{ world_id: "farmstand-genesis", sha: "aac567fd", held: 0, detail: "step 1: POST /api/cart returned 200, expected 409", at: now, preview_url: GENESIS, agent: "agent-7", why: "Also fixing oversold honey", status: "superseded", kind: "attempt" }],
         held: [],
       },
     },

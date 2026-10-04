@@ -264,7 +264,7 @@ export class Referee extends DurableObject<Env> {
     const trials = this.rows(
       `SELECT r.world_id, r.sha, r.held, r.detail, r.at,
               COALESCE(NULLIF(json_extract(v.json, '$.previewUrl'), ''), w.preview_url) AS preview_url,
-              c.agent, c.why, c.status
+              c.agent, c.why, c.status, c.fact_id AS claimed_fact, w.created_at AS forked_at
          FROM results r
          JOIN worlds w ON w.id = r.world_id
          LEFT JOIN claims c ON c.id = w.claim_id
@@ -273,11 +273,16 @@ export class Referee extends DurableObject<Env> {
         ORDER BY r.at DESC`,
       factId, factId, canonSince,
     );
+    // Each failed trial is one of: an attempt (the world claimed this fact), a contradiction
+    // (the world forked after the fact was canon and still broke it), or behind (the world was
+    // built before the fact existed, so it simply lacks the code).
+    const kindOf = (t: Row) =>
+      t.claimed_fact === factId ? "attempt" : (t.forked_at as number) >= canonSince ? "contradiction" : "behind";
     const madeTrueBy = fact.madeTrueBy ? { world: this.world(fact.madeTrueBy), claim: this.rows(`SELECT * FROM claims WHERE world_id = ?`, fact.madeTrueBy).map(toClaim)[0] ?? null } : null;
     return {
       fact,
       madeTrueBy,
-      rejected: trials.filter((t) => !t.held),
+      rejected: trials.filter((t) => !t.held).map((t) => ({ ...t, kind: kindOf(t) })),
       held: trials.filter((t) => t.held),
     };
   }

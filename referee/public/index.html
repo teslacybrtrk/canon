@@ -131,16 +131,21 @@
     const w = MOCK ? window.CANON_MOCK.why[id] ?? { fact: state.facts.find((f) => f.id === id), madeTrueBy: null, rejected: [], held: [] }
                    : await (await fetch(`/p/${project}/facts/${id}/why`)).json();
     const frame = (url, label) => url ? `<div><div class="row"><strong>${label}</strong> <a href="${esc(url)}" target="_blank" rel="noopener">open</a></div><iframe src="${esc(url)}" loading="lazy"></iframe></div>` : "";
-    const rejected = [...new Map(w.rejected.map((r) => [r.world_id, r])).values()];
+    // Latest failure per world. Previews only for real failures; worlds built before the fact existed are listed.
+    const latest = [...new Map([...w.rejected].reverse().map((r) => [r.world_id, r])).values()];
+    const failed = latest.filter((r) => r.kind !== "behind");
+    const behind = latest.filter((r) => r.kind === "behind");
+    const label = (r) => r.kind === "attempt" ? "Tried and failed" : "Broke it after it became canon";
     $("whybody").innerHTML = `
       <h2>Why is this true?</h2>
       <div class="sentence" style="font-size:18px">${esc(w.fact.sentence)}</div>
       ${w.madeTrueBy ? `<p>Made true by <b>${esc(w.madeTrueBy.claim?.agent)}</b> in ${esc(w.madeTrueBy.world?.id)}: “${esc(w.madeTrueBy.claim?.why)}”</p>` : `<p>Seed fact.</p>`}
-      ${rejected.length ? `<p>${rejected.length} world(s) failed this fact.</p>` : ""}
+      ${failed.length ? `<p>${failed.length} world(s) failed this fact.</p>` : ""}
       <div class="worlds">
         ${w.madeTrueBy ? frame(w.madeTrueBy.world?.previewUrl, "Accepted world") : ""}
-        ${rejected.map((r) => frame(r.preview_url, `Rejected: ${esc(r.agent ?? r.world_id)} — ${esc(r.detail)}`)).join("")}
-      </div>`;
+        ${failed.map((r) => frame(r.preview_url, `${label(r)}: ${esc(r.agent ?? r.world_id)}: ${esc(r.detail)}`)).join("")}
+      </div>
+      ${behind.length ? `<p class="why">Built before this fact existed: ${behind.map((r) => esc(r.agent ?? r.world_id)).join(", ")}</p>` : ""}`;
     $("why").showModal();
   }
 
