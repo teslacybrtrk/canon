@@ -510,17 +510,23 @@ function validateCheck(check: Check) {
   }
 }
 
+// Waits until the Preview is deployed. 404 or no connection means "not deployed yet" (the
+// Workflow step retries). A Preview that keeps answering 5xx is deployed but broken: it is
+// judged as it is, so a crashing world gets a verdict instead of hanging.
 async function waitForPreview(origin: string) {
   const deadline = Date.now() + PREVIEW_READY_TIMEOUT_MS;
+  let lastStatus = 0;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(origin, { signal: AbortSignal.timeout(5_000) });
+      lastStatus = res.status;
       if (res.status < 500 && res.status !== 404) return;
     } catch {
-      // not serving yet
+      lastStatus = 0;
     }
     await sleep(2_000);
   }
+  if (lastStatus >= 500) return;
   throw new Error(`preview ${origin} is not serving yet`);
 }
 

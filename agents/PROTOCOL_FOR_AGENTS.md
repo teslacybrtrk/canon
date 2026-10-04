@@ -14,7 +14,7 @@ Use the `canon` command for the protocol and plain `git` for code.
    Work only inside that directory. Never edit canon.json: the referee rejects a world that changes it.
 3. Make the change. Commit. `git push origin main`.
 4. `canon verdict --wait`. It runs every canon fact and your fact against a live preview
-   of your world.
+   of your world. Run it in the foreground. If it says "Still judging", run it again.
    - CONTRADICTS: you broke a canon fact. Read which one and why, and fix your world.
      Never weaken a canon fact. If your fact cannot coexist with it, stop and say so.
    - UNPROVEN: canon held but your fact does not. Fix and push again.

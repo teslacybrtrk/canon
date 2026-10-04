@@ -19,7 +19,9 @@ import { dirname, join, resolve } from "node:path";
 const URL_BASE = process.env.CANON_URL?.replace(/\/$/, "");
 const PROJECT = process.env.CANON_PROJECT ?? "farmstand";
 const AGENT = process.env.CANON_AGENT ?? process.env.USER ?? "agent";
-const WAIT_MS = 15 * 60_000;
+// Coding agents background shell commands that run past about 2 minutes, then lose the result.
+// One wait stays under that; if no verdict yet, the command says to run it again.
+const WAIT_MS = 100_000;
 
 const [cmd, ...rest] = process.argv.slice(2);
 const args = parseArgs(rest);
@@ -129,7 +131,10 @@ async function verdict() {
     await new Promise((r) => setTimeout(r, 5_000));
   }
   if (v.sha !== head) {
-    console.log(`No verdict for ${head.slice(0, 8)} yet${v.sha ? ` (last verdict was for ${v.sha.slice(0, 8)})` : ""}. Did you push?`);
+    const pushed = git(["-C", ctx.root, "ls-remote", "origin", "refs/heads/main"]).startsWith(head);
+    console.log(pushed
+      ? `Still judging ${head.slice(0, 8)} (the preview is building). Run \`canon verdict --wait\` again.`
+      : `No verdict for ${head.slice(0, 8)}: it is not pushed. Run \`git push origin main\` first.`);
     process.exit(3);
   }
   console.log(`VERDICT ${v.outcome.toUpperCase()}  world ${v.worldId} @ ${v.sha.slice(0, 8)}`);
