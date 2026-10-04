@@ -1,10 +1,10 @@
 // Sample board state for design work: open https://canon.rodeo/?mock
 // Covers every claim status and both kinds of "why" (seed fact, accepted fact).
-// Preview URLs are real deployments from the Oct 4 spike, so iframes load live pages.
+// Every preview link points at the production app, which always exists (rehearsal Previews get deleted on reset).
 (() => {
-  const GENESIS = "https://211b4631-farmstand.philipemanuele.workers.dev"; // canon before sold-out (allows honey)
-  const DISCOUNT = "https://caeedbb1-farmstand.philipemanuele.workers.dev"; // bulk discount world (breaks price-is-listed)
-  const SOLD_OUT = "https://735990e3-farmstand.philipemanuele.workers.dev"; // accepted world (refuses sold-out honey)
+  const GENESIS = "https://farmstand.philipemanuele.workers.dev"; // sample data: the always-on production app
+  const DISCOUNT = GENESIS;
+  const SOLD_OUT = GENESIS;
   const now = Date.now();
   const check = { kind: "probe", steps: [] };
   const fact = (id, sentence, status, extra = {}) => ({ id, sentence, status, check, proposedBy: null, madeTrueBy: null, createdAt: now, acceptedAt: status === "canon" ? now : null, ...extra });

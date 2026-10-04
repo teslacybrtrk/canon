@@ -3,135 +3,422 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Canon Board</title>
+<title>Canon · canon.rodeo</title>
+<meta name="description" content="Canon: main is not a branch. It is the set of facts that must stay true of the running app. A referee for many coding agents on one codebase, built on Cloudflare Artifacts.">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="theme-color" content="#01132a">
+<meta name="theme-color" content="#010e20">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Instrument+Sans:wght@400..700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   /* Palette from the canon.rodeo icon: midnight #01132A, sunset #FD6F16 / #ED5616, sun gold #FDC86D.
-     Orange is the brand only; status colours (held green, lost crimson, pending amber) stay distinct. */
+     Orange is the brand; status colours (held green, lost crimson, pending amber) stay distinct. */
   :root {
-    --bg: #fbf7f2; --panel: #ffffff; --ink: #01132a; --muted: #5b6577; --line: #e7e1d8;
-    --brand: #ed5616; --link: #c2410c;
-    --held: #1e7b4f; --held-bg: #e3f4ea; --broke: #c0264e; --broke-bg: #fbe7ec;
-    --pending: #8a5a00; --pending-bg: #fff1d6;
+    --bg: #010e20; --bg-2: #031631; --panel: rgb(8 28 54 / 0.72); --panel-solid: #071a33;
+    --ink: #f5efe6; --ink-2: #c9c3ba; --muted: #8796ab; --line: rgb(135 150 171 / 0.18); --line-2: rgb(135 150 171 / 0.32);
+    --brand: #fd6f16; --brand-2: #ed5616; --gold: #fdc86d; --link: #fd9a55;
+    --held: #4cc38a; --held-bg: rgb(76 195 138 / 0.12); --broke: #ff6b86; --broke-bg: rgb(255 107 134 / 0.12);
+    --pending: #fdc86d; --pending-bg: rgb(253 200 109 / 0.12);
+    --serif: "Fraunces", Georgia, serif; --sans: "Instrument Sans", system-ui, sans-serif; --mono: "Martian Mono", ui-monospace, monospace;
+    --sky: radial-gradient(120% 90% at 50% 100%, #fd6f16 0%, #ed5616 18%, #7a2a1d 38%, #1b1a33 60%, transparent 78%);
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #010e20; --panel: #06182f; --ink: #f3eee6; --muted: #93a1b5; --line: #16304f;
-      --brand: #fd6f16; --link: #fd8a3d;
-      --held: #4cc38a; --held-bg: #0c2a26; --broke: #ff6b86; --broke-bg: #331426;
-      --pending: #fdc86d; --pending-bg: #2b2414;
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #fbf6ef; --bg-2: #f6eee3; --panel: rgb(255 255 255 / 0.8); --panel-solid: #ffffff;
+      --ink: #01132a; --ink-2: #2a3a52; --muted: #5b6577; --line: rgb(1 19 42 / 0.10); --line-2: rgb(1 19 42 / 0.2);
+      --brand: #ed5616; --brand-2: #c2410c; --gold: #b7791f; --link: #c2410c;
+      --held: #1e7b4f; --held-bg: rgb(30 123 79 / 0.1); --broke: #c0264e; --broke-bg: rgb(192 38 78 / 0.09);
+      --pending: #8a5a00; --pending-bg: rgb(183 121 31 / 0.12);
+      --sky: radial-gradient(120% 90% at 50% 100%, #fd8f3e 0%, #fdb36d 22%, #fde3c4 45%, transparent 75%);
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 ui-sans-serif, system-ui, sans-serif; }
-  header { display: flex; align-items: center; gap: 12px; padding: 20px 16px 8px; max-width: 1280px; margin: 0 auto; flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
-  header h1 img { width: 36px; height: 36px; border-radius: 9px; }
-  header h1 span { color: var(--muted); font-weight: 400; font-size: 15px; }
-  header p { margin: 0; color: var(--muted); }
-  #canonline { margin-left: auto; color: var(--muted); font: 13px ui-monospace, monospace; }
-  #canonline::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); margin-right: 8px; }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; padding: 8px 16px 32px; max-width: 1280px; margin: 0 auto; }
-  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
-  h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-  .fact { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 8px; cursor: pointer; }
-  .fact:hover { background: var(--bg); }
-  .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--held); }
-  .dot.proposed { background: transparent; border: 2px solid var(--pending); }
-  .fact small { display: block; color: var(--muted); font: 12px ui-monospace, monospace; }
-  .claim { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
-  .claim .who { font-weight: 600; }
-  .claim .sentence { font-size: 16px; margin: 2px 0 8px; }
-  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .s-ready, .s-accepted { background: var(--held-bg); color: var(--held); }
-  .s-contradicts { background: var(--broke-bg); color: var(--broke); }
-  .s-unproven, .s-checking, .s-open, .s-behind { background: var(--pending-bg); color: var(--pending); }
-  .s-superseded { background: var(--line); color: var(--muted); }
-  .diff { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-  .diff span { font: 12px ui-monospace, monospace; padding: 2px 6px; border-radius: 6px; }
-  .kept { background: var(--held-bg); color: var(--held); }
-  .lost { background: var(--broke-bg); color: var(--broke); }
-  .new { border: 1px dashed var(--pending); color: var(--pending); }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  a { color: var(--link); }
-  button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 6px 14px; background: var(--brand); color: #fff; cursor: pointer; }
-  button:disabled { opacity: 0.6; cursor: default; }
-  .why { margin-top: 6px; color: var(--muted); font-style: italic; }
-  dialog { width: min(1100px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); padding: 16px; }
-  dialog::backdrop { background: rgb(0 0 0 / 0.4); }
-  .worlds { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
-  .worlds iframe { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
-  .empty { color: var(--muted); padding: 8px; }
-  details summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 8px 0; }
+  html { background: var(--bg); scroll-behavior: smooth; }
+  body { margin: 0; color: var(--ink); font: 15px/1.55 var(--sans); background: var(--bg); min-height: 100vh; overflow-x: hidden; }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: 0.06; mix-blend-mode: overlay; z-index: 50;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  code { font: 12.5px var(--mono); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px; }
+  .kicker { font: 500 12px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin: 0 0 14px; }
+  h2 { font: 500 clamp(28px, 3.4vw, 40px)/1.08 var(--serif); letter-spacing: -0.02em; margin: 0; }
+  h2 em { font-style: italic; font-weight: 400; color: var(--brand); }
+  .sub { color: var(--ink-2); font: 400 18px/1.5 var(--serif); margin: 12px 0 0; max-width: 40em; }
+
+  /* ---- Hero: the sun on the horizon is the canon ---------------------------------- */
+  .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+  .hero::before { content: ""; position: absolute; inset: 0; background: var(--sky); opacity: 0.55; }
+  .sun { position: absolute; left: 50%; bottom: -310px; width: 500px; height: 500px; margin-left: -250px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, #fdc86d 0%, #fd8a2c 38%, #ed5616 64%, rgb(237 86 22 / 0) 71%);
+    animation: rise 1.6s cubic-bezier(.2,.7,.1,1) both, breathe 9s ease-in-out 1.6s infinite; }
+  .horizon { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--brand) 30%, var(--gold) 50%, var(--brand) 70%, transparent); opacity: 0.8; }
+  .ridge { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; color: var(--bg); }
+  .bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 14px; padding-top: 18px; padding-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 600 18px/1 var(--sans); color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
+  .brand img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 0 0 1px var(--line-2), 0 8px 24px -8px rgb(253 111 22 / 0.6); }
+  .brand small { font: 400 13px var(--mono); color: var(--muted); }
+  nav.links { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
+  nav.links a { color: var(--ink-2); text-decoration: none; }
+  nav.links a:hover { color: var(--ink); }
+  .hero-body { position: relative; z-index: 2; padding-top: 40px; padding-bottom: 170px; max-width: 880px; text-align: center; margin: 0 auto; }
+  h1 { font: 500 clamp(44px, 7vw, 88px)/0.96 var(--serif); letter-spacing: -0.03em; margin: 0; font-variation-settings: "opsz" 144, "SOFT" 50; }
+  h1 em { font-style: italic; font-weight: 400; color: var(--brand); }
+  .lede { font: 400 20px/1.5 var(--serif); color: var(--ink-2); margin: 22px auto 0; max-width: 36em; }
+  .lede b { color: var(--ink); font-weight: 600; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font: 600 14.5px var(--sans); text-decoration: none; padding: 11px 18px; border-radius: 12px; border: 0; cursor: pointer; }
+  .btn.primary { color: #1a0b02; background: linear-gradient(180deg, #fdac5c, var(--brand) 55%, var(--brand-2)); box-shadow: 0 12px 28px -12px rgb(253 111 22 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.35); }
+  .cmd { display: inline-flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; padding: 4px 4px 4px 14px; backdrop-filter: blur(10px); max-width: 100%; }
+  .cmd code { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cmd code::before { content: "$ "; color: var(--brand); }
+  .copy { font: 500 12px var(--mono); color: var(--ink-2); background: transparent; border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+  .copy:hover { color: var(--ink); border-color: var(--brand); }
+  .copy.done { color: var(--held); border-color: var(--held); }
+
+  /* ---- How it works: the four moves -------------------------------------------------- */
+  .how { padding: 72px 0 24px; }
+  .moves { list-style: none; margin: 34px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; position: relative; }
+  .moves::before { content: ""; position: absolute; top: 31px; left: 6%; right: 6%; height: 1px; background: linear-gradient(90deg, var(--brand), var(--gold), var(--held)); opacity: .55; }
+  .move { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; backdrop-filter: blur(10px); }
+  .move .n { position: relative; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 500 11px var(--mono); color: #1a0b02;
+    background: radial-gradient(circle at 50% 35%, var(--gold), var(--brand) 75%); box-shadow: 0 0 0 6px var(--bg), 0 0 18px -2px rgb(253 111 22 / .8); margin-bottom: 14px; }
+  .move h3 { font: 500 21px/1.2 var(--serif); margin: 0 0 6px; letter-spacing: -0.01em; }
+  .move p { margin: 0; color: var(--ink-2); font-size: 14px; }
+  .example { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--bg-2); border: 1px dashed var(--line-2); font: 400 11.5px/1.6 var(--mono); color: var(--ink-2); }
+  .example .ok { color: var(--held); } .example .bad { color: var(--broke); } .example .dim { color: var(--muted); }
+
+  /* ---- Live strip -------------------------------------------------------------------- */
+  .live { padding: 56px 0 0; }
+  .live-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .strip-inner { margin-top: 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr); background: var(--panel); border: 1px solid var(--line-2);
+    border-radius: 16px; backdrop-filter: blur(16px); overflow: hidden; }
+  .stat { padding: 16px 18px; border-right: 1px solid var(--line); }
+  .stat b { display: block; font: 500 30px/1.1 var(--serif); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat span, .pointer > span { font: 400 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .pointer { padding: 16px 18px; display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
+  #canonline { font: 400 13px var(--mono); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 10px; }
+  #canonline::before { content: ""; flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--brand); animation: beacon 2.4s ease-out infinite; }
+  #canonline.off::before { background: var(--muted); animation: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ---- Board -------------------------------------------------------------------------- */
+  .board { padding-top: 28px; padding-bottom: 40px; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); gap: 28px; align-items: start; }
+  .col-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+  .col-head h3 { font: 500 24px/1.1 var(--serif); letter-spacing: -0.015em; margin: 0; }
+  .count { font: 400 12px var(--mono); color: var(--muted); }
+  .hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .ledger { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 6px; backdrop-filter: blur(10px); position: sticky; top: 16px; }
+  .fact { display: grid; grid-template-columns: 20px 1fr auto; gap: 12px; padding: 12px; border-radius: 10px; cursor: pointer; transition: background .2s; align-items: start; }
+  .fact + .fact { border-top: 1px dashed var(--line); }
+  .fact:hover { background: rgb(253 111 22 / 0.08); }
+  .fact .go { font: 400 11px var(--mono); color: var(--muted); opacity: 0; transition: opacity .2s; margin-top: 4px; }
+  .fact:hover .go { opacity: 1; color: var(--link); }
+  .glyph { width: 16px; height: 16px; margin-top: 3px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, var(--gold), var(--brand) 70%); box-shadow: 0 0 12px -2px rgb(253 111 22 / 0.8); }
+  .fact.proposed .glyph { background: transparent; box-shadow: none; border: 1.5px dashed var(--muted); }
+  .fact .text { font: 500 16px/1.35 var(--serif); }
+  .fact.proposed .text { color: var(--ink-2); font-weight: 400; }
+  .fact small { display: flex; gap: 8px; margin-top: 4px; font: 400 11px var(--mono); color: var(--muted); }
+  .divider { font: 400 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 14px 12px 6px; }
+
+  .claims { display: grid; gap: 14px; }
+  .claim { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px 16px 24px; backdrop-filter: blur(10px); overflow: hidden; }
+  .claim::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--muted); }
+  .claim.s-ready::before, .claim.s-accepted::before { background: var(--held); }
+  .claim.s-contradicts::before { background: var(--broke); }
+  .claim.s-unproven::before, .claim.s-behind::before, .claim.s-open::before { background: var(--pending); }
+  .claim.s-checking::before { background: linear-gradient(var(--pending), transparent, var(--pending)); background-size: 100% 200%; animation: scan 1.4s linear infinite; }
+  .claim-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 500 10px var(--mono); color: #1a0b02;
+    background: conic-gradient(from 200deg, var(--gold), var(--brand), var(--brand-2), var(--gold)); }
+  .who { color: var(--ink); font-weight: 600; font-size: 14px; }
+  .chip { margin-left: auto; font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; border: 1px solid currentColor; }
+  .chip.s-ready, .chip.s-accepted { color: var(--held); background: var(--held-bg); }
+  .chip.s-contradicts { color: var(--broke); background: var(--broke-bg); }
+  .chip.s-unproven, .chip.s-behind, .chip.s-checking, .chip.s-open { color: var(--pending); background: var(--pending-bg); }
+  .chip.s-superseded { color: var(--muted); }
+  .sentence { font: 500 22px/1.25 var(--serif); letter-spacing: -0.01em; margin: 10px 0 6px; }
+  .status-line { margin: 0 0 12px; font-size: 13.5px; color: var(--ink-2); }
+  .verdict { display: flex; flex-wrap: wrap; gap: 6px; }
+  .verdict span, .legend i { font: 400 11.5px var(--mono); padding: 4px 8px; border-radius: 6px; border: 1px solid transparent; font-style: normal; }
+  .kept { color: var(--held); background: var(--held-bg); }
+  .lost { color: var(--broke); background: var(--broke-bg); border-color: rgb(255 107 134 / 0.35) !important; font-weight: 500; }
+  .new { color: var(--pending); border: 1px dashed var(--pending) !important; }
+  .plus { color: var(--held); border: 1px solid var(--held) !important; }
+  .claim-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+  .claim-foot a { font-size: 13.5px; font-weight: 500; }
+  .claim-foot .world { font: 400 11px var(--mono); color: var(--muted); }
+  .reason { margin: 12px 0 0; font: italic 400 15px/1.4 var(--serif); color: var(--ink-2); }
+  .reason::before { content: "Why: "; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-style: normal; }
+  .accept { margin-left: auto; font: 600 14px var(--sans); border: 0; border-radius: 10px; padding: 9px 16px; cursor: pointer; color: #1a0b02;
+    background: linear-gradient(180deg, #fdac5c, var(--brand) 55%, var(--brand-2)); box-shadow: 0 10px 24px -10px rgb(253 111 22 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.35); transition: transform .15s; }
+  .accept:hover { transform: translateY(-1px); }
+  .accept:disabled { opacity: 0.55; cursor: default; transform: none; }
+  details.settled { margin-top: 18px; }
+  details.settled summary { cursor: pointer; font: 400 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); list-style: none; padding: 6px 0; }
+  details.settled summary::before { content: "+ "; color: var(--brand); }
+  details.settled[open] summary::before { content: "− "; }
+  details.settled .claim { opacity: 0.8; }
+  .empty { padding: 28px; text-align: center; color: var(--muted); font: italic 400 16px var(--serif); border: 1px dashed var(--line-2); border-radius: 16px; }
+
+  /* ---- What changes: Cloudflare's four problems ------------------------------------- */
+  .changes { padding: 64px 0 72px; border-top: 1px solid var(--line); margin-top: 24px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 30px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .card .k { font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--brand); }
+  .card h3 { font: 500 20px/1.25 var(--serif); margin: 10px 0 8px; letter-spacing: -0.01em; }
+  .card p { margin: 0; color: var(--ink-2); font-size: 14px; }
+  .card .was { margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  .card .was s { text-decoration-color: var(--broke); }
+
+  /* ---- Why dialog --------------------------------------------------------------------- */
+  dialog { width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--line-2); border-radius: 20px; padding: 0; color: var(--ink);
+    background: var(--panel-solid); box-shadow: 0 40px 120px -20px rgb(0 0 0 / 0.7); }
+  dialog::backdrop { background: rgb(1 14 32 / 0.6); backdrop-filter: blur(6px); }
+  dialog[open] { animation: lift .35s cubic-bezier(.2,.7,.1,1); }
+  .why-head { position: relative; padding: 28px 28px 22px; border-bottom: 1px solid var(--line); overflow: hidden; }
+  .why-head::before { content: ""; position: absolute; inset: 0; background: var(--sky); opacity: 0.25; }
+  .why-head > * { position: relative; }
+  .why-head h3 { font: 500 34px/1.1 var(--serif); letter-spacing: -0.02em; margin: 6px 0 10px; }
+  .why-head p { margin: 0; color: var(--ink-2); }
+  .why-head p b { color: var(--ink); }
+  .worlds { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 22px 28px; }
+  .window { border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; background: var(--bg-2); }
+  .window.accepted { box-shadow: 0 0 0 2px var(--held); }
+  .window.failed { box-shadow: 0 0 0 2px var(--broke); }
+  .window-bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); font: 400 11px var(--mono); color: var(--muted); }
+  .window-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); }
+  .window-bar a { margin-left: auto; }
+  .window-label { padding: 10px 12px 0; font-size: 13px; font-weight: 600; }
+  .window-label.held { color: var(--held); } .window-label.broke { color: var(--broke); }
+  .window-detail { padding: 2px 12px 10px; font: 400 11px var(--mono); color: var(--muted); }
+  .window iframe { display: block; width: 100%; height: 420px; border: 0; background: #fff; }
+  .why-foot { display: flex; align-items: center; gap: 12px; padding: 0 28px 24px; color: var(--muted); font-size: 13px; }
+  .why-foot form { margin-left: auto; }
+  .why-foot .copy { font-size: 13px; padding: 8px 14px; }
+
+  footer { border-top: 1px solid var(--line); }
+  footer .wrap { padding-top: 28px; padding-bottom: 48px; display: flex; flex-wrap: wrap; gap: 12px 28px; color: var(--muted); font-size: 13px; align-items: center; }
+  footer b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---- Motion -------------------------------------------------------------------------- */
+  .reveal { animation: up .8s cubic-bezier(.2,.7,.1,1) both; }
+  .claim.enter { animation: up .6s cubic-bezier(.2,.7,.1,1) both; }
+  .claim.changed { animation: flash 1.6s ease-out; }
+  @keyframes up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes rise { from { transform: translateY(120px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes breathe { 50% { filter: saturate(1.15) brightness(1.06); } }
+  @keyframes beacon { 0% { box-shadow: 0 0 0 0 rgb(253 111 22 / 0.7); } 70%, 100% { box-shadow: 0 0 0 10px rgb(253 111 22 / 0); } }
+  @keyframes scan { to { background-position: 0 -200%; } }
+  @keyframes flash { 0% { box-shadow: 0 0 0 2px var(--brand), 0 0 40px -6px rgb(253 111 22 / 0.7); } 100% { box-shadow: 0 0 0 0 transparent; } }
+  @keyframes lift { from { opacity: 0; transform: translateY(16px) scale(.985); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+
+  @media (max-width: 1000px) {
+    .moves, .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .moves::before { display: none; }
+    .board { grid-template-columns: 1fr; }
+    .strip-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pointer { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+    .ledger { position: static; }
+  }
+  @media (max-width: 620px) {
+    .moves, .grid4 { grid-template-columns: 1fr; }
+    nav.links { display: none; }
+    .hero-body { padding-bottom: 120px; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1><img src="/icon.png" alt="">Canon <span>canon.rodeo</span></h1>
-  <p>Main is the set of facts that must stay true of the running app.</p>
-  <span id="canonline">connecting…</span>
+<header class="hero">
+  <div class="sun" aria-hidden="true"></div>
+  <svg class="ridge" viewBox="0 0 1440 46" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 46V30l60-6 70 8 90-14 80 10 70-6 110 12 90-16 70 8 120-10 80 12 100-6 90 10 80-14 110 10 70-4 80 8 70-6v34z"/></svg>
+  <div class="horizon" aria-hidden="true"></div>
+  <div class="bar wrap">
+    <a class="brand" href="/"><img src="/icon.png" alt="">Canon <small>canon.rodeo</small></a>
+    <nav class="links"><a href="#how">How it works</a><a href="#board">Live board</a><a href="#changes">What changes</a><a href="/src" id="navsource" hidden>Source</a></nav>
+  </div>
+  <div class="hero-body wrap reveal">
+    <p class="kicker">Git for a world of coding agents</p>
+    <h1>Main is not a branch.<br><em>It’s what must stay true.</em></h1>
+    <p class="lede">Many AI agents change one codebase at once. Each one says <b>what it is trying to make true</b>, builds it in its own copy, and pushes with plain Git. Canon checks every rule the app must keep on a live preview. <b>Break one and the change is rejected — no one has to read the diff.</b></p>
+    <div class="cta">
+      <a class="btn primary" href="#board">Watch the live board ↓</a>
+      <span class="cmd" id="clonecmd" hidden><code>git clone https://canon.rodeo/canon.git</code><button class="copy" data-copy="git clone https://canon.rodeo/canon.git">Copy</button></span>
+    </div>
+  </div>
 </header>
-<main>
-  <section><h2>Facts</h2><div id="facts"></div></section>
-  <section><h2>Claims in flight</h2><div id="claims"></div>
-    <details id="settledbox"><summary>Settled</summary><div id="settled"></div></details></section>
+
+<section class="how wrap" id="how">
+  <p class="kicker">How Canon works</p>
+  <h2>Four moves. <em>Any agent that speaks Git can play.</em></h2>
+  <p class="sub">The repo is still Git and the agent still pushes. The only new object is the <b>fact</b>: a plain sentence plus a check that runs against a live preview of the app.</p>
+  <ol class="moves">
+    <li class="move reveal" style="animation-delay:.05s"><div class="n">01</div><h3>Read the canon</h3><p>The facts that are true of production right now, and what other agents are already working on.</p>
+      <div class="example"><span class="ok">✓</span> The basket charges the listed price<br><span class="ok">✓</span> A sold-out item can’t be added</div></li>
+    <li class="move reveal" style="animation-delay:.12s"><div class="n">02</div><h3>Claim a fact</h3><p>An agent declares the one new fact it will make true. Canon gives it a private world: a fork with its own Git remote.</p>
+      <div class="example">agent-2 → <span class="ok">“A stall cannot be double-booked”</span><br><span class="dim">world farmstand-p2q8zz</span></div></li>
+    <li class="move reveal" style="animation-delay:.19s"><div class="n">03</div><h3>Push a world</h3><p>Plain <code>git push</code>. Every commit becomes its own live preview on Cloudflare.</p>
+      <div class="example"><span class="dim">$</span> git push origin main<br><span class="dim">→ preview built in ~40 s</span></div></li>
+    <li class="move reveal" style="animation-delay:.26s"><div class="n">04</div><h3>Get a verdict</h3><p>Canon runs every fact on the preview. Keep them all and add yours: a person can accept it into production.</p>
+      <div class="example"><span class="ok">READY</span> · 6 kept · +1 new<br><span class="bad">REJECTED</span> · ✗ listed price</div></li>
+  </ol>
+</section>
+
+<section class="live wrap" id="board">
+  <div class="live-head">
+    <div><p class="kicker">Live · farmstand demo</p><h2>The board</h2></div>
+    <p class="sub" style="margin:0;max-width:30em">Real agents, real forks, real previews. Click any fact to see the world that made it true — and the ones that failed it.</p>
+  </div>
+  <div class="strip-inner">
+    <div class="stat"><b id="st-facts">–</b><span>Facts hold</span></div>
+    <div class="stat"><b id="st-flight">–</b><span>Claims in flight</span></div>
+    <div class="stat"><b id="st-ready">–</b><span>Ready to accept</span></div>
+    <div class="stat"><b id="st-rejected">–</b><span>Rejected</span></div>
+    <div class="pointer"><span>Canon points at</span><div id="canonline" class="off">connecting…</div></div>
+  </div>
+  <div class="legend">
+    <span><i class="kept">✓ 6 kept</i> canon facts this world keeps</span>
+    <span><i class="lost">✗ fact</i> broke a canon fact: rejected</span>
+    <span><i class="plus">+ fact</i> new fact it makes true</span>
+    <span><i class="new">↻ needs fact</i> built before that fact existed</span>
+  </div>
+</section>
+
+<main class="board wrap">
+  <section>
+    <div class="col-head"><h3>The canon</h3><span class="count" id="factcount"></span></div>
+    <p class="hint">What production must keep true. Click a fact for its history.</p>
+    <div class="ledger" id="facts"></div>
+  </section>
+  <section>
+    <div class="col-head"><h3>In the arena</h3><span class="count">claims in flight · live</span></div>
+    <p class="hint">Each card is one agent’s attempt, judged on its own live preview.</p>
+    <div class="claims" id="claims"></div>
+    <details class="settled" id="settledbox"><summary>Settled</summary><div class="claims" id="settled" style="margin-top:12px"></div></details>
+  </section>
 </main>
-<dialog id="why"><div id="whybody"></div><form method="dialog"><button>Close</button></form></dialog>
+
+<section class="changes wrap" id="changes">
+  <p class="kicker">What changes</p>
+  <h2>Facts, not files. <em>Contradictions, not merge conflicts.</em></h2>
+  <div class="grid4">
+    <div class="card"><span class="k">Coordination</span><h3>Agents read claims, not locks</h3><p>“agent-4 is trying to make <i>sold-out items can’t be bought</i> true.” Intent is visible before anyone writes code.</p><p class="was">Instead of <s>branch names and file locks</s></p></div>
+    <div class="card"><span class="k">Conflicts</span><h3>A conflict is a contradiction</h3><p>Edits that keep every fact are fine. A clean merge that breaks one is not. Accepting one fact can reject a rival world on its own.</p><p class="was">Instead of <s>textual merge conflicts</s></p></div>
+    <div class="card"><span class="k">Review</span><h3>Review the fact diff</h3><p>Facts kept, lost and added, each with a live preview. A person accepts a change in the facts; the code comes along as evidence.</p><p class="was">Instead of <s>reading every line of a pull request</s></p></div>
+    <div class="card"><span class="k">Why</span><h3>The fact chain is the memory</h3><p>Every fact links to the world that made it true, the agent’s reason, and every world that failed it — still clickable, still clonable.</p><p class="was">Instead of <s>commit messages and lost context</s></p></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span><b>Canon</b> — a small protocol on Cloudflare Artifacts.</span>
+    <span>Built on Workers, Durable Objects, Workflows, Containers, Workers Previews and Artifacts.</span>
+    <span id="footsource" hidden><a href="/src">Browse the source</a> · served from Artifacts</span>
+  </div>
+</footer>
+
+<dialog id="why"><div id="whybody"></div><div class="why-foot"><span>Every world stays addressable — the failed ones are the memory.</span><form method="dialog"><button class="copy">Close</button></form></div></dialog>
+
 <script>
   const project = new URLSearchParams(location.search).get("p") || "farmstand";
   // ?mock shows sample data for every state (public/mock.js) instead of the live project.
   const MOCK = new URLSearchParams(location.search).has("mock");
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const LABEL = { open: "Working", checking: "Judging", contradicts: "Rejected", unproven: "Unproven", behind: "Behind canon", ready: "Ready", accepted: "Canon", superseded: "Replaced" };
+  // One plain sentence per status, so the card explains itself.
+  const MEANING = {
+    open: "Claimed. The agent is building its world.",
+    checking: "Pushed. Building a live preview and running every fact.",
+    contradicts: "Rejected: this world breaks a fact production must keep.",
+    unproven: "Keeps every canon fact, but its own fact doesn’t hold yet.",
+    behind: "Canon moved after this world started. It needs a refresh.",
+    ready: "Keeps every canon fact and makes its own true. Waiting for a person.",
+    accepted: "Accepted. This world is canon and in production.",
+    superseded: "Replaced by a newer attempt.",
+  };
+  const SETTLED = ["accepted", "superseded"];
+  const seen = new Map(); // claim id -> last status, to animate arrivals and changes
   let state = null;
+
+  const initials = (agent) => { const m = String(agent).match(/(\d+)$/); return m ? `A${m[1]}` : String(agent).slice(0, 2).toUpperCase(); };
+  const cloneCmd = (worldId) => `git clone ${location.origin}/w/${worldId}.git`;
 
   function render() {
     const s = state;
-    $("canonline").textContent = s.canon ? `canon → ${s.canon.worldId} @ ${s.canon.sha.slice(0, 8)} · seq ${s.canon.seq}` : "no canon yet";
-    $("facts").innerHTML = s.facts.map((f) => `
-      <div class="fact" data-fact="${esc(f.id)}">
-        <span class="dot ${f.status}"></span>
-        <div>${esc(f.sentence)}<small>${esc(f.id)} · ${f.status}</small></div>
-      </div>`).join("") || `<div class="empty">No facts yet.</div>`;
-    const SETTLED = ["accepted", "superseded"];
+    const canonFacts = s.facts.filter((f) => f.status === "canon");
+    const proposed = s.facts.filter((f) => f.status !== "canon");
+    const live = s.claims.filter((c) => !SETTLED.includes(c.status));
+    $("st-facts").textContent = canonFacts.length;
+    $("st-flight").textContent = live.length;
+    $("st-ready").textContent = live.filter((c) => c.status === "ready").length;
+    $("st-rejected").textContent = live.filter((c) => c.status === "contradicts").length;
+    $("canonline").classList.toggle("off", !s.canon);
+    $("canonline").textContent = s.canon ? `${s.canon.worldId} @ ${s.canon.sha.slice(0, 8)} · #${s.canon.seq}${MOCK ? " · sample data" : ""}` : "no canon yet";
+    $("factcount").textContent = `${canonFacts.length} true · ${proposed.length} proposed`;
+
+    const fact = (f) => `
+      <div class="fact ${f.status}" data-fact="${esc(f.id)}" title="Why is this true?">
+        <span class="glyph"></span>
+        <div><div class="text">${esc(f.sentence)}</div><small><span>${esc(f.id)}</span><span>${f.status === "canon" ? "holds" : "proposed"}</span></small></div>
+        <span class="go">why →</span>
+      </div>`;
+    $("facts").innerHTML = (canonFacts.map(fact).join("") || `<div class="empty">No canon yet.</div>`)
+      + (proposed.length ? `<div class="divider">Proposed by agents</div>` + proposed.map(fact).join("") : "");
+
     const card = (c) => {
       const v = c.verdict;
-      const diff = v ? [
+      const verdict = v ? [
         ...v.lost.map((l) => `<span class="lost" title="${esc(l.detail)}">✗ ${esc(l.factId)}</span>`),
         ...(v.stale ?? []).map((l) => `<span class="new" title="${esc(l.detail)}">↻ needs ${esc(l.factId)}</span>`),
-        `<span class="${v.claimed.held ? "kept" : "new"}" title="${esc(v.claimed.detail)}">${v.claimed.held ? "+" : "?"} ${esc(v.claimed.factId)}</span>`,
-        ...v.offers.map((id) => `<span class="new">+ ${esc(id)}</span>`),
+        `<span class="${v.claimed.held ? "plus" : "new"}" title="${esc(v.claimed.detail)}">${v.claimed.held ? "+" : "?"} ${esc(v.claimed.factId)}</span>`,
+        ...v.offers.map((id) => `<span class="plus">+ ${esc(id)}</span>`),
         `<span class="kept">✓ ${v.kept.length} kept</span>`,
-      ].join("") : "";
-      return `<div class="claim">
-        <div class="row"><span class="who">${esc(c.agent)}</span> is trying to make this true
-          <span class="chip s-${c.status}">${c.status === "contradicts" ? "rejected" : c.status === "behind" ? "behind canon" : c.status}</span></div>
+      ].join("") : `<span class="new">${c.status === "checking" ? "building preview…" : "not pushed yet"}</span>`;
+      const before = seen.get(c.id);
+      const motion = before === undefined && seen.size ? "enter" : before && before !== c.status ? "changed" : "";
+      return `<article class="claim s-${c.status} ${motion}">
+        <div class="claim-top"><span class="avatar">${esc(initials(c.agent))}</span><span class="who">${esc(c.agent)}</span> is trying to make this true
+          <span class="chip s-${c.status}">${LABEL[c.status] ?? esc(c.status)}</span></div>
         <div class="sentence">${esc(c.sentence)}</div>
-        ${v ? `<div class="diff">${diff}</div>` : ""}
-        <div class="row">
-          ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">preview of ${esc(c.worldId)}</a>` : `<span class="why">${esc(c.worldId)}</span>`}
-          ${c.status === "ready" ? `<button data-accept="${esc(c.id)}">Accept fact</button>` : ""}
+        <p class="status-line">${MEANING[c.status] ?? ""}</p>
+        <div class="verdict">${verdict}</div>
+        <div class="claim-foot">
+          ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
+          <button class="copy" data-copy="${esc(cloneCmd(c.worldId))}" title="${esc(cloneCmd(c.worldId))}">Clone world</button>
+          <span class="world">${esc(c.worldId)}</span>
+          ${c.status === "ready" ? `<button class="accept" data-accept="${esc(c.id)}">Accept fact</button>` : ""}
         </div>
-        <div class="why">“${esc(c.why)}”</div>
-      </div>`;
+        <p class="reason">${esc(c.why)}</p>
+      </article>`;
     };
-    $("claims").innerHTML = s.claims.filter((c) => !SETTLED.includes(c.status)).map(card).join("") || `<div class="empty">No claims in flight.</div>`;
+    $("claims").innerHTML = live.map(card).join("") || `<div class="empty">The arena is quiet. No claims in flight.</div>`;
     const settled = s.claims.filter((c) => SETTLED.includes(c.status));
     $("settled").innerHTML = settled.map(card).join("");
     $("settledbox").hidden = settled.length === 0;
-    $("settledbox").querySelector("summary").textContent = `Settled (${settled.length})`;
+    $("settledbox").querySelector("summary").textContent = `Settled · ${settled.length}`;
+    for (const c of s.claims) seen.set(c.id, c.status);
   }
 
   document.addEventListener("click", async (e) => {
+    const copy = e.target.closest("[data-copy]");
+    if (copy) {
+      try { await navigator.clipboard.writeText(copy.dataset.copy); } catch { /* clipboard blocked: the command stays visible */ }
+      const was = copy.textContent;
+      copy.textContent = "Copied ✓";
+      copy.classList.add("done");
+      setTimeout(() => { copy.textContent = was; copy.classList.remove("done"); }, 1600);
+      return;
+    }
     const accept = e.target.closest("[data-accept]");
     if (accept) {
       if (MOCK) return alert("Sample data: accepting is disabled in ?mock mode.");
       accept.disabled = true;
+      accept.textContent = "Accepting…";
       const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST" });
-      if (!res.ok) alert((await res.json()).error);
+      if (!res.ok) { alert((await res.json()).error); accept.disabled = false; accept.textContent = "Accept fact"; }
       return;
     }
     const fact = e.target.closest("[data-fact]");
@@ -141,34 +428,51 @@
   async function showWhy(id) {
     const w = MOCK ? window.CANON_MOCK.why[id] ?? { fact: state.facts.find((f) => f.id === id), madeTrueBy: null, rejected: [], held: [] }
                    : await (await fetch(`/p/${project}/facts/${id}/why`)).json();
-    const frame = (url, label) => url ? `<div><div class="row"><strong>${label}</strong> <a href="${esc(url)}" target="_blank" rel="noopener">open</a></div><iframe src="${esc(url)}" loading="lazy"></iframe></div>` : "";
+    const host = (u) => { try { return new URL(u).host; } catch { return u; } };
+    const frame = (url, cls, label, labelCls, detail) => url ? `
+      <div class="window ${cls}">
+        <div class="window-bar"><i></i><i></i><i></i><span>${esc(host(url))}</span><a href="${esc(url)}" target="_blank" rel="noopener">open ↗</a></div>
+        <div class="window-label ${labelCls}">${label}</div><div class="window-detail">${esc(detail)}</div>
+        <iframe src="${esc(url)}" loading="lazy" title="${esc(label)}"></iframe>
+      </div>` : "";
     // Latest failure per world. Previews only for real failures; worlds built before the fact existed are listed.
     const latest = [...new Map([...w.rejected].reverse().map((r) => [r.world_id, r])).values()];
     const failed = latest.filter((r) => r.kind !== "behind");
     const behind = latest.filter((r) => r.kind === "behind");
-    const label = (r) => r.kind === "attempt" ? "Tried and failed" : "Broke it after it became canon";
+    const kindLabel = (r) => r.kind === "attempt" ? "Tried and failed" : "Broke it after it became canon";
+    const m = w.madeTrueBy;
     $("whybody").innerHTML = `
-      <h2>Why is this true?</h2>
-      <div class="sentence" style="font-size:18px">${esc(w.fact.sentence)}</div>
-      ${w.madeTrueBy ? `<p>Made true by <b>${esc(w.madeTrueBy.claim?.agent)}</b> in ${esc(w.madeTrueBy.world?.id)}: “${esc(w.madeTrueBy.claim?.why)}”</p>` : `<p>Seed fact.</p>`}
-      ${failed.length ? `<p>${failed.length} world(s) failed this fact.</p>` : ""}
-      <div class="worlds">
-        ${w.madeTrueBy ? frame(w.madeTrueBy.world?.previewUrl, "Accepted world") : ""}
-        ${failed.map((r) => frame(r.preview_url, `${label(r)}: ${esc(r.agent ?? r.world_id)}: ${esc(r.detail)}`)).join("")}
+      <div class="why-head">
+        <p class="kicker">Why is this true?</p>
+        <h3>${esc(w.fact.sentence)}</h3>
+        <p>${m ? `Made true by <b>${esc(m.claim?.agent)}</b> in <code>${esc(m.world?.id)}</code> — “${esc(m.claim?.why)}”` : `A seed fact: true since the first canon.`}
+           ${failed.length ? ` · ${failed.length} world${failed.length > 1 ? "s" : ""} failed it.` : ""}</p>
       </div>
-      ${behind.length ? `<p class="why">Built before this fact existed: ${behind.map((r) => esc(r.agent ?? r.world_id)).join(", ")}</p>` : ""}`;
+      <div class="worlds">
+        ${m ? frame(m.world?.previewUrl, "accepted", "Accepted world", "held", `${m.claim?.agent ?? ""} · ${m.world?.id ?? ""}`) : ""}
+        ${failed.map((r) => frame(r.preview_url, "failed", `${kindLabel(r)} · ${esc(r.agent ?? r.world_id)}`, "broke", r.detail)).join("")}
+        ${!m && !failed.length ? `<div class="empty">No world has failed this fact yet.</div>` : ""}
+      </div>
+      ${behind.length ? `<p class="why-foot" style="padding-top:0">Built before this fact existed: ${behind.map((r) => esc(r.agent ?? r.world_id)).join(", ")}</p>` : ""}`;
     $("why").showModal();
   }
 
   function connect() {
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/p/${project}/ws`);
     ws.onmessage = (m) => { state = JSON.parse(m.data); render(); };
-    ws.onclose = () => { $("canonline").textContent = "reconnecting…"; setTimeout(connect, 1500); };
+    ws.onclose = () => { $("canonline").classList.add("off"); $("canonline").textContent = "reconnecting…"; setTimeout(connect, 1500); };
   }
+
+  // Canon's own source is published on submission day; until then the clone command stays hidden.
+  fetch("/meta").then((r) => r.json()).then((m) => {
+    if (!m.sourcePublic && !MOCK) return;
+    for (const id of ["clonecmd", "navsource", "footsource"]) $(id).hidden = false;
+  }).catch(() => {});
+
   if (MOCK) {
     const script = document.createElement("script");
     script.src = "/mock.js";
-    script.onload = () => { state = window.CANON_MOCK.state; render(); $("canonline").textContent += " · sample data"; };
+    script.onload = () => { state = window.CANON_MOCK.state; render(); };
     document.head.appendChild(script);
   } else {
     connect();

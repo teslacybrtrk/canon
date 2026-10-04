@@ -24,6 +24,7 @@ export { VerifyWorld, PromoteWorld } from "./pipelines";
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/meta") return json({ sourcePublic: env.SOURCE_PUBLIC === "true" });
     const served = (await serveGit(request, env)) ?? (await serveSource(request, env));
     if (served) return served;
     const m = url.pathname.match(/^\/p\/([a-z0-9]+)(\/.*)$/);
