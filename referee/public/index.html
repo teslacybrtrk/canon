@@ -181,14 +181,14 @@
   .claim::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--muted); }
   .claim.s-ready::before, .claim.s-accepted::before { background: var(--held); }
   .claim.s-contradicts::before { background: var(--broke); }
-  .claim.s-unproven::before, .claim.s-behind::before, .claim.s-open::before { background: var(--pending); }
+  .claim.s-unproven::before, .claim.s-behind::before, .claim.s-open::before, .claim.s-error::before { background: var(--pending); }
   .claim.s-checking::before { background: linear-gradient(var(--pending), transparent, var(--pending)); background-size: 100% 200%; animation: scan 1.4s linear infinite; }
   .claim-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
   .who { color: var(--brand); font-weight: 600; font-size: 14px; }
   .chip { margin-left: auto; font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; border: 1px solid currentColor; }
   .chip.s-ready, .chip.s-accepted { color: var(--held); background: var(--held-bg); }
   .chip.s-contradicts { color: var(--broke); background: var(--broke-bg); }
-  .chip.s-unproven, .chip.s-behind, .chip.s-checking, .chip.s-open { color: var(--pending); background: var(--pending-bg); }
+  .chip.s-unproven, .chip.s-behind, .chip.s-checking, .chip.s-open, .chip.s-error { color: var(--pending); background: var(--pending-bg); }
   .chip.s-superseded { color: var(--muted); }
   .sentence { font: 600 21px/1.25 var(--sans); font-variation-settings: "wdth" 92; letter-spacing: -0.005em; margin: 10px 0 6px; }
   .status-line { margin: 0 0 12px; font-size: 13.5px; color: var(--ink-2); }
@@ -501,7 +501,7 @@
   const MOCK = new URLSearchParams(location.search).has("mock");
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
-  const LABEL = { open: "Working", checking: "Judging", contradicts: "Rejected", unproven: "Unproven", behind: "Behind canon", ready: "Ready", accepted: "Canon", superseded: "Replaced" };
+  const LABEL = { open: "Working", checking: "Judging", contradicts: "Rejected", unproven: "Unproven", behind: "Behind canon", ready: "Ready", accepted: "Canon", superseded: "Replaced", error: "Retry" };
   // One plain sentence per status, so the card explains itself.
   const MEANING = {
     open: "Claimed. The agent is building its world.",
@@ -512,6 +512,7 @@
     ready: "Keeps every canon fact and makes its own true. Waiting for a person.",
     accepted: "Accepted. This world is canon and in production.",
     superseded: "Replaced by a newer attempt.",
+    error: "Couldn’t be judged: a platform error, not the code. The agent pushes again.",
   };
   const SETTLED = ["accepted", "superseded"];
   const seen = new Map(); // claim id -> last status, to animate arrivals and changes

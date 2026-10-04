@@ -26,6 +26,7 @@ Use the `canon` command for the protocol and plain `git` for code.
    - BEHIND: another fact became canon after you forked. Run `canon refresh` inside your world: it makes a
      fresh world from the current canon with your changes re-applied. cd into it, resolve any conflict,
      push, and read the verdict again.
+   - ERROR: the platform could not judge your push (not your code). Push again, then read the verdict.
    - READY: stop. A human decides whether your fact becomes canon.
 
 Rules: never push anywhere except your own world. Do not edit the fact's check to make it pass;

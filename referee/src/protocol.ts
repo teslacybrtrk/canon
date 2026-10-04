@@ -22,7 +22,8 @@ export type ClaimStatus =
   | "ready" //       canon held and the claimed fact holds; waiting on a human
   | "behind" //      canon gained a fact after this world forked; `canon refresh` onto the current canon
   | "accepted" //    a human accepted the fact; this world is canon
-  | "superseded"; // another world made the same fact true first
+  | "superseded" // another world made the same fact true first
+  | "error"; //      could not be judged: a platform error, not the code (push again)
 
 export interface Fact {
   id: string; // slug, e.g. "price-is-listed"
@@ -157,7 +158,7 @@ export interface Declared {
 
 // ---- Move 4: verdict -------------------------------------------------------------
 
-export type Outcome = "pending" | "contradicts" | "unproven" | "behind" | "ready";
+export type Outcome = "pending" | "contradicts" | "unproven" | "behind" | "ready" | "error";
 
 export interface Ledger {
   // ok: canon.json is canon plus this world's claimed fact, unchanged.

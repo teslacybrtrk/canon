@@ -32,7 +32,7 @@
     "CiSandbox": { "type": "durable-object", "storage": "sqlite" }
   },
   "containers": [
-    { "class_name": "CiSandbox", "image": "docker.io/cloudflare/sandbox:0.12.1", "max_instances": 10, "instance_type": "standard-4" }
+    { "class_name": "CiSandbox", "image": "docker.io/cloudflare/sandbox:0.12.1", "max_instances": 20, "instance_type": "standard-4" }
   ],
 
   // Move 3 is plain `git push`; this trigger is how the referee hears it.

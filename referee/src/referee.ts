@@ -26,7 +26,7 @@ import { diffTrees, inScope } from "./scope";
 
 const WORLD_TOKEN_TTL_S = 4 * 60 * 60;
 const PREVIEW_READY_TIMEOUT_MS = 45_000;
-const LIVE: ClaimStatus[] = ["checking", "contradicts", "unproven", "behind", "ready"];
+const LIVE: ClaimStatus[] = ["checking", "contradicts", "unproven", "behind", "ready", "error"];
 
 type Row = Record<string, SqlStorageValue>;
 type AutoAccept = "off" | "backlog";
@@ -221,6 +221,22 @@ export class Referee extends DurableObject<Env> {
     const world = this.world(repo);
     if (!world || (world.headSha && world.headSha !== sha)) return;
     await this.evaluate(world, sha, "", { held: false, detail: `build failed: ${detail.slice(0, 300)}`, ms: 0 });
+    this.broadcast();
+  }
+
+  /** The platform failed (container capacity, RPC, Workflows), not the code: say so, and let the agent push again. */
+  couldNotJudge(repo: string, sha: string, detail: string): void {
+    const world = this.world(repo);
+    if (!world || (world.headSha && world.headSha !== sha)) return;
+    const message = `could not be judged (platform error, not your code): ${detail.replace(/\s+/g, " ").slice(0, 200)}. Push again.`;
+    const verdict: Verdict = {
+      worldId: repo, sha, previewUrl: "", canonSeq: (this.currentCanon()?.seq as number | undefined) ?? 0, outcome: "error",
+      stale: [], kept: [], lost: [], retires: [], skipped: [], offers: [],
+      claimed: { factId: world.claimId ? (this.claim(world.claimId)?.factId ?? "") : "", held: false, detail: message },
+      ledger: { status: "ok", detail: "not read" }, judgedAt: Date.now(),
+    };
+    this.sql.exec(`INSERT OR REPLACE INTO verdicts (world_id, sha, json, at) VALUES (?, ?, ?, ?)`, repo, sha, JSON.stringify(verdict), verdict.judgedAt);
+    if (world.claimId) this.setClaimStatus(world.claimId, "error");
     this.broadcast();
   }
 

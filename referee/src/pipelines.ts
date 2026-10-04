@@ -1,4 +1,5 @@
 import { CIWorkflow, isCiRunnerFailure, type CiContext, type CiParams, type CiRunnerResult, type CloudflareArtifacts } from "@cloudflare/ci";
+import { commandFailure, commandScript, exitedNonZero, parseCommandResults, PLATFORM_RETRIES } from "./commands";
 import type { CheckResult } from "./protocol";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { Env } from "./env";
@@ -17,57 +18,59 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     // One Preview per pushed commit. Within a single Preview, Durable Objects always run the
     // latest push, so only a Preview of its own keeps a judged attempt exactly as it was.
     const previewName = `${repo}-${sha.slice(0, 7)}`;
+
+    // A command that exits non-zero is a verdict about the code. Anything else (container capacity,
+    // RPC or Workflows trouble) is the platform: retry with growing waits, and never blame the code.
+    const withRetries = async <T>(label: string, run: (attempt: number) => Promise<T>): Promise<T> => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await run(attempt);
+        } catch (err) {
+          if (exitedNonZero(err) || attempt >= PLATFORM_RETRIES) throw err;
+          await step.sleep(`${label}: platform retry ${attempt + 1}`, `${15 * 2 ** attempt} seconds`);
+        }
+      }
+    };
+    const once = { retries: { limit: 0, delay: 1_000 }, timeout: 10 * 60_000 } as const;
+    const named = (name: string, attempt: number) => (attempt ? `${name} (retry ${attempt})` : name);
+
     let previewUrl: string;
     let deps: CiRunnerResult;
     try {
-      deps = await ci.runner({
-        name: "install",
-        command: "npm ci --no-audit --no-fund",
-        cache: { inputs: ["package-lock.json"] },
-        config: { retries: { limit: 1, delay: 5_000 } },
-      });
-      const preview = await deps.runner({
-        name: "preview",
-        command: `npx wrangler preview --name ${previewName} --json`,
-        cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
-        config: { retries: { limit: 1, delay: 5_000 } },
-      });
+      deps = await withRetries("install", (a) =>
+        ci.runner({ name: named("install", a), command: "npm ci --no-audit --no-fund", cache: { inputs: ["package-lock.json"] }, config: once }),
+      );
+      const preview = await withRetries("preview", (a) =>
+        deps.runner({
+          name: named("preview", a),
+          command: `npx wrangler preview --name ${previewName} --json`,
+          cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+          config: once,
+        }),
+      );
       previewUrl = previewUrlFrom(preview.logs) ?? this.env.PREVIEW_URL_TEMPLATE.replace("{name}", previewName);
     } catch (err) {
       const detail = isCiRunnerFailure(err) ? err.message : String(err);
-      await step.do("build failed", () => referee.buildFailed(repo, sha, detail));
+      if (exitedNonZero(err)) await step.do("build failed", () => referee.buildFailed(repo, sha, detail));
+      else await step.do("could not judge", () => referee.couldNotJudge(repo, sha, detail));
       return;
     }
 
-    // Command facts (lint, types, tests, budgets) run on this commit's checkout, each in its own
-    // container from the installed snapshot. The commands come from canon, never from the world.
+    // Command facts (lint, types, tests, budgets) run on this commit's checkout in ONE container,
+    // from the installed snapshot. The commands come from canon, never from the world.
     const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
-    // In parallel: each runs in its own container from the same snapshot, and each failure is caught on its own.
-    const results: Record<string, CheckResult> = {};
-    await Promise.all(
-      commands.map(async ({ factId, run }) => {
-        const started = Date.now();
-        // A command that exits non-zero is a verdict. A platform error (container or Workflows
-        // trouble) is not: retry it in a fresh container, and never blame the code for it.
-        for (let attempt = 0; ; attempt++) {
-          try {
-            const name = attempt ? `fact ${factId} (retry ${attempt})` : `fact ${factId}`;
-            await deps.runner({ name, command: run, config: { retries: { limit: 0, delay: 1_000 }, timeout: 5 * 60_000 } });
-            results[factId] = { held: true, detail: "ok", ms: Date.now() - started };
-            return;
-          } catch (err) {
-            if (exitedNonZero(err)) {
-              results[factId] = { held: false, detail: commandFailure(run, err), ms: Date.now() - started };
-              return;
-            }
-            if (attempt >= 2) {
-              results[factId] = { held: false, detail: `\`${run}\` could not run (platform error, not your code): ${String((err as Error).message).slice(0, 120)}. Push again.`, ms: Date.now() - started };
-              return;
-            }
-          }
-        }
-      }),
-    );
+    let results: Record<string, CheckResult> = {};
+    if (commands.length) {
+      try {
+        const ran = await withRetries("facts", (a) =>
+          deps.runner({ name: named("command facts", a), command: commandScript(commands), config: once }),
+        );
+        results = parseCommandResults(commands, typeof ran.logs.stdout === "string" ? ran.logs.stdout : "");
+      } catch (err) {
+        await step.do("could not judge", () => referee.couldNotJudge(repo, sha, isCiRunnerFailure(err) ? err.message : String(err)));
+        return;
+      }
+    }
 
     await step.do("judge", { retries: { limit: 4, delay: 10_000, backoff: "linear" }, timeout: 5 * 60_000 }, async () => {
       await referee.judge(repo, sha, previewUrl, results);
@@ -99,23 +102,6 @@ export class PromoteWorld extends CIWorkflow<CloudflareArtifacts, Env> {
 
 // `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. The Preview is
 // already per commit, so its stable URL is the one to keep.
-// The CI library reports a command's own failure as "<name> failed with exit code N".
-function exitedNonZero(err: unknown): boolean {
-  const text = isCiRunnerFailure(err) ? err.output : String((err as Error)?.message ?? err);
-  return /failed with exit code \d+/.test(text);
-}
-
-// The useful part of a failed command for a verdict: the first "file:line:col rule" location if the
-// tool printed one (lint and type errors do), plus its summary line; otherwise its last output lines.
-function commandFailure(run: string, err: unknown): string {
-  const raw = (isCiRunnerFailure(err) ? err.output : String(err)).replace(/\u001b\[[0-9;]*m/g, "");
-  const lines = raw.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("===") && !/failed with exit code/.test(l) && !/^[━─│]+$/.test(l));
-  const location = lines.find((l) => /^[\w./-]+[:(]\d+[:,]\d+\)?[:\s]/.test(l))?.replace(/\s*(FIXABLE)?\s*[━─]{3,}.*$/, "");
-  const summary = lines.find((l) => /^(Found \d+ (errors?|warnings?)|\d+ errors?)/i.test(l));
-  const detail = [...new Set([location, summary].filter(Boolean))].join(" · ") || lines.slice(-2).join(" · ");
-  return `\`${run}\` failed: ${detail.slice(0, 280) || "non-zero exit"}`;
-}
-
 function previewUrlFrom(logs: CiRunnerResult["logs"]): string | null {
   if (typeof logs.stdout !== "string") return null;
   const out = logs.stdout;

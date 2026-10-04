@@ -163,6 +163,10 @@ async function verdict() {
     process.exit(3);
   }
   console.log(`VERDICT ${v.outcome.toUpperCase()}  world ${v.worldId} @ ${v.sha.slice(0, 8)}`);
+  if (v.outcome === "error") {
+    console.log(`\n${v.claimed.detail}\nThis is not about your code. Push again (an empty commit is fine: git commit --allow-empty -m retry && git push origin main), then canon verdict --wait.`);
+    process.exit(2);
+  }
   if (v.previewUrl) console.log(`preview  ${v.previewUrl}`);
   for (const id of v.kept) console.log(`  kept     ${id}`);
   for (const l of v.lost) console.log(`  LOST     ${l.factId}: ${l.detail}`);
