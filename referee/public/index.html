@@ -69,6 +69,8 @@
 <dialog id="why"><div id="whybody"></div><form method="dialog"><button>Close</button></form></dialog>
 <script>
   const project = new URLSearchParams(location.search).get("p") || "farmstand";
+  // ?mock shows sample data for every state (public/mock.js) instead of the live project.
+  const MOCK = new URLSearchParams(location.search).has("mock");
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   let state = null;
@@ -106,6 +108,7 @@
   document.addEventListener("click", async (e) => {
     const accept = e.target.closest("[data-accept]");
     if (accept) {
+      if (MOCK) return alert("Sample data: accepting is disabled in ?mock mode.");
       accept.disabled = true;
       const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST" });
       if (!res.ok) alert((await res.json()).error);
@@ -116,7 +119,8 @@
   });
 
   async function showWhy(id) {
-    const w = await (await fetch(`/p/${project}/facts/${id}/why`)).json();
+    const w = MOCK ? window.CANON_MOCK.why[id] ?? { fact: state.facts.find((f) => f.id === id), madeTrueBy: null, rejected: [], held: [] }
+                   : await (await fetch(`/p/${project}/facts/${id}/why`)).json();
     const frame = (url, label) => url ? `<div><div class="row"><strong>${label}</strong> <a href="${esc(url)}" target="_blank" rel="noopener">open</a></div><iframe src="${esc(url)}" loading="lazy"></iframe></div>` : "";
     const rejected = [...new Map(w.rejected.map((r) => [r.world_id, r])).values()];
     $("whybody").innerHTML = `
@@ -136,7 +140,14 @@
     ws.onmessage = (m) => { state = JSON.parse(m.data); render(); };
     ws.onclose = () => { $("canonline").textContent = "reconnecting…"; setTimeout(connect, 1500); };
   }
-  connect();
+  if (MOCK) {
+    const script = document.createElement("script");
+    script.src = "/mock.js";
+    script.onload = () => { state = window.CANON_MOCK.state; render(); $("canonline").textContent += " · sample data"; };
+    document.head.appendChild(script);
+  } else {
+    connect();
+  }
 </script>
 </body>
 </html>

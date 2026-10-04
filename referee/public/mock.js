@@ -1,0 +1,71 @@
+// Sample board state for design work: open https://canon.rodeo/?mock
+// Covers every claim status and both kinds of "why" (seed fact, accepted fact).
+// Preview URLs are real deployments from the Oct 4 spike, so iframes load live pages.
+(() => {
+  const GENESIS = "https://211b4631-farmstand.philipemanuele.workers.dev"; // canon before sold-out (allows honey)
+  const DISCOUNT = "https://caeedbb1-farmstand.philipemanuele.workers.dev"; // bulk discount world (breaks price-is-listed)
+  const SOLD_OUT = "https://735990e3-farmstand.philipemanuele.workers.dev"; // accepted world (refuses sold-out honey)
+  const now = Date.now();
+  const check = { kind: "probe", steps: [] };
+  const fact = (id, sentence, status, extra = {}) => ({ id, sentence, status, check, proposedBy: null, madeTrueBy: null, createdAt: now, acceptedAt: status === "canon" ? now : null, ...extra });
+  const KEPT = ["market-lists-stalls", "products-have-prices", "cart-starts-empty", "price-is-listed", "unknown-product-refused", "sold-out-refused"];
+  const verdict = (worldId, previewUrl, outcome, claimed, lost = [], extra = {}) => ({
+    worldId, sha: "3cf7cec5a1b2c3d4e5f60718293a4b5c6d7e8f90", previewUrl, canonSeq: 2, outcome,
+    kept: KEPT.filter((k) => !lost.some((l) => l.factId === k)), lost, claimed, offers: [],
+    ledger: { status: outcome === "behind" ? "behind" : "ok", detail: outcome === "behind" ? "canon gained sold-out-refused after this world forked; declare a fresh world" : "ok" },
+    judgedAt: now, ...extra,
+  });
+  const claim = (id, agent, factId, sentence, status, why, worldId, v) => ({ id, agent, factId, sentence, status, why, worldId, createdAt: now, verdict: v });
+
+  window.CANON_MOCK = {
+    state: {
+      project: "farmstand",
+      canon: { worldId: "farmstand-yplv6l", sha: "14c534b25cd601f7187aed13e6ba50fd923d4634", seq: 2, previewUrl: SOLD_OUT },
+      facts: [
+        fact("market-lists-stalls", "The market page lists every stall", "canon"),
+        fact("products-have-prices", "All six products are for sale with a price", "canon"),
+        fact("cart-starts-empty", "A new shopper's basket is empty", "canon"),
+        fact("price-is-listed", "The basket charges the listed price for every unit", "canon"),
+        fact("unknown-product-refused", "A product that does not exist cannot be added", "canon"),
+        fact("sold-out-refused", "A sold-out product cannot be added to the basket", "canon", { madeTrueBy: "farmstand-yplv6l" }),
+        fact("bulk-discount", "Buying 10 or more of one item takes 10% off that line", "proposed"),
+        fact("no-double-booking", "A stall cannot be double-booked", "proposed"),
+        fact("search-by-name", "Shoppers can search products by name", "proposed"),
+        fact("stall-hours", "Every stall shows its opening hours", "proposed"),
+      ],
+      claims: [
+        claim("c-1", "agent-1", "bulk-discount", "Buying 10 or more of one item takes 10% off that line", "contradicts", "Wholesale buyers asked for a discount", "farmstand-dkw3cr",
+          verdict("farmstand-dkw3cr", DISCOUNT, "contradicts", { factId: "bulk-discount", held: true, detail: "ok" }, [{ factId: "price-is-listed", detail: "step 2: totalCents is 4320, expected 4800" }])),
+        claim("c-2", "agent-2", "no-double-booking", "A stall cannot be double-booked", "ready", "Vendors keep fighting over stall 1", "farmstand-p2q8zz",
+          verdict("farmstand-p2q8zz", SOLD_OUT, "ready", { factId: "no-double-booking", held: true, detail: "ok" })),
+        claim("c-3", "agent-3", "no-double-booking", "A stall cannot be double-booked", "unproven", "Joining the reservation race", "farmstand-m4n1aa",
+          verdict("farmstand-m4n1aa", SOLD_OUT, "unproven", { factId: "no-double-booking", held: false, detail: "step 2: POST /api/reservations returned 201, expected 409" })),
+        claim("c-4", "agent-5", "search-by-name", "Shoppers can search products by name", "behind", "Shoppers want to find eggs fast", "farmstand-9tw8ex",
+          verdict("farmstand-9tw8ex", GENESIS, "behind", { factId: "search-by-name", held: true, detail: "ok" })),
+        claim("c-5", "agent-6", "stall-hours", "Every stall shows its opening hours", "checking", "People show up before the stalls open", "farmstand-h7k2qq", null),
+        claim("c-6", "human:philip", "stall-hours", "Every stall shows its opening hours", "open", "Trying it by hand", "farmstand-q1w2e3", null),
+        claim("c-7", "agent-4", "sold-out-refused", "A sold-out product cannot be added to the basket", "accepted", "Honey keeps getting oversold", "farmstand-yplv6l",
+          verdict("farmstand-yplv6l", SOLD_OUT, "ready", { factId: "sold-out-refused", held: true, detail: "ok" })),
+        claim("c-8", "agent-7", "sold-out-refused", "A sold-out product cannot be added to the basket", "superseded", "Also fixing oversold honey", "farmstand-z9y8xx",
+          verdict("farmstand-z9y8xx", GENESIS, "ready", { factId: "sold-out-refused", held: true, detail: "ok" })),
+      ],
+    },
+    why: {
+      "price-is-listed": {
+        fact: fact("price-is-listed", "The basket charges the listed price for every unit", "canon"),
+        madeTrueBy: null,
+        rejected: [{ world_id: "farmstand-dkw3cr", sha: "3cf7cec5", held: 0, detail: "step 2: totalCents is 4320, expected 4800", at: now, preview_url: DISCOUNT, agent: "agent-1", why: "Wholesale buyers asked for a discount", status: "contradicts" }],
+        held: [],
+      },
+      "sold-out-refused": {
+        fact: fact("sold-out-refused", "A sold-out product cannot be added to the basket", "canon", { madeTrueBy: "farmstand-yplv6l" }),
+        madeTrueBy: {
+          world: { id: "farmstand-yplv6l", previewUrl: SOLD_OUT },
+          claim: { id: "c-7", agent: "agent-4", why: "Honey keeps getting oversold", factId: "sold-out-refused", status: "accepted" },
+        },
+        rejected: [{ world_id: "farmstand-genesis", sha: "aac567fd", held: 0, detail: "step 1: POST /api/cart returned 200, expected 409", at: now, preview_url: GENESIS, agent: null, why: null, status: null }],
+        held: [],
+      },
+    },
+  };
+})();
