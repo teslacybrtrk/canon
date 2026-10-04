@@ -1,4 +1,4 @@
-import type { Check, CheckResult, ProbeStep } from "./protocol";
+import type { CheckResult, ProbeCheck, ProbeStep } from "./protocol";
 
 const STEP_TIMEOUT_MS = 8_000;
 // A fresh Preview can briefly answer 5xx while its Durable Objects spin up. Infrastructure
@@ -10,7 +10,7 @@ const RETRY_DELAY_MS = 1_500;
 type StepFailure = { message: string; transient: boolean };
 
 /** Runs one check against a preview origin. Deterministic given the app's seed data. */
-export async function runCheck(check: Check, origin: string): Promise<CheckResult> {
+export async function runCheck(check: ProbeCheck, origin: string): Promise<CheckResult> {
   const started = Date.now();
   for (let attempt = 0; ; attempt++) {
     const failure = await runOnce(check, origin);
@@ -22,7 +22,7 @@ export async function runCheck(check: Check, origin: string): Promise<CheckResul
   }
 }
 
-async function runOnce(check: Check, origin: string): Promise<StepFailure | null> {
+async function runOnce(check: ProbeCheck, origin: string): Promise<StepFailure | null> {
   const run = crypto.randomUUID();
   const vars: Record<string, unknown> = {};
   for (const [i, step] of check.steps.entries()) {
@@ -39,6 +39,7 @@ async function runStep(
   vars: Record<string, unknown>,
 ): Promise<StepFailure | null> {
   const fail = (message: string, transient = false): StepFailure => ({ message, transient });
+  if (step.repeat && step.repeat > 1) return runRepeated(step, origin, run, vars, fail);
   const method = step.method ?? "GET";
   const url = new URL(fill(step.path, vars) as string, origin);
   let res: Response;
@@ -81,6 +82,47 @@ async function runStep(
     for (const [name, path] of Object.entries(step.save ?? {})) vars[name] = pick(json, path);
   }
   return null;
+}
+
+// A latency budget: one warm-up request, then `repeat` timed requests; every one must meet the
+// status expectation and the p95 must fit the budget. Slowness is marked transient, so a one-off
+// network blip reruns the check, while a genuinely slow world fails every time.
+async function runRepeated(
+  step: ProbeStep,
+  origin: string,
+  run: string,
+  vars: Record<string, unknown>,
+  fail: (message: string, transient?: boolean) => StepFailure,
+): Promise<StepFailure | null> {
+  const method = step.method ?? "GET";
+  const url = new URL(fill(step.path, vars) as string, origin);
+  const init = () => ({
+    method,
+    headers: { "x-canon-run": run, "content-type": "application/json" },
+    body: step.body === undefined ? undefined : JSON.stringify(fill(step.body, vars)),
+    signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+  });
+  const statuses = step.expect?.status === undefined ? null : [step.expect.status].flat();
+  try {
+    await (await fetch(url, init())).arrayBuffer();
+    const times: number[] = [];
+    for (let i = 0; i < (step.repeat ?? 1); i++) {
+      const t0 = Date.now();
+      const res = await fetch(url, init());
+      await res.arrayBuffer();
+      times.push(Date.now() - t0);
+      if (statuses && !statuses.includes(res.status)) {
+        return fail(`${method} ${url.pathname} returned ${res.status}, expected ${statuses.join(" or ")}`, res.status >= 500);
+      }
+    }
+    times.sort((a, b) => a - b);
+    const p95 = times[Math.min(times.length - 1, Math.ceil(times.length * 0.95) - 1)];
+    const budget = step.expect?.p95Ms;
+    if (budget !== undefined && p95 > budget) return fail(`${method} ${url.pathname} p95 is ${p95} ms, budget ${budget} ms`, true);
+    return null;
+  } catch (err) {
+    return fail(`${method} ${url.pathname} failed: ${(err as Error).message}`, true);
+  }
 }
 
 function pick(value: unknown, path: string): unknown {

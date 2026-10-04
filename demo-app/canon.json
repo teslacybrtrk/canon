@@ -108,6 +108,63 @@
           }
         ]
       }
+    },
+    {
+      "id": "page-is-fast",
+      "sentence": "The market page answers in under 400 ms (p95 of 20 requests)",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/",
+            "repeat": 20,
+            "expect": {
+              "status": 200,
+              "p95Ms": 400
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "code-typechecks",
+      "sentence": "The code type-checks with no errors",
+      "check": {
+        "kind": "command",
+        "run": "npx tsc --noEmit -p tsconfig.json"
+      },
+      "scope": [
+        "src/**",
+        "tsconfig.json",
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "id": "code-lints",
+      "sentence": "The code passes the linter",
+      "check": {
+        "kind": "command",
+        "run": "npx biome lint src"
+      },
+      "scope": [
+        "src/**",
+        "biome.json",
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "id": "tooling-locked",
+      "sentence": "Lint and type-check settings only change by revision",
+      "check": {
+        "kind": "command",
+        "run": "printf '%s  %s\\n' 59a84695d901baa34c3e99fbdd740360528a175aac378dcf15ac29992af8dade biome.json a1ddb318478c949d6dea887eafb411b99e9cc602305330ff161315d6b33f9daa tsconfig.json | sha256sum -c --quiet -"
+      },
+      "scope": [
+        "biome.json",
+        "tsconfig.json"
+      ]
     }
   ]
 }

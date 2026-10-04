@@ -1,0 +1,50 @@
+{
+  "id": "price-with-bulk-discount",
+  "replaces": "price-is-listed",
+  "sentence": "The basket charges the listed price, with 10% off any line of 10 or more",
+  "check": {
+    "kind": "probe",
+    "steps": [
+      {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+          "productId": "eggs",
+          "qty": 2
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "path": "/api/cart",
+        "expect": {
+          "status": 200,
+          "json": {
+            "totalCents": 800
+          }
+        }
+      },
+      {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+          "productId": "kale",
+          "qty": 10
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "path": "/api/cart",
+        "expect": {
+          "status": 200,
+          "json": {
+            "totalCents": 3500
+          }
+        }
+      }
+    ]
+  }
+}

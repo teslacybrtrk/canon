@@ -1,34 +1,54 @@
-import type { CanonFile, Fact, Ledger } from "./protocol";
+import type { CanonFile, Fact, FactDef, Ledger } from "./protocol";
+
+type Known = Pick<Fact, "id" | "sentence" | "check"> & { scope?: string[] | null; replaces?: string | null };
 
 /**
  * A world's canon.json must be canon plus its claimed fact, unchanged. Facts accepted
- * after the world forked may be missing (behind); anything else is tampering.
+ * after the world forked may be missing, and facts retired after it forked may linger
+ * (both: behind). A revision may drop the fact it replaces. Anything else is tampering.
  */
 export function compareLedger(
   file: CanonFile["facts"],
-  canonFacts: Pick<Fact, "id" | "sentence" | "check" | "acceptedAt">[],
-  claimed: Pick<Fact, "id" | "sentence" | "check"> | null,
+  canonFacts: Array<Known & { acceptedAt?: number | null }>,
+  claimed: Known | null,
   forkedAt: number,
+  opts: { retiring?: string | null; retired?: Array<Known & { retiredAt?: number | null }> } = {},
 ): Ledger {
-  const allowed = new Map<string, Pick<Fact, "id" | "sentence" | "check">>(canonFacts.map((f) => [f.id, f]));
+  const allowed = new Map<string, Known>(canonFacts.map((f) => [f.id, f]));
   if (claimed) allowed.set(claimed.id, claimed);
+  const retired = new Map((opts.retired ?? []).map((f) => [f.id, f]));
   const inFile = new Set<string>();
+  const lingering: string[] = [];
   for (const f of file) {
     inFile.add(f.id);
     const truth = allowed.get(f.id);
-    if (!truth) return { status: "tampered", detail: `canon.json adds "${f.id}", which this world did not claim` };
-    if (stable({ s: f.sentence, c: f.check }) !== stable({ s: truth.sentence, c: truth.check })) {
-      return { status: "tampered", detail: `canon.json changes the fact "${f.id}"` };
+    if (!truth) {
+      const old = retired.get(f.id);
+      if (old && same(f, old) && (old.retiredAt ?? 0) > forkedAt) {
+        lingering.push(f.id);
+        continue;
+      }
+      return { status: "tampered", detail: `canon.json adds "${f.id}", which this world did not claim` };
     }
+    if (!same(f, truth)) return { status: "tampered", detail: `canon.json changes the fact "${f.id}"` };
   }
   if (claimed && !inFile.has(claimed.id)) return { status: "tampered", detail: `canon.json is missing the claimed fact "${claimed.id}"` };
-  const missing = canonFacts.filter((f) => !inFile.has(f.id));
+  const missing = canonFacts.filter((f) => !inFile.has(f.id) && f.id !== opts.retiring);
   const dropped = missing.filter((f) => (f.acceptedAt ?? 0) <= forkedAt);
   if (dropped.length) return { status: "tampered", detail: `canon.json drops ${dropped.map((f) => f.id).join(", ")}` };
-  if (missing.length) {
-    return { status: "behind", detail: `canon gained ${missing.map((f) => f.id).join(", ")} after this world forked; declare a fresh world` };
+  if (missing.length || lingering.length) {
+    const parts = [
+      missing.length ? `canon gained ${missing.map((f) => f.id).join(", ")}` : "",
+      lingering.length ? `canon retired ${lingering.join(", ")}` : "",
+    ].filter(Boolean);
+    return { status: "behind", detail: `${parts.join(" and ")} after this world forked; declare a fresh world` };
   }
   return { status: "ok", detail: "ok" };
+}
+
+function same(a: FactDef | Known, b: Known): boolean {
+  const norm = (x: FactDef | Known) => ({ s: x.sentence, c: x.check, scope: x.scope ?? null, replaces: x.replaces ?? null });
+  return stable(norm(a)) === stable(norm(b));
 }
 
 /** JSON with sorted keys, so key order in canon.json never counts as a change. */

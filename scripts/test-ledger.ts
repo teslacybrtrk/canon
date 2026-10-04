@@ -20,6 +20,21 @@ const cases: Array<[string, any[], any[] | undefined, string]> = [
   ["key order differs", [...seed.map((f: any) => ({ check: f.check, sentence: f.sentence, id: f.id })), claimed], undefined, "ok"],
   ["canon moved after fork", [...seed, claimed], [...seed, { ...clone(seed[0]), id: "sold-out-refused", acceptedAt: 300 }], "behind"],
 ];
+// Revisions and retirement.
+const revision = { ...clone(claimed), id: "price-with-bulk-discount", replaces: "price-is-listed" };
+const withoutPrice = seed.filter((f: any) => f.id !== "price-is-listed");
+const rev = (file: any[]) => compareLedger(file, seed, revision, forkedAt, { retiring: "price-is-listed" });
+assert.equal(rev([...withoutPrice, revision]).status, "ok");
+console.log("ok  revision drops the fact it replaces -> ok");
+assert.equal(rev([...withoutPrice]).status, "tampered");
+console.log("ok  revision missing its new fact      -> tampered");
+assert.equal(compareLedger([...withoutPrice, claimed], seed, claimed, forkedAt).status, "tampered");
+console.log("ok  dropping a fact without a revision -> tampered");
+const retired = [{ ...seed.find((f: any) => f.id === "price-is-listed"), retiredAt: 300 }];
+const afterRetire = [...withoutPrice, { ...revision, acceptedAt: 300 }];
+assert.equal(compareLedger([...seed, claimed], afterRetire, claimed, forkedAt, { retired }).status, "behind");
+console.log("ok  fact retired after the fork        -> behind");
+
 for (const [name, file, canon, want] of cases) {
   const got = status(file, canon);
   assert.equal(got.status, want, `${name}: ${got.detail}`);

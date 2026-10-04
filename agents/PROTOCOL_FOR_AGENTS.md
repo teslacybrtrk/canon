@@ -7,6 +7,7 @@ world (a private fork) without breaking any fact that is already canon.
 Use the `canon` command for the protocol and plain `git` for code.
 
 1. `canon read`: see the canon facts and what other agents are trying to make true.
+   `canon read --for <path>` lists the facts that govern a file before you change it.
    Do not start work that another agent has already claimed unless you are told to race them.
 2. `canon claim --fact <file.json> --why "<one sentence: why this matters>"`
    or `canon claim --join <fact-id> --why "..."` if you are racing an existing claim.
@@ -16,7 +17,10 @@ Use the `canon` command for the protocol and plain `git` for code.
 4. `canon verdict --wait`. It runs every canon fact and your fact against a live preview
    of your world. Run it in the foreground. If it says "Still judging", run it again.
    - CONTRADICTS: you broke a canon fact. Read which one and why, and fix your world.
-     Never weaken a canon fact. If your fact cannot coexist with it, stop and say so.
+     Never weaken a canon fact. If your goal is to change that rule on purpose, propose a revision:
+     a fact file with "replaces": "<fact id>" (claim it with `canon claim --fact`). A person decides
+     whether the rule changes. If your fact cannot coexist with canon and no revision is intended, stop and say so.
+   - Facts with "runs:" are commands (lint, type-check, tests) run on your commit; fix what they report.
    - UNPROVEN: canon held but your fact does not. Fix and push again.
    - BEHIND: another fact became canon after you forked. Run `canon refresh` inside your world: it makes a
      fresh world from the current canon with your changes re-applied. cd into it, resolve any conflict,

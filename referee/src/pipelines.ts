@@ -1,4 +1,5 @@
 import { CIWorkflow, isCiRunnerFailure, type CiContext, type CiParams, type CiRunnerResult, type CloudflareArtifacts } from "@cloudflare/ci";
+import type { CheckResult } from "./protocol";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { Env } from "./env";
 import { refereeForRepo } from "./stub";
@@ -17,8 +18,9 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     // latest push, so only a Preview of its own keeps a judged attempt exactly as it was.
     const previewName = `${repo}-${sha.slice(0, 7)}`;
     let previewUrl: string;
+    let deps: CiRunnerResult;
     try {
-      const deps = await ci.runner({
+      deps = await ci.runner({
         name: "install",
         command: "npm ci --no-audit --no-fund",
         cache: { inputs: ["package-lock.json"] },
@@ -37,8 +39,22 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
       return;
     }
 
+    // Command facts (lint, types, tests, budgets) run on this commit's checkout, each in its own
+    // container from the installed snapshot. The commands come from canon, never from the world.
+    const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
+    const results: Record<string, CheckResult> = {};
+    for (const { factId, run } of commands) {
+      const started = Date.now();
+      try {
+        await deps.runner({ name: `fact ${factId}`, command: run, config: { retries: { limit: 0, delay: 1_000 }, timeout: 5 * 60_000 } });
+        results[factId] = { held: true, detail: "ok", ms: Date.now() - started };
+      } catch (err) {
+        results[factId] = { held: false, detail: commandFailure(run, err), ms: Date.now() - started };
+      }
+    }
+
     await step.do("judge", { retries: { limit: 4, delay: 10_000, backoff: "linear" }, timeout: 5 * 60_000 }, async () => {
-      await referee.judge(repo, sha, previewUrl);
+      await referee.judge(repo, sha, previewUrl, results);
     });
   }
 }
@@ -51,9 +67,11 @@ export class PromoteWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     let ok = true;
     try {
       const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund", cache: { inputs: ["package-lock.json"] } });
+      // Each project deploys under its own Worker name, so projects never share a production app.
+      const project = repo.slice(0, repo.lastIndexOf("-"));
       await deps.runner({
         name: "deploy",
-        command: "npx wrangler deploy",
+        command: `npx wrangler deploy --name ${project}`,
         cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
       });
     } catch {
@@ -65,6 +83,17 @@ export class PromoteWorld extends CIWorkflow<CloudflareArtifacts, Env> {
 
 // `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. The Preview is
 // already per commit, so its stable URL is the one to keep.
+// The useful part of a failed command for a verdict: the first "file:line:col rule" location if the
+// tool printed one (lint and type errors do), plus its summary line; otherwise its last output lines.
+function commandFailure(run: string, err: unknown): string {
+  const raw = (isCiRunnerFailure(err) ? err.output : String(err)).replace(/\u001b\[[0-9;]*m/g, "");
+  const lines = raw.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("===") && !/failed with exit code/.test(l) && !/^[━─│]+$/.test(l));
+  const location = lines.find((l) => /^[\w./-]+[:(]\d+[:,]\d+\)?[:\s]/.test(l))?.replace(/\s*(FIXABLE)?\s*[━─]{3,}.*$/, "");
+  const summary = lines.find((l) => /^(Found \d+ (errors?|warnings?)|\d+ errors?)/i.test(l));
+  const detail = [...new Set([location, summary].filter(Boolean))].join(" · ") || lines.slice(-2).join(" · ");
+  return `\`${run}\` failed: ${detail.slice(0, 280) || "non-zero exit"}`;
+}
+
 function previewUrlFrom(logs: CiRunnerResult["logs"]): string | null {
   if (typeof logs.stdout !== "string") return null;
   const out = logs.stdout;

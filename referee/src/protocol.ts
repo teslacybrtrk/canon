@@ -11,6 +11,8 @@
 // canon copy: a world may add the fact it claimed to its canon.json, nothing else.
 
 export type FactStatus = "canon" | "proposed" | "retired";
+// seed: from genesis canon.json · agent: proposed in a claim · backlog: written by people in canon.json for agents to build
+export type FactOrigin = "seed" | "agent" | "backlog";
 
 export type ClaimStatus =
   | "open" //        declared, nothing pushed yet
@@ -26,17 +28,34 @@ export interface Fact {
   id: string; // slug, e.g. "price-is-listed"
   sentence: string;
   check: Check;
+  scope: string[] | null; // globs; the fact is judged only on worlds that change a matching file. null = always
+  replaces: string | null; // a revision: the canon fact this one retires when accepted
+  origin: FactOrigin;
   status: FactStatus;
   proposedBy: string | null; // claim id
   madeTrueBy: string | null; // world id
   createdAt: number;
   acceptedAt: number | null;
+  retiredBy: string | null; // world that retired it (by accepting a revision)
+  retiredAt: number | null;
+}
+
+/** How a fact is written in canon.json and in claims. */
+export interface FactDef {
+  id: string;
+  sentence: string;
+  check: Check;
+  scope?: string[];
+  replaces?: string;
 }
 
 /** canon.json at the root of every world. */
 export interface CanonFile {
   version: 1;
-  facts: Array<Pick<Fact, "id" | "sentence" | "check">>;
+  facts: FactDef[];
+  // Facts people want made true. Agents claim them; with autoAccept "backlog" they land on their own.
+  backlog?: FactDef[];
+  policy?: { autoAccept?: "off" | "backlog" };
 }
 
 // ---- Checks -------------------------------------------------------------------
@@ -44,16 +63,27 @@ export interface CanonFile {
 // preview, with assertions. Every run sends a fresh `x-canon-run` header; the
 // app under test scopes its state to it, so runs never see each other's data.
 
-export interface Check {
+export type Check = ProbeCheck | CommandCheck;
+
+export interface ProbeCheck {
   kind: "probe";
   steps: ProbeStep[];
+}
+
+// Runs in the CI container on the world's checkout: lint, types, tests, coverage, bundle size...
+// The command is owned by canon, so a world cannot change what judges it.
+export interface CommandCheck {
+  kind: "command";
+  run: string;
 }
 
 export interface ProbeStep {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string; // relative to the preview origin; may use {{var}}
   body?: unknown; // JSON; string leaves may use {{var}}
+  repeat?: number; // send the request this many times (after one warm-up) to measure latency
   expect?: {
+    p95Ms?: number; // latency budget across the repeats
     status?: number | number[];
     // dot-path -> expected value. Paths support array indices and `.length`.
     // A value of {"$exists": true|false} asserts presence only.
@@ -86,6 +116,7 @@ export interface World {
   claimId: string | null; // null for genesis
   remote: string;
   baseWorld: string | null; // the canon world this was forked from
+  baseSha: string | null; // the canon commit it was forked from
   headSha: string | null;
   previewUrl: string | null;
   frozen: boolean; // canon worlds have their write tokens revoked
@@ -99,6 +130,7 @@ export interface CanonState {
   canon: { worldId: string; sha: string; seq: number; previewUrl: string | null } | null;
   facts: Fact[]; // canon + proposed
   claims: Array<Claim & { sentence: string; verdict: Verdict | null }>;
+  policy: { autoAccept: "off" | "backlog" };
 }
 
 // ---- Move 2: declare --------------------------------------------------------------
@@ -108,7 +140,7 @@ export type DeclareRequest = {
   why: string;
   replaces?: string; // an earlier claim on the same fact that this one supersedes (canon refresh)
 } & (
-  | { fact: { id: string; sentence: string; check: Check } } // propose a new fact
+  | { fact: FactDef } // propose a new fact (with `replaces`: a revision of a canon fact)
   | { join: string } // race for a fact someone else already proposed
 );
 
@@ -143,6 +175,8 @@ export interface Verdict {
   outcome: Outcome;
   kept: string[]; // canon facts that held
   lost: Array<{ factId: string; detail: string }>; // facts canon at the fork that broke: a contradiction
+  retires: string[]; // canon facts this world deliberately replaces (a revision): allowed to break
+  skipped: string[]; // scoped facts not judged: this world changes none of their files
   stale: Array<{ factId: string; detail: string }>; // facts accepted after the fork that fail: refresh needed
   claimed: { factId: string; held: boolean; detail: string };
   offers: string[]; // other proposed facts this world happens to make true

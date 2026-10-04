@@ -452,7 +452,7 @@
   function render() {
     const s = state;
     const canonFacts = s.facts.filter((f) => f.status === "canon");
-    const proposed = s.facts.filter((f) => f.status !== "canon");
+    const proposed = s.facts.filter((f) => f.status === "proposed");
     const live = s.claims.filter((c) => !SETTLED.includes(c.status));
     $("st-facts").textContent = canonFacts.length;
     $("st-flight").textContent = live.length;

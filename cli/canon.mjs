@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // canon: the four moves from a shell, for any coding agent that can run commands.
 //
-//   canon read                                  1. read canon and claims in flight
-//   canon claim --fact <file.json> --why "..."  2. declare a new fact, get a world (fork) to work in
+//   canon read [--for <path>]                   1. read canon, the backlog and claims in flight (--for: facts governing a file)
+//   canon claim --fact <file.json> --why "..."  2. declare a new fact (or a revision: "replaces" a canon fact)
 //   canon claim --join <fact-id>   --why "..."     ...or race for a fact someone already proposed
 //   git push                                    3. push the world (plain Git, from inside the world)
 //   canon verdict [--wait]                      4. which facts held, which broke, accepted or not
@@ -42,11 +42,25 @@ try {
 async function read() {
   const s = await api("GET", "/canon");
   if (!s.canon) return console.log("No canon yet (genesis has not passed its seed facts).");
-  console.log(`CANON  world ${s.canon.worldId} @ ${s.canon.sha.slice(0, 8)}  (seq ${s.canon.seq})`);
-  for (const f of s.facts.filter((f) => f.status === "canon")) console.log(`  ✓ ${f.id.padEnd(26)} ${f.sentence}`);
-  const proposed = s.facts.filter((f) => f.status === "proposed");
-  if (proposed.length) console.log(`\nPROPOSED`);
-  for (const f of proposed) console.log(`  ? ${f.id.padEnd(26)} ${f.sentence}`);
+  // --for <path>: only the facts that govern that file (scoped facts that match, plus unscoped ones).
+  const forPath = typeof args.for === "string" ? args.for.replace(/^\.\//, "") : null;
+  const applies = (f) => !forPath || !f.scope || f.scope.some((g) => globToRegExp(g).test(forPath));
+  const facts = s.facts.filter(applies);
+  const label = (f) => `${f.id.padEnd(28)} ${f.sentence}${f.scope ? `  [${f.scope.join(", ")}]` : ""}${f.check.kind === "command" ? `  (runs: ${f.check.run})` : ""}`;
+  console.log(`CANON  world ${s.canon.worldId} @ ${s.canon.sha.slice(0, 8)}  (seq ${s.canon.seq})${s.policy?.autoAccept === "backlog" ? "  · autopilot: backlog facts land on their own" : ""}`);
+  if (forPath) console.log(`(facts that govern ${forPath})`);
+  for (const f of facts.filter((f) => f.status === "canon")) console.log(`  ✓ ${label(f)}`);
+  const claimsFor = (id) => s.claims.filter((c) => c.factId === id && !["superseded"].includes(c.status));
+  const proposed = facts.filter((f) => f.status === "proposed");
+  const backlog = proposed.filter((f) => f.origin === "backlog");
+  const byAgents = proposed.filter((f) => f.origin !== "backlog");
+  if (backlog.length) console.log(`\nBACKLOG (written by people; claim one with: canon claim --join <id>)`);
+  for (const f of backlog) console.log(`  ? ${label(f)}  · ${claimsFor(f.id).length} claim(s)`);
+  if (byAgents.length) console.log(`\nPROPOSED BY AGENTS`);
+  for (const f of byAgents) console.log(`  ? ${label(f)}${f.replaces ? `  (revises ${f.replaces})` : ""}`);
+  const retired = facts.filter((f) => f.status === "retired");
+  if (retired.length) console.log(`\nRETIRED`);
+  for (const f of retired) console.log(`  ✗ ${f.id.padEnd(28)} ${f.sentence}`);
   const live = s.claims.filter((c) => !["accepted", "superseded"].includes(c.status));
   if (live.length) console.log(`\nCLAIMS IN FLIGHT`);
   for (const c of live) console.log(`  ${c.agent} is trying to make "${c.sentence}" true  [${c.status}]`);
@@ -81,7 +95,14 @@ async function setupWorld(dir, claim, world, fact) {
   installTrailerHook(dir, claim);
   const ledgerPath = join(dir, "canon.json");
   const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
-  if (!ledger.facts.some((f) => f.id === fact.id)) ledger.facts.push({ id: fact.id, sentence: fact.sentence, check: fact.check });
+  const def = { id: fact.id, sentence: fact.sentence, check: fact.check };
+  if (fact.scope?.length) def.scope = fact.scope;
+  if (fact.replaces) def.replaces = fact.replaces;
+  // A revision drops the fact it replaces; a backlog fact moves from the backlog into the facts.
+  if (fact.replaces) ledger.facts = ledger.facts.filter((f) => f.id !== fact.replaces);
+  if (Array.isArray(ledger.backlog)) ledger.backlog = ledger.backlog.filter((f) => f.id !== fact.id);
+  if (ledger.backlog?.length === 0) delete ledger.backlog;
+  if (!ledger.facts.some((f) => f.id === fact.id)) ledger.facts.push(def);
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2) + "\n");
   git(["-C", dir, "commit", "--quiet", "-am", `canon: claim "${fact.sentence}"`]);
 }
@@ -145,10 +166,12 @@ async function verdict() {
   for (const id of v.kept) console.log(`  kept     ${id}`);
   for (const l of v.lost) console.log(`  LOST     ${l.factId}: ${l.detail}`);
   for (const l of v.stale ?? []) console.log(`  NEWER    ${l.factId} became canon after you forked: ${l.detail}`);
+  for (const id of v.retires ?? []) console.log(`  RETIRES  ${id} (your claim revises this rule on purpose; a person decides)`);
+  if (v.skipped?.length) console.log(`  skipped  ${v.skipped.join(", ")} (out of scope: you changed none of their files)`);
   console.log(`  claimed  ${v.claimed.factId}: ${v.claimed.held ? "holds" : v.claimed.detail}`);
   for (const id of v.offers) console.log(`  offers   ${id}`);
   if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.`);
-  if (v.outcome === "contradicts") console.log(`\nThis world contradicts canon. Make the lost facts hold again (or drop the change), then push.`);
+  if (v.outcome === "contradicts") console.log(`\nThis world contradicts canon. Make the lost facts hold again, or, if your goal is to change that rule on purpose, propose a revision (a fact with "replaces"), then push.`);
   if (v.outcome === "unproven") console.log(`\nCanon held, but your fact does not hold yet. Fix and push again.`);
   if (v.outcome === "behind") console.log(`\nCanon moved after this world forked. Run: canon refresh`);
   process.exit(v.outcome === "ready" ? 0 : 2);
@@ -159,6 +182,8 @@ async function why(factId) {
   const w = await api("GET", `/facts/${factId}/why`);
   console.log(`${w.fact.id} [${w.fact.status}]  ${w.fact.sentence}`);
   if (w.madeTrueBy) console.log(`  made true by ${w.madeTrueBy.world.id} (${w.madeTrueBy.claim?.agent}: ${w.madeTrueBy.claim?.why})  ${w.madeTrueBy.world.previewUrl ?? ""}`);
+  if (w.replaces) console.log(`  revises     ${w.replaces.id}: ${w.replaces.sentence}`);
+  if (w.retiredBy) console.log(`  retired by  ${w.retiredBy.world?.id} (${w.retiredBy.claim?.agent}: ${w.retiredBy.claim?.why}), replaced by ${w.retiredBy.replacement?.id ?? "?"}`);
   for (const r of w.rejected) console.log(`  failed on  ${r.world_id} @ ${String(r.sha).slice(0, 8)} (${r.agent ?? "genesis"}): ${r.detail}  ${r.preview_url ?? ""}`);
 }
 
@@ -199,6 +224,19 @@ git interpret-trailers --in-place --if-exists doNothing \\
 `,
   );
   chmodSync(hook, 0o755);
+}
+
+// Same glob rules as the referee: ** spans directories, * stays within one.
+function globToRegExp(glob) {
+  let re = "";
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === "*" && glob[i + 1] === "*") { re += glob[i + 2] === "/" ? "(?:.*/)?" : ".*"; i += glob[i + 2] === "/" ? 2 : 1; }
+    else if (c === "*") re += "[^/]*";
+    else if (c === "?") re += "[^/]";
+    else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(`^${re}$`);
 }
 
 function git(argv) {

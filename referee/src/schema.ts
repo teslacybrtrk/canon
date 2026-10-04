@@ -1,5 +1,15 @@
 // SQLite schema for one project's referee. Facts and claims are shared mutable
 // state; the Durable Object is the only writer, so two agents cannot both win.
+// Columns added after the first release, for referees created before them. Errors (column exists) are ignored.
+export const UPGRADES = [
+  `ALTER TABLE facts ADD COLUMN scope_json TEXT`,
+  `ALTER TABLE facts ADD COLUMN replaces TEXT`,
+  `ALTER TABLE facts ADD COLUMN origin TEXT NOT NULL DEFAULT 'agent'`,
+  `ALTER TABLE facts ADD COLUMN retired_by TEXT`,
+  `ALTER TABLE facts ADD COLUMN retired_at INTEGER`,
+  `ALTER TABLE worlds ADD COLUMN base_sha TEXT`,
+];
+
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
@@ -14,7 +24,12 @@ CREATE TABLE IF NOT EXISTS facts (
   proposed_by  TEXT,                   -- claim id
   made_true_by TEXT,                   -- world id
   created_at   INTEGER NOT NULL,
-  accepted_at  INTEGER
+  accepted_at  INTEGER,
+  scope_json   TEXT,                   -- globs; NULL = applies to every world
+  replaces     TEXT,                   -- a revision: the canon fact this one retires
+  origin       TEXT NOT NULL DEFAULT 'agent', -- seed | agent | backlog
+  retired_by   TEXT,                   -- world whose acceptance retired it
+  retired_at   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS worlds (
@@ -22,6 +37,7 @@ CREATE TABLE IF NOT EXISTS worlds (
   claim_id    TEXT,                    -- NULL for genesis
   remote      TEXT NOT NULL,
   base_world  TEXT,
+  base_sha    TEXT,                    -- canon commit it was forked from (for changed-file scopes)
   head_sha    TEXT,
   preview_url TEXT,
   frozen      INTEGER NOT NULL DEFAULT 0,
