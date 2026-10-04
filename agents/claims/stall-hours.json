@@ -1,0 +1,8 @@
+{
+  "id": "stall-hours",
+  "sentence": "Every stall shows its opening hours",
+  "check": { "kind": "probe", "steps": [
+    { "path": "/api/stalls", "expect": { "status": 200, "json": { "0.hours": { "$exists": true }, "2.hours": { "$exists": true } } } },
+    { "path": "/", "expect": { "bodyIncludes": "Open" } }
+  ] }
+}

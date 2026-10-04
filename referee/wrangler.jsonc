@@ -1,0 +1,54 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "canon-referee",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // Every world is a repo in this namespace: "<project>-genesis", "<project>-<id>".
+  "artifacts": [{ "binding": "ARTIFACTS", "namespace": "canon" }],
+
+  // Referee: one SQLite-backed Durable Object per project.
+  // CiSandbox: containers that build Previews and run production deploys.
+  "durable_objects": {
+    "bindings": [
+      { "name": "REFEREE", "class_name": "Referee" },
+      { "name": "SANDBOX", "class_name": "CiSandbox" }
+    ]
+  },
+  "exports": {
+    "Referee": { "type": "durable-object", "storage": "sqlite" },
+    "CiSandbox": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "containers": [
+    { "class_name": "CiSandbox", "image": "./Dockerfile", "max_instances": 10, "instance_type": "standard-4" }
+  ],
+
+  // Move 3 is plain `git push`; this trigger is how the referee hears it.
+  "triggers": {
+    "events": [
+      {
+        "type": "cf.artifacts.repo.pushed",
+        "filter": { "namespace": "canon" },
+        "targets": [{ "type": "workflow", "workflow_name": "canon-verify" }]
+      }
+    ]
+  },
+  "workflows": [
+    { "name": "canon-verify", "binding": "CI_WORKFLOW", "class_name": "VerifyWorld" },
+    { "name": "canon-promote", "binding": "PROMOTE_WORKFLOW", "class_name": "PromoteWorld" }
+  ],
+  "r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "canon-ci-snapshots" }],
+
+  "vars": {
+    "ARTIFACTS_NAMESPACE": "canon",
+    "BACKUP_BUCKET_NAME": "canon-ci-snapshots",
+    "CLOUDFLARE_ACCOUNT_ID": "REPLACE_WITH_ACCOUNT_ID",
+    // Preview URLs are "<preview-name>-<worker-name>.<your-subdomain>.workers.dev".
+    "PREVIEW_URL_TEMPLATE": "https://{name}-farmstand.REPLACE_WITH_SUBDOMAIN.workers.dev",
+    "PRODUCTION_URL": "https://farmstand.REPLACE_WITH_SUBDOMAIN.workers.dev"
+  },
+  // Secrets (wrangler secret put): CF_TOKEN, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+  "observability": { "enabled": true, "logs": { "enabled": true } }
+}

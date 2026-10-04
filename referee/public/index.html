@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Canon Board</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1c1a; --muted: #6b6860; --line: #e3e0d8;
+    --held: #2f7d4a; --held-bg: #e6f3ea; --broke: #b3261e; --broke-bg: #fbe9e7;
+    --pending: #8a6d1d; --pending-bg: #fbf3dc; --accent: #1f4fd1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --panel: #1d1d1b; --ink: #ecebe6; --muted: #9c998f; --line: #2f2e2a;
+      --held: #6cc68b; --held-bg: #1b2c21; --broke: #ff8a80; --broke-bg: #33201e;
+      --pending: #e6c35c; --pending-bg: #2e2816; --accent: #8fb0ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 ui-sans-serif, system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 20px 16px 8px; max-width: 1280px; margin: 0 auto; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  #canonline { margin-left: auto; color: var(--muted); font: 13px ui-monospace, monospace; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; padding: 8px 16px 32px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .fact { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 8px; cursor: pointer; }
+  .fact:hover { background: var(--bg); }
+  .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--held); }
+  .dot.proposed { background: transparent; border: 2px solid var(--pending); }
+  .fact small { display: block; color: var(--muted); font: 12px ui-monospace, monospace; }
+  .claim { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .claim .who { font-weight: 600; }
+  .claim .sentence { font-size: 16px; margin: 2px 0 8px; }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .s-ready, .s-accepted { background: var(--held-bg); color: var(--held); }
+  .s-contradicts { background: var(--broke-bg); color: var(--broke); }
+  .s-unproven, .s-checking, .s-open, .s-behind { background: var(--pending-bg); color: var(--pending); }
+  .s-superseded { background: var(--line); color: var(--muted); }
+  .diff { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .diff span { font: 12px ui-monospace, monospace; padding: 2px 6px; border-radius: 6px; }
+  .kept { background: var(--held-bg); color: var(--held); }
+  .lost { background: var(--broke-bg); color: var(--broke); }
+  .new { border: 1px dashed var(--pending); color: var(--pending); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  a { color: var(--accent); }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 6px 12px; background: var(--held); color: #fff; cursor: pointer; }
+  .why { margin-top: 6px; color: var(--muted); font-style: italic; }
+  dialog { width: min(1100px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); padding: 16px; }
+  dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+  .worlds { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
+  .worlds iframe { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .empty { color: var(--muted); padding: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Canon</h1>
+  <p>Main is the set of facts that must stay true of the running app.</p>
+  <span id="canonline">connecting…</span>
+</header>
+<main>
+  <section><h2>Facts</h2><div id="facts"></div></section>
+  <section><h2>Claims in flight</h2><div id="claims"></div></section>
+</main>
+<dialog id="why"><div id="whybody"></div><form method="dialog"><button>Close</button></form></dialog>
+<script>
+  const project = new URLSearchParams(location.search).get("p") || "farmstand";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  let state = null;
+
+  function render() {
+    const s = state;
+    $("canonline").textContent = s.canon ? `canon → ${s.canon.worldId} @ ${s.canon.sha.slice(0, 8)} · seq ${s.canon.seq}` : "no canon yet";
+    $("facts").innerHTML = s.facts.map((f) => `
+      <div class="fact" data-fact="${esc(f.id)}">
+        <span class="dot ${f.status}"></span>
+        <div>${esc(f.sentence)}<small>${esc(f.id)} · ${f.status}</small></div>
+      </div>`).join("") || `<div class="empty">No facts yet.</div>`;
+    $("claims").innerHTML = s.claims.map((c) => {
+      const v = c.verdict;
+      const diff = v ? [
+        ...v.lost.map((l) => `<span class="lost" title="${esc(l.detail)}">✗ ${esc(l.factId)}</span>`),
+        `<span class="${v.claimed.held ? "kept" : "new"}" title="${esc(v.claimed.detail)}">${v.claimed.held ? "+" : "?"} ${esc(v.claimed.factId)}</span>`,
+        ...v.offers.map((id) => `<span class="new">+ ${esc(id)}</span>`),
+        `<span class="kept">✓ ${v.kept.length} kept</span>`,
+      ].join("") : "";
+      return `<div class="claim">
+        <div class="row"><span class="who">${esc(c.agent)}</span> is trying to make this true
+          <span class="chip s-${c.status}">${c.status === "contradicts" ? "rejected" : c.status === "behind" ? "behind canon" : c.status}</span></div>
+        <div class="sentence">${esc(c.sentence)}</div>
+        ${v ? `<div class="diff">${diff}</div>` : ""}
+        <div class="row">
+          ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">preview of ${esc(c.worldId)}</a>` : `<span class="why">${esc(c.worldId)}</span>`}
+          ${c.status === "ready" ? `<button data-accept="${esc(c.id)}">Accept fact</button>` : ""}
+        </div>
+        <div class="why">“${esc(c.why)}”</div>
+      </div>`;
+    }).join("") || `<div class="empty">No claims yet.</div>`;
+  }
+
+  document.addEventListener("click", async (e) => {
+    const accept = e.target.closest("[data-accept]");
+    if (accept) {
+      accept.disabled = true;
+      const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST" });
+      if (!res.ok) alert((await res.json()).error);
+      return;
+    }
+    const fact = e.target.closest("[data-fact]");
+    if (fact) showWhy(fact.dataset.fact);
+  });
+
+  async function showWhy(id) {
+    const w = await (await fetch(`/p/${project}/facts/${id}/why`)).json();
+    const frame = (url, label) => url ? `<div><div class="row"><strong>${label}</strong> <a href="${esc(url)}" target="_blank" rel="noopener">open</a></div><iframe src="${esc(url)}" loading="lazy"></iframe></div>` : "";
+    const rejected = [...new Map(w.rejected.map((r) => [r.world_id, r])).values()];
+    $("whybody").innerHTML = `
+      <h2>Why is this true?</h2>
+      <div class="sentence" style="font-size:18px">${esc(w.fact.sentence)}</div>
+      ${w.madeTrueBy ? `<p>Made true by <b>${esc(w.madeTrueBy.claim?.agent)}</b> in ${esc(w.madeTrueBy.world?.id)}: “${esc(w.madeTrueBy.claim?.why)}”</p>` : `<p>Seed fact.</p>`}
+      ${rejected.length ? `<p>${rejected.length} world(s) failed this fact.</p>` : ""}
+      <div class="worlds">
+        ${w.madeTrueBy ? frame(w.madeTrueBy.world?.previewUrl, "Accepted world") : ""}
+        ${rejected.map((r) => frame(r.preview_url, `Rejected: ${esc(r.agent ?? r.world_id)} — ${esc(r.detail)}`)).join("")}
+      </div>`;
+    $("why").showModal();
+  }
+
+  function connect() {
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/p/${project}/ws`);
+    ws.onmessage = (m) => { state = JSON.parse(m.data); render(); };
+    ws.onclose = () => { $("canonline").textContent = "reconnecting…"; setTimeout(connect, 1500); };
+  }
+  connect();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "id": "sold-out-refused",
+  "sentence": "A sold-out product cannot be added to the basket",
+  "check": { "kind": "probe", "steps": [
+    { "method": "POST", "path": "/api/cart", "body": { "productId": "honey", "qty": 1 }, "expect": { "status": 409 } },
+    { "path": "/api/cart", "expect": { "json": { "items.length": 0 } } }
+  ] }
+}

@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "facts": [
+    {
+      "id": "market-lists-stalls",
+      "sentence": "The market page lists every stall",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/",
+            "expect": {
+              "status": 200,
+              "bodyIncludes": "Two Oaks Greens"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "products-have-prices",
+      "sentence": "All six products are for sale with a price",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/api/products",
+            "expect": {
+              "status": 200,
+              "json": {
+                "length": 6,
+                "0.priceCents": {
+                  "$exists": true
+                },
+                "5.priceCents": {
+                  "$exists": true
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "cart-starts-empty",
+      "sentence": "A new shopper's basket is empty",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "path": "/api/cart",
+            "expect": {
+              "status": 200,
+              "json": {
+                "items.length": 0,
+                "totalCents": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "price-is-listed",
+      "sentence": "The basket charges the listed price for every unit",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "eggs",
+              "qty": 12
+            },
+            "expect": {
+              "status": 200
+            }
+          },
+          {
+            "path": "/api/cart",
+            "expect": {
+              "status": 200,
+              "json": {
+                "totalCents": 4800
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "unknown-product-refused",
+      "sentence": "A product that does not exist cannot be added",
+      "check": {
+        "kind": "probe",
+        "steps": [
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "turnip",
+              "qty": 1
+            },
+            "expect": {
+              "status": 400
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

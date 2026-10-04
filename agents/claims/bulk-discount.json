@@ -1,0 +1,8 @@
+{
+  "id": "bulk-discount",
+  "sentence": "Buying 10 or more of one item takes 10% off that line",
+  "check": { "kind": "probe", "steps": [
+    { "method": "POST", "path": "/api/cart", "body": { "productId": "eggs", "qty": 12 }, "expect": { "status": 200 } },
+    { "path": "/api/cart", "expect": { "status": 200, "json": { "totalCents": 4320 } } }
+  ] }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "search-by-name",
+  "sentence": "Shoppers can search products by name",
+  "check": { "kind": "probe", "steps": [
+    { "path": "/api/products?q=egg", "expect": { "status": 200, "json": { "length": 2, "0.id": "eggs" } } }
+  ] }
+}
