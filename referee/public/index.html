@@ -127,9 +127,7 @@
   .claim.s-unproven::before, .claim.s-behind::before, .claim.s-open::before { background: var(--pending); }
   .claim.s-checking::before { background: linear-gradient(var(--pending), transparent, var(--pending)); background-size: 100% 200%; animation: scan 1.4s linear infinite; }
   .claim-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
-  .avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 500 10px var(--mono); color: #1a0b02;
-    background: conic-gradient(from 200deg, var(--gold), var(--brand), var(--brand-2), var(--gold)); }
-  .who { color: var(--ink); font-weight: 600; font-size: 14px; }
+  .who { color: var(--brand); font-weight: 600; font-size: 14px; }
   .chip { margin-left: auto; font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; border: 1px solid currentColor; }
   .chip.s-ready, .chip.s-accepted { color: var(--held); background: var(--held-bg); }
   .chip.s-contradicts { color: var(--broke); background: var(--broke-bg); }
@@ -338,7 +336,6 @@
   const seen = new Map(); // claim id -> last status, to animate arrivals and changes
   let state = null;
 
-  const initials = (agent) => { const m = String(agent).match(/(\d+)$/); return m ? `A${m[1]}` : String(agent).slice(0, 2).toUpperCase(); };
   const cloneCmd = (worldId) => `git clone ${location.origin}/w/${worldId}.git`;
 
   function render() {
@@ -375,7 +372,7 @@
       const before = seen.get(c.id);
       const motion = before === undefined && seen.size ? "enter" : before && before !== c.status ? "changed" : "";
       return `<article class="claim s-${c.status} ${motion}">
-        <div class="claim-top"><span class="avatar">${esc(initials(c.agent))}</span><span class="who">${esc(c.agent)}</span> is trying to make this true
+        <div class="claim-top"><span class="who">${esc(c.agent)}</span> is trying to make this true
           <span class="chip s-${c.status}">${LABEL[c.status] ?? esc(c.status)}</span></div>
         <div class="sentence">${esc(c.sentence)}</div>
         <p class="status-line">${MEANING[c.status] ?? ""}</p>
