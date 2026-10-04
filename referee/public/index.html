@@ -21,7 +21,7 @@
     --held: #4cc38a; --held-bg: rgb(76 195 138 / 0.12); --broke: #ff6b86; --broke-bg: rgb(255 107 134 / 0.12);
     --pending: #fdc86d; --pending-bg: rgb(253 200 109 / 0.12);
     --display: "Big Shoulders Display", "Archivo", sans-serif; --serif: "Archivo", system-ui, sans-serif; --sans: "Archivo", system-ui, sans-serif; --mono: "Martian Mono", ui-monospace, monospace;
-    --sky: radial-gradient(120% 90% at 50% 100%, #fd6f16 0%, #ed5616 18%, #7a2a1d 38%, #1b1a33 60%, transparent 78%);
+    --sky: radial-gradient(1100px 560px at 50% 100%, #fd6f16 0%, #ed5616 18%, #7a2a1d 38%, #1b1a33 60%, transparent 78%);
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -30,7 +30,7 @@
       --brand: #ed5616; --brand-2: #c2410c; --gold: #b7791f; --link: #c2410c;
       --held: #1e7b4f; --held-bg: rgb(30 123 79 / 0.1); --broke: #c0264e; --broke-bg: rgb(192 38 78 / 0.09);
       --pending: #8a5a00; --pending-bg: rgb(183 121 31 / 0.12);
-      --sky: radial-gradient(120% 90% at 50% 100%, #fd8f3e 0%, #fdb36d 22%, #fde3c4 45%, transparent 75%);
+      --sky: radial-gradient(1100px 560px at 50% 100%, #fd8f3e 0%, #fdb36d 22%, #fde3c4 45%, transparent 75%);
     }
   }
   * { box-sizing: border-box; }
@@ -47,13 +47,12 @@
   .sub { color: var(--ink-2); font: 400 17px/1.55 var(--sans); margin: 14px 0 0; max-width: 42em; }
 
   /* ---- Hero: the sun on the horizon is the canon ---------------------------------- */
-  .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+  .hero { position: relative; overflow: hidden; }
   .hero::before { content: ""; position: absolute; inset: 0; background: var(--sky); opacity: 0.55; }
-  .sun { position: absolute; left: 50%; bottom: -310px; width: 500px; height: 500px; margin-left: -250px; border-radius: 50%;
+  .sun { position: absolute; left: 50%; bottom: -370px; width: 500px; height: 500px; margin-left: -250px; border-radius: 50%;
     background: radial-gradient(circle at 50% 40%, #fdc86d 0%, #fd8a2c 38%, #ed5616 64%, rgb(237 86 22 / 0) 71%);
     animation: rise 1.6s cubic-bezier(.2,.7,.1,1) both, breathe 9s ease-in-out 1.6s infinite; }
-  .horizon { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--brand) 30%, var(--gold) 50%, var(--brand) 70%, transparent); opacity: 0.8; }
-  .ridge { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; color: var(--bg); }
+  .ridge { position: absolute; left: 0; bottom: -1px; display: block; width: 100%; height: 47px; color: var(--bg); }
   .bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 14px; padding-top: 18px; padding-bottom: 18px; }
   .brand { display: flex; align-items: center; gap: 10px; font: 800 24px/1 var(--display); text-transform: uppercase; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
   .brand img { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 0 0 1px var(--line-2), 0 8px 24px -8px rgb(253 111 22 / 0.6); }
@@ -61,7 +60,7 @@
   nav.links { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
   nav.links a { color: var(--ink-2); text-decoration: none; }
   nav.links a:hover { color: var(--ink); }
-  .hero-body { position: relative; z-index: 2; padding-top: 40px; padding-bottom: 170px; max-width: 1160px; text-align: center; margin: 0 auto; }
+  .hero-body { position: relative; z-index: 2; padding-top: 40px; padding-bottom: 180px; max-width: 1160px; text-align: center; margin: 0 auto; }
   h1 { font: 800 clamp(52px, 7.6vw, 112px)/0.9 var(--display); letter-spacing: 0.005em; margin: 0; text-transform: uppercase; }
   h1 em { font-style: normal; color: var(--brand); display: block; }
   .lede { font: 400 19px/1.55 var(--sans); font-variation-settings: "wdth" 100; color: var(--ink-2); margin: 26px auto 0; max-width: 38em; }
@@ -79,11 +78,9 @@
   /* ---- How it works: the four moves -------------------------------------------------- */
   .how { padding: 72px 0 24px; }
   .moves { list-style: none; margin: 34px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; position: relative; }
-  .moves::before { content: ""; position: absolute; top: 31px; left: 6%; right: 6%; height: 1px; background: linear-gradient(90deg, var(--brand), var(--gold), var(--held)); opacity: .55; }
   .move { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; backdrop-filter: blur(10px); }
-  .move .n { position: relative; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 500 11px var(--mono); color: #1a0b02;
-    background: radial-gradient(circle at 50% 35%, var(--gold), var(--brand) 75%); box-shadow: 0 0 0 6px var(--bg), 0 0 18px -2px rgb(253 111 22 / .8); margin-bottom: 14px; }
   .move h3 { font: 700 26px/1.05 var(--display); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.01em; }
+  .move h3::after { content: " →"; color: var(--brand); }
   .move p { margin: 0; color: var(--ink-2); font-size: 14px; }
   .example { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--bg-2); border: 1px dashed var(--line-2); font: 400 11.5px/1.6 var(--mono); color: var(--ink-2); }
   .example .ok { color: var(--held); } .example .bad { color: var(--broke); } .example .dim { color: var(--muted); }
@@ -217,7 +214,6 @@
 
   @media (max-width: 1000px) {
     .moves, .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .moves::before { display: none; }
     .board { grid-template-columns: 1fr; }
     .strip-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .pointer { grid-column: 1 / -1; border-top: 1px solid var(--line); }
@@ -226,7 +222,7 @@
   @media (max-width: 620px) {
     .moves, .grid4 { grid-template-columns: 1fr; }
     nav.links { display: none; }
-    .hero-body { padding-bottom: 120px; }
+    .hero-body { padding-bottom: 170px; }
   }
 </style>
 </head>
@@ -234,7 +230,6 @@
 <header class="hero">
   <div class="sun" aria-hidden="true"></div>
   <svg class="ridge" viewBox="0 0 1440 46" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 46V30l60-6 70 8 90-14 80 10 70-6 110 12 90-16 70 8 120-10 80 12 100-6 90 10 80-14 110 10 70-4 80 8 70-6v34z"/></svg>
-  <div class="horizon" aria-hidden="true"></div>
   <div class="bar wrap">
     <a class="brand" href="/"><img src="/icon.png" alt="">Canon <small>canon.rodeo</small></a>
     <nav class="links"><a href="#how">How it works</a><a href="#board">Live board</a><a href="#changes">What changes</a><a href="/src" id="navsource" hidden>Source</a></nav>
@@ -255,13 +250,13 @@
   <h2>Four moves. <em>Any agent that speaks Git can play.</em></h2>
   <p class="sub">The repo is still Git and the agent still pushes. The only new object is the <b>fact</b>: a plain sentence plus a check that runs against a live preview of the app.</p>
   <ol class="moves">
-    <li class="move reveal" style="animation-delay:.05s"><div class="n">01</div><h3>Read the canon</h3><p>The facts that are true of production right now, and what other agents are already working on.</p>
+    <li class="move reveal" style="animation-delay:.05s"><h3>Read the canon</h3><p>The facts that are true of production right now, and what other agents are already working on.</p>
       <div class="example"><span class="ok">✓</span> The basket charges the listed price<br><span class="ok">✓</span> A sold-out item can’t be added</div></li>
-    <li class="move reveal" style="animation-delay:.12s"><div class="n">02</div><h3>Claim a fact</h3><p>An agent declares the one new fact it will make true. Canon gives it a private world: a fork with its own Git remote.</p>
+    <li class="move reveal" style="animation-delay:.12s"><h3>Claim a fact</h3><p>An agent declares the one new fact it will make true. Canon gives it a private world: a fork with its own Git remote.</p>
       <div class="example">agent-2 → <span class="ok">“A stall cannot be double-booked”</span><br><span class="dim">world farmstand-p2q8zz</span></div></li>
-    <li class="move reveal" style="animation-delay:.19s"><div class="n">03</div><h3>Push a world</h3><p>Plain <code>git push</code>. Every commit becomes its own live preview on Cloudflare.</p>
+    <li class="move reveal" style="animation-delay:.19s"><h3>Push a world</h3><p>Plain <code>git push</code>. Every commit becomes its own live preview on Cloudflare.</p>
       <div class="example"><span class="dim">$</span> git push origin main<br><span class="dim">→ preview built in ~40 s</span></div></li>
-    <li class="move reveal" style="animation-delay:.26s"><div class="n">04</div><h3>Get a verdict</h3><p>Canon runs every fact on the preview. Keep them all and add yours: a person can accept it into production.</p>
+    <li class="move reveal" style="animation-delay:.26s"><h3>Get a verdict</h3><p>Canon runs every fact on the preview. Keep them all and add yours: a person can accept it into production.</p>
       <div class="example"><span class="ok">READY</span> · 6 kept · +1 new<br><span class="bad">REJECTED</span> · ✗ listed price</div></li>
   </ol>
 </section>
