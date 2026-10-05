@@ -1,14 +1,16 @@
 // Canon Stampede: two 40-second rounds riding a stampede of agents' changes.
+// The herd streams past you; you make your way forward by lassoing the changes ahead.
 // Round 1 is Git: every change looks the same. Review one first (press and hold) or jump blind.
-// Round 2 is Canon: the moon (the referee) checks every change against every fact; only green can land.
+// Round 2 is Canon: the moon (the referee) checks every change against every fact; only green can land,
+// and the autopilot button hands the lasso to the referee.
 (() => {
   const cv = document.getElementById("stage");
   const ctx = cv.getContext("2d");
   const ui = document.querySelector(".ui");
   const el = (k) => ui.querySelector(`[data-r="${k}"]`);
 
-  const ROUND = 40, RIDE = 3.6, JUMP = 0.42, REVIEW = 1.0, TAP = 0.22, ROLLBACK = 2.6, FALL = 1.6;
-  const JUDGE = 0.6, RECHECK = 0.7, AUTOPILOT = 10, BAD = 0.32, SPEED = 260;
+  const ROUND = 40, JUMP = 0.42, REVIEW = 1.0, TAP = 0.22, ROLLBACK = 2.6;
+  const JUDGE = 0.6, RECHECK = 0.7, BAD = 0.32, SPEED = 260;
   // Facts the demo app keeps (demo-app/canon.json); a broken change breaks one of them.
   const FACTS = ["The basket charges the listed price", "The code passes the linter", "The code type-checks",
     "The page answers in under 400 ms", "Unknown products are refused", "A new basket is empty", "The market lists every stall"];
@@ -39,11 +41,11 @@
   const easeOut = (x) => 1 - (1 - x) ** 3;
   const quad = (a, c, b, t) => ({ x: (1 - t) ** 2 * a.x + 2 * (1 - t) * t * c.x + t * t * b.x, y: (1 - t) ** 2 * a.y + 2 * (1 - t) * t * c.y + t * t * b.y });
 
-  let W = 0, H = 0, small = false, horizon = 0, PX = 0, lanes = [], scales = [];
+  let W = 0, H = 0, small = false, horizon = 0, PX = 0, lanes = [], scales = [], hudBottom = 100;
   let mode = null, playing = false, time = 0, clock = 0, last = 0;
   let herd = [], me = null, floaters = [], dust = [], lines = [], stars = [], ridge = [], scroll = 0;
   let press = null, nextSpawn = 0, nextConflict = 0, nextId = 401, pool = [], pairSeq = 0, landedPairs = new Map(), shown = new Set();
-  let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [];
+  let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [], autopilot = false;
 
   // ---- Layout ---------------------------------------------------------------------------------------
   function resize() {
@@ -87,24 +89,28 @@
 
   // ---- The herd -------------------------------------------------------------------------------------
   function spawn(extra = {}) {
-    const fromRight = Math.random() < 0.75;
-    const x = extra.x ?? (fromRight ? W + 80 : -80);
+    // Every change enters ahead of you and drifts back past the rider: you push forward through the herd.
+    const x = extra.x ?? W + 80;
     // A lane with room at the edge, so animals don't spawn on top of each other.
     const lane = extra.lane ?? shuffle([0, 1, 2]).find((l) => herd.every((a) => a.lane !== l || Math.abs(a.x - x) > 130));
     if (lane == null) return;
     herd.push({
       id: nextId++, kind: Math.random() < 0.35 ? "bull" : "horse", lane,
-      x, v: fromRight ? -rand(110, 220) : rand(70, 130), seed: rand(0, 6.3),
+      x, v: laneSpeed(lane), seed: rand(0, 6.3),
       bad: Math.random() < BAD, reason: pick(FACTS), claim: pool.pop() ?? pick(CLAIMS),
       pair: null, side: 0, state: "new", st: 0, reviewed: null, main: false, past: false, ...extra,
     });
   }
+  // One speed per lane (far lanes drift slower), so animals never run into each other.
+  const laneSpeed = (lane) => -(60 + Math.max(W, 375) * 0.08) * [0.8, 1, 1.2][lane];
+  const spawnEvery = () => rand(0.55, 0.8) * Math.min(1.8, Math.max(1, 1100 / W));
+
   function spawnConflict() {
     const pair = pairSeq++;
     const [a, b] = CONFLICTS[pair % CONFLICTS.length];
     const lanesFree = shuffle([0, 1, 2]);
-    spawn({ pair, side: 0, claim: a, bad: false, lane: lanesFree[0], x: W + 80, v: -rand(130, 160) });
-    spawn({ pair, side: 1, claim: b, bad: false, lane: lanesFree[1], x: W + 150, v: -rand(130, 160) });
+    spawn({ pair, side: 0, claim: a, bad: false, lane: lanesFree[0], x: W + 80 });
+    spawn({ pair, side: 1, claim: b, bad: false, lane: lanesFree[1], x: W + 150 });
   }
   const partnerLanded = (a) => a.pair != null && landedPairs.has(a.pair) && landedPairs.get(a.pair).side !== a.side;
   const brokenNow = (a) => a.bad || partnerLanded(a);
@@ -152,8 +158,8 @@
     hud();
     card(`<p class="kicker">Canon Stampede · two rounds, 40 seconds each</p>
       <h3>Round 1: <em>Git</em></h3>
-      <p>Every animal in the stampede is an agent's change. You're riding main. Your ride bucks you off after a few seconds, so keep lassoing the next one: <b>every safe landing ships a change.</b></p>
-      <p><b>Tap an animal to jump.</b> About 1 in 3 is broken and they all look the same: land on one and production breaks. <b>Press and hold</b> to review one first, but your ride keeps bucking while you read.</p>`,
+      <p>Every animal in the stampede is an agent's change, and you're riding main. Make your way forward through the herd by lassoing the ones ahead: <b>every safe landing ships a change.</b></p>
+      <p><b>Tap an animal to jump.</b> About 1 in 3 is broken and they all look the same: land on one and production breaks. <b>Press and hold</b> to review one first, but the herd keeps moving while you read.</p>`,
     [{ label: "Start round 1", primary: true, run: () => begin("git") }]);
   }
 
@@ -161,6 +167,7 @@
     mode = m;
     time = 0;
     playing = true;
+    autopilot = false;
     herd = herd.filter((a) => a === me?.a);
     if (!me?.a) newMain();
     me.ride = 0;
@@ -172,10 +179,10 @@
     pool = shuffle(CLAIMS);
     el("card").hidden = true;
     if (m === "git") {
-      git = { shipped: 0, broke: 0, review: 0, stale: 0, falls: 0 };
+      git = { shipped: 0, broke: 0, review: 0, stale: 0 };
       tip("Tap an animal to jump onto it. Press and hold to review it first.");
     } else {
-      canon = { shipped: 0, auto: 0, rejected: 0, falls: 0 };
+      canon = { shipped: 0, auto: 0, rejected: 0 };
       tip("The moon checks every change against every fact. Only green ones can land.");
     }
     for (let i = 0; i < 5; i++) spawn({ x: rand(PX + 140, W - 40) });
@@ -185,6 +192,7 @@
   function finish() {
     playing = false;
     press = null;
+    autopilot = false;
     if (mode === "git") {
       card(`<p class="kicker">Round 1 · Git</p>
         <h3>${git.shipped} shipped. <em>${git.broke} broke production.</em></h3>
@@ -218,22 +226,34 @@
         <span><i class="g"></i><span><b>Green</b> keeps every fact and adds one. Lasso it.</span></span>
         <span><i class="r"></i><span><b>Red</b> breaks a fact. Your lasso won't catch it.</span></span>
         <span><i class="a"></i><span><b>Amber</b>: main just moved, so it's being re-checked.</span></span>
-      </div>`,
+      </div>
+      <p>Ready to let go? Hit <b>Autopilot</b> and the referee lands green changes for you.</p>`,
     [{ label: "Start round 2", primary: true, run: () => begin("canon") }]);
   }
 
-  let lastStats = "";
+  let lastStats = "", measured = -1;
   function hud() {
     el("round").textContent = mode === "git" ? "Round 1 · Git" : mode === "canon" ? "Round 2 · Canon" : "Canon Stampede";
     el("time").style.width = `${mode ? Math.max(0, 1 - time / ROUND) * 100 : 100}%`;
     const html = mode === "git"
       ? `<span>Shipped <b>${git.shipped}</b></span><span>Broke production <b class="bad">${git.broke}</b></span><span>Reviewing <b>${git.review.toFixed(1)} s</b></span>`
       : mode === "canon"
-        ? `<span>Shipped <b class="good">${canon.shipped + canon.auto}</b></span><span>Broke production <b class="good">0</b></span><span>Rejected by the referee <b>${canon.rejected}</b></span>${time >= ROUND - AUTOPILOT && playing ? `<span class="auto">Autopilot on</span>` : ""}`
+        ? `<span>Shipped <b class="good">${canon.shipped + canon.auto}</b></span><span>Broke production <b class="good">0</b></span><span>Rejected by the referee <b>${canon.rejected}</b></span>`
         : "";
     if (html !== lastStats) {
       el("stats").innerHTML = html;
       lastStats = html;
+    }
+    const btn = el("auto");
+    const hide = !mode || !playing;
+    const text = autopilot ? "Autopilot on · take the reins" : mode === "git" ? "Autopilot" : "Turn on autopilot";
+    if (btn.hidden !== hide) btn.hidden = hide;
+    if (btn.textContent !== text) btn.textContent = text;
+    btn.classList.toggle("on", autopilot);
+    btn.classList.toggle("git", mode === "git");
+    if (clock - measured > 0.5) {
+      hudBottom = ui.querySelector(".hud").getBoundingClientRect().bottom;
+      measured = clock;
     }
   }
 
@@ -249,7 +269,8 @@
   function lasso(t, auto = false) {
     if (!me.a || me.jump || me.down || t === me.a || t.past) return;
     const from = riderAt();
-    if (Math.abs(t.x - from.x) > W * 0.62) return float("Too far to lasso", top(t), "muted");
+    if (t.x < from.x - 10) return float("Lasso the ones ahead of you", top(t), "muted");
+    if (t.x - from.x > W * 0.62) return float("Too far to lasso", top(t), "muted");
     if (mode === "canon") {
       if (t.state === "red") return float(t.against ? `Refused: contradicts “${t.against}”` : `Refused: breaks “${t.reason}”`, top(t), "broke");
       if (t.state !== "green") return float("Still being checked", top(t), "muted");
@@ -257,7 +278,7 @@
     me.jump = { st: 0, from, target: t, auto };
     me.a.main = false;
     me.a.past = true;
-    me.a.v = -rand(70, 120);
+    me.a.v = laneSpeed(me.a.lane);
     me.a = null;
     me.pos = from;
   }
@@ -295,17 +316,6 @@
     me.ride = 0;
   }
 
-  function buck() {
-    if (mode === "git") git.falls++;
-    if (mode === "canon") canon.falls++;
-    me.pos = riderAt();
-    me.a.main = false;
-    me.a.past = true;
-    me.a = null;
-    me.down = { st: 0, dur: FALL, why: "Bucked off. Back on main…" };
-    tip("Your ride bucked you off. Keep moving: main has to keep shipping.", "buck");
-  }
-
   // ---- Simulation -----------------------------------------------------------------------------------
   function step(dt) {
     clock += dt;
@@ -315,13 +325,12 @@
       nextSpawn -= dt;
       if (nextSpawn <= 0) {
         spawn();
-        nextSpawn = rand(0.55, 0.8);
+        nextSpawn = spawnEvery();
       }
       if (time >= nextConflict) {
         spawnConflict();
         nextConflict = time + 11;
       }
-      if (mode === "canon" && time >= ROUND - AUTOPILOT) tip("Autopilot on: with one line in canon.json, green changes land by themselves.", "auto");
       if (time >= ROUND) finish();
     }
 
@@ -369,8 +378,7 @@
         if (me.jump.st >= JUMP) land(me.jump.target, me.jump.auto);
       } else if (me.a) {
         if (playing) me.ride += dt;
-        if (me.ride >= RIDE) buck();
-        else if (playing && mode === "canon" && time >= ROUND - AUTOPILOT && me.ride > 0.45) {
+        if (playing && autopilot && me.ride > 0.45) {
           const next = herd.filter((a) => a.state === "green" && !a.past && a !== me.a && a.x > PX - 40 && Math.abs(a.x - PX) < W * 0.6)
             .sort((p, q) => Math.abs(p.x - PX - 160) - Math.abs(q.x - PX - 160))[0];
           if (next) lasso(next, true);
@@ -379,7 +387,7 @@
       if (me.a?.fresh) me.a.fresh = Math.max(0, me.a.fresh - dt * 1.5);
     }
 
-    // Reviewing (Git): hold on a change to read it; the ride keeps bucking meanwhile.
+    // Reviewing (Git): hold on a change to read it; the herd keeps moving meanwhile.
     if (press && mode === "git" && playing) {
       press.st += dt;
       if (press.st >= REVIEW && !press.done) {
@@ -473,7 +481,8 @@
     }
     // The moon: the referee. It only rises in the Canon round.
     if (moonShown > 0.01) {
-      const mr = small ? 16 : 24, mx = W * (small ? 0.84 : 0.86), my = horizon * 0.3;
+      // Below the HUD (and the autopilot button), above the horizon.
+      const mr = small ? 16 : 24, mx = W * (small ? 0.84 : 0.86), my = Math.min(horizon - mr * 2.2, Math.max(horizon * 0.42, hudBottom + mr * 2));
       const mg = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 3.4);
       mg.addColorStop(0, `rgba(205,218,238,${0.18 * moonShown})`);
       mg.addColorStop(1, "rgba(205,218,238,0)");
@@ -636,19 +645,7 @@
       if (a.main && me?.a === a && !me.jump) {
         const s = scales[a.lane];
         const bob = Math.sin((clock * 12 + a.seed) * 2) * 1.6 * s;
-        const buckle = me.ride / RIDE;
-        const shake = buckle > 0.7 ? Math.sin(clock * 40) * (buckle - 0.7) * 0.6 : 0;
-        drawRider(a.x - 2 * s, lanes[a.lane] - 36 * s + bob, s, c.ink, shake);
-        if (playing) {
-          // How long until this ride bucks you off.
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = buckle > 0.7 ? c.broke : c.pending;
-          ctx.globalAlpha = 0.9;
-          ctx.beginPath();
-          ctx.arc(a.x - 2 * s, lanes[a.lane] - 80 * s, 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - buckle));
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-        }
+        drawRider(a.x - 2 * s, lanes[a.lane] - 36 * s + bob, s, c.ink);
         if (a.fresh > 0) {
           ctx.strokeStyle = c.main;
           ctx.globalAlpha = a.fresh;
@@ -726,7 +723,7 @@
       ctx.globalAlpha = 1;
       drawRider(p.x, p.y, s, c.ink, -0.3 + u * 0.3);
     }
-    // Down: bucked off or rolling back.
+    // Down: rolling back a broken production.
     if (me?.down) {
       const d = me.down, u = Math.min(1, d.st / 0.5);
       drawRider(me.pos.x - u * 30, me.pos.y + u * 34, 0.9, c.ink, u * 1.6);
@@ -774,6 +771,13 @@
     }
   };
   cv.addEventListener("pointerup", release);
+  el("auto").addEventListener("click", () => {
+    if (!playing) return;
+    if (mode === "git") return tip("Git has no referee, so nothing can safely land changes for you. Someone has to read every diff.");
+    autopilot = !autopilot;
+    if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself. People decide the facts; agents do the rest.");
+    hud();
+  });
   cv.addEventListener("pointercancel", () => { press = null; });
 
   // ---- Loop -----------------------------------------------------------------------------------------

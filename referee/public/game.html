@@ -55,6 +55,15 @@
   .stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 400 12px var(--mono); color: var(--ink-2); }
   .stats b { color: var(--ink); font-weight: 500; }
   .stats .bad { color: var(--broke); } .stats .good { color: var(--held); } .stats .auto { color: var(--brand); }
+  .auto-btn { margin-left: auto; pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; font: 600 13.5px var(--sans); color: var(--ink); cursor: pointer;
+    background: var(--panel); border: 1px solid var(--brand); border-radius: 999px; padding: 9px 16px; backdrop-filter: blur(10px); }
+  .auto-btn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); }
+  .auto-btn.git { color: var(--muted); border-color: var(--line-2); }
+  .auto-btn.git::before { background: var(--muted); }
+  .auto-btn.on { color: #1a0b02; border-color: transparent; background: linear-gradient(180deg, #fdac5c, var(--brand) 55%, var(--brand-2)); }
+  .auto-btn.on::before { background: #1a0b02; animation: blink 1s infinite; }
+  .auto-btn[hidden] { display: none; }
+  @keyframes blink { 50% { opacity: .25; } }
   .tip { margin: 0; max-width: 620px; text-align: center; font: 500 14.5px/1.45 var(--sans); background: var(--panel); border: 1px solid var(--line-2);
     border-radius: 12px; padding: 10px 16px; backdrop-filter: blur(10px); opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
   .tip.on { opacity: 1; transform: none; }
@@ -104,6 +113,7 @@
     <div class="hud">
       <div class="round"><b data-r="round">Canon Stampede</b><span class="time"><i data-r="time"></i></span></div>
       <div class="stats" data-r="stats"></div>
+      <button class="auto-btn" data-r="auto" type="button" hidden>Turn on autopilot</button>
     </div>
     <p class="tip" data-r="tip" role="status"></p>
   </div>
