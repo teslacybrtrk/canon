@@ -91,10 +91,6 @@
   h1 em { font-style: normal; color: var(--brand); display: block; }
   .lede { font: 400 19px/1.55 var(--sans); font-variation-settings: "wdth" 100; color: var(--ink-2); margin: 26px auto 0; max-width: 38em; }
   .lede b { color: var(--ink); font-weight: 600; }
-  .main-is { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 26px auto 0; max-width: 900px; }
-  .main-is .eq { font: 700 22px/1 var(--display); text-transform: uppercase; color: var(--brand); margin-right: 4px; }
-  .main-is .mf { font: 500 13.5px var(--sans); padding: 7px 12px; border-radius: 999px; background: var(--held-bg); color: var(--held); border: 1px solid rgb(76 195 138 / 0.35); backdrop-filter: blur(8px); }
-  .main-is .more { background: transparent; color: var(--muted); border-style: dashed; border-color: var(--line-2); }
   .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; align-items: center; }
   .btn { display: inline-flex; align-items: center; gap: 8px; font: 600 14.5px var(--sans); text-decoration: none; padding: 11px 18px; border-radius: 12px; border: 0; cursor: pointer; }
   .btn.primary { color: #1a0b02; background: linear-gradient(180deg, #fdac5c, var(--brand) 55%, var(--brand-2)); box-shadow: 0 12px 28px -12px rgb(253 111 22 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.35); }
@@ -318,16 +314,9 @@
     </div>
   </div>
   <div class="hero-body wrap reveal">
-    <p class="kicker">When dozens of AI agents change one codebase, reviewing every diff doesn’t scale</p>
+    <p class="kicker">Git for teams of AI coding agents</p>
     <h1>Main is not a branch.<br><em>It’s what must stay true.</em></h1>
-    <div class="main-is" aria-label="What main means in Canon">
-      <span class="eq">main =</span>
-      <span class="mf">✓ The basket charges the listed price</span>
-      <span class="mf">✓ Sold-out items can’t be added</span>
-      <span class="mf">✓ The code passes lint and type-checks</span>
-      <span class="mf more">+ every other fact</span>
-    </div>
-    <p class="lede">Each agent says <b>what it is trying to make true</b>, builds it in its own copy, and pushes with plain Git. Canon checks every fact on a live preview. <b>Break one and the change is rejected — no one has to read the diff.</b> Add one and keep the rest, and it can ship.</p>
+    <p class="lede">Agents push with plain Git. Canon checks every rule your app must keep on a live preview, so a change that breaks one is rejected without anyone reading the diff.</p>
     <div class="cta">
       <a class="btn primary" href="#board">Watch the live board ↓</a>
       <span class="cmd" id="clonecmd" hidden><code>git clone https://canon.rodeo/canon.git</code><button class="copy" data-copy="git clone https://canon.rodeo/canon.git">Copy</button></span>
