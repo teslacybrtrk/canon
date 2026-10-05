@@ -20,7 +20,7 @@
 
   let W = 0, H = 0, R = 250, VIS = 130, small = false;
   let stars = [], embers = [], worlds = [], rings = [], moonRings = [];
-  let px = 0, pxTarget = 0, flare = 0, swells = [], nextFork = 2.2, last = 0, clock = 0, raf = 0;
+  let flare = 0, swells = [], nextFork = 2.2, last = 0, clock = 0, raf = 0;
 
   const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
   const easeIn = (x) => x * x * x;
@@ -47,14 +47,14 @@
   function sun() {
     const rise = (1 - Math.min(1, clock / 1.8)) ** 3 * 160;
     const sink = Math.min(scrollY, H) * 0.22;
-    return { x: W / 2 + px * 14, y: H - VIS + R + rise + sink };
+    return { x: W / 2, y: H - VIS + R + rise + sink };
   }
   // The moon sits right of the sun, clear of the buttons; it drifts less than the sun (it's further away).
   function moon() {
     const fade = Math.min(1, Math.max(0, (clock - 0.6) / 1.2));
     if (small) return { x: W - 58, y: H - 138, r: 15, fade };
     const wide = W >= 1100;
-    return { x: W / 2 + R + (W / 2 - R) * 0.55 - px * 6, y: H - (wide ? 205 : 140), r: wide ? 26 : 21, fade };
+    return { x: W / 2 + R + (W / 2 - R) * 0.55, y: H - (wide ? 205 : 140), r: wide ? 26 : 21, fade };
   }
   const rim = (s, phi) => ({ x: s.x + R * Math.sin(phi), y: s.y - R * Math.cos(phi) });
   // Orbits are tilted ellipses: the far half passes behind the moon.
@@ -238,7 +238,7 @@
       ctx.fillStyle = "#f5efe6";
       for (const st of stars) {
         ctx.globalAlpha = 0.1 + 0.4 * (0.5 + 0.5 * Math.sin(t * st.sp + st.ph));
-        ctx.fillRect(st.x - px * 6, st.y, st.s, st.s);
+        ctx.fillRect(st.x, st.y, st.s, st.s);
       }
     }
 
@@ -297,7 +297,6 @@
 
   function step(dt) {
     clock += dt;
-    px += (pxTarget - px) * Math.min(1, dt * 3);
     // A merge swells the sun's glow in and out over two seconds, never a sudden flash.
     swells = swells.filter((at) => clock - at < SWELL);
     flare = Math.min(0.45, swells.reduce((sum, at) => sum + 0.3 * Math.sin((Math.PI * (clock - at)) / SWELL), 0));
@@ -383,10 +382,7 @@
     const x = e.clientX - r.left, y = e.clientY - r.top;
     return Math.hypot(x - s.x, y - s.y) < R && y < H - 30 && !e.target.closest("a, button, .cmd");
   };
-  hero.addEventListener("pointermove", (e) => {
-    pxTarget = (e.clientX / W - 0.5) * 2;
-    hero.style.cursor = !still.matches && onSun(e) ? "pointer" : "";
-  });
-  hero.addEventListener("pointerleave", () => { pxTarget = 0; hero.style.cursor = ""; });
+  hero.addEventListener("pointermove", (e) => { hero.style.cursor = !still.matches && onSun(e) ? "pointer" : ""; });
+  hero.addEventListener("pointerleave", () => { hero.style.cursor = ""; });
   hero.addEventListener("click", (e) => { if (onSun(e) && raf) fork(undefined, true); });
 })();

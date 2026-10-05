@@ -1,6 +1,5 @@
 // The rider on the hero's horizon: the cowboy from Canon Stampede galloping in place on main,
 // next to the link to the game. Same drawings as stampede.js (horse, rider, hat), in the same scanlines.
-// Hovering the link spurs the horse on.
 (() => {
   const link = document.querySelector(".ride");
   const canvas = link?.querySelector("canvas");
@@ -13,7 +12,7 @@
     light: { horse: "#01132a", ink: "#01132a", edge: "rgba(255,255,255,0.95)", brand: "#ed5616", rope: "#b7791f", shadow: "rgba(1,19,42,0.16)", dust: "rgba(1,19,42,0.22)" },
   };
   const FEET = 15; // px above the bottom of the hero: on the ridge
-  let W = 0, H = 0, S = 1, theme = null, fill = null, clock = 0, last = 0, raf = 0, spur = 0, spurTarget = 0, visible = true;
+  let W = 0, H = 0, S = 1, theme = null, fill = null, clock = 0, last = 0, raf = 0, visible = true;
   let dust = [], nextDust = 0;
 
   function resize() {
@@ -137,7 +136,7 @@
     ctx.lineTo(1, -10.5);
     ctx.closePath();
     ctx.fill();
-    const spin = t * (8 + spur * 6);
+    const spin = t * 8;
     const hand = { x: 6 + Math.cos(spin) * 1.5, y: -31 };
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -161,7 +160,7 @@
     ctx.clearRect(0, 0, W, H);
     // Origin at the horse's feet, right of centre so the dust has room to trail behind.
     const x0 = W - 52 * S, y0 = H - FEET;
-    const ph = clock * (11 + spur * 6);
+    const ph = clock * 11;
     const bob = Math.sin(ph * 2) * 1.8, pitch = Math.sin(ph * 2 + 0.6) * 0.04;
 
     ctx.fillStyle = c.dust;
@@ -213,9 +212,8 @@
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     clock += dt;
-    spur += (spurTarget - spur) * Math.min(1, dt * 4);
     // Hooves kick up dust that blows back behind the horse.
-    nextDust -= dt * (1 + spur);
+    nextDust -= dt;
     if (nextDust <= 0) {
       dust.push({ born: clock, life: 0.9, x: -16 + Math.random() * 30, y: Math.random() * 4, v: 50 + Math.random() * 40, s: Math.random() < 0.3 ? 2 : 1.5 });
       nextDust = 0.06;
@@ -237,10 +235,6 @@
     }
   }
 
-  link.addEventListener("pointerenter", () => { spurTarget = 1; });
-  link.addEventListener("pointerleave", () => { spurTarget = 0; });
-  link.addEventListener("focus", () => { spurTarget = 1; });
-  link.addEventListener("blur", () => { spurTarget = 0; });
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; run(); }).observe(link);
   still.addEventListener?.("change", run);
   new MutationObserver(() => { if (!raf) draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
