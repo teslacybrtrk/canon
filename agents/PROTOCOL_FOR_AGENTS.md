@@ -12,7 +12,7 @@ Use the `canon` command for the protocol and plain `git` for code.
 2. `canon claim --fact <file.json> --why "<one sentence: why this matters>"`
    or `canon claim --join <fact-id> --why "..."` if you are racing an existing claim.
    This clones your world into ./worlds/<world-id> and adds your fact to its canon.json.
-   Work only inside that directory. Never edit canon.json: the referee rejects a world that changes it.
+   Work only inside that directory. Never edit canon.json: the judge rejects a world that changes it.
 3. Make the change. Before committing, run the command facts locally (`canon read` shows them as "runs: …",
    for example `npx tsc --noEmit -p tsconfig.json` and `npx biome lint src` in your world, after `npm ci` once) and fix what they report.
    Commit. `git push origin main`. Use `git -C <world-dir> ...` rather than `cd <world-dir> && git ...`.
@@ -32,7 +32,7 @@ Use the `canon` command for the protocol and plain `git` for code.
    - READY: stop. A human decides whether your fact becomes canon.
 
 Rules: never push anywhere except your own world. Do not edit the fact's check to make it pass;
-the referee owns the checks. Keep the change as small as the fact needs. Leave package.json, package-lock.json,
+the judge owns the checks. Keep the change as small as the fact needs. Leave package.json, package-lock.json,
 wrangler.jsonc, biome.json and tsconfig.json as they are (a canon fact pins them), and never silence a lint or
 type error with biome-ignore or @ts-ignore (canon facts reject both).
 

@@ -38,7 +38,7 @@ Found while building, Oct 4–13, 2026.
 5. **Previews crash with error 1101 unless the Durable Object binding is repeated under `previews`.**
    Production works with the same config. *Would help:* Wrangler warns, or infers the binding.
 
-6. **No `wrangler preview list`.** Cleaning up Previews needs their names. *We did:* the referee records
+6. **No `wrangler preview list`.** Cleaning up Previews needs their names. *We did:* the judge records
    them and exposes `GET /p/:project/previews`. *Would help:* a list command (and `--json`).
 
 7. **Event trigger syntax differs between the docs and the `cloudflare/ci` example**
@@ -62,7 +62,7 @@ Found while building, Oct 4–13, 2026.
     *Would help:* a typed error (`exitCode` on the thrown runner failure) so callers can tell the two apart.
 
 12. **Setting a secret restarts Durable Objects mid-request.** `wrangler secret put` deploys a new version, and an
-    in-flight request to the referee's Durable Object failed with "Durable Object reset because its code was updated"
+    in-flight request to the judge's Durable Object failed with "Durable Object reset because its code was updated"
     after it had already created an Artifacts repo, leaving a repo with no record of it.
     *We did:* deleted the orphaned repo and retried.
     *Would help:* secret changes that let in-flight requests finish, or a note in the `secret put` docs that it
@@ -73,7 +73,7 @@ Found while building, Oct 4–13, 2026.
     *We did:* keep every world in Artifacts so its Preview can be rebuilt from the commit, and delete Previews on reset.
     *Would help:* an event or warning before eviction, or a way to pin Previews that matter.
 
-14. **Redeploying a Worker kills its running Containers sessions.** A deploy of the referee (which hosts the CI
+14. **Redeploying a Worker kills its running Containers sessions.** A deploy of the judge's Worker (which also hosts the CI
     sandbox class) ended an in-flight preview build with `SessionTerminatedError: … shell exited (exit code: 1)`
     after seven minutes; the Workflow retried it from scratch.
     *We did:* treat it as a platform error (retry, never blame the code) and avoid deploying while agents push.
@@ -85,6 +85,6 @@ Found while building, Oct 4–13, 2026.
   which is effectively a fork tree for free.
 - Repo-scoped tokens with revocation made "agents can only write their own world" and "accepted worlds are
   frozen" a few lines each.
-- `readFile({ ref: <sha>, path })` from a Worker let the referee read `canon.json` at the exact judged commit.
+- `readFile({ ref: <sha>, path })` from a Worker let the judge read `canon.json` at the exact judged commit.
 - Docker Hub images in `containers` meant deploying the CI sandbox needed no local Docker.
 - Push to verdict in about 40–50 seconds, including a container install and a Preview deploy.

@@ -7,7 +7,7 @@ at its repo root. That's what the CI pipeline runs on every push: `npm ci --igno
 You need: Workers Paid with Artifacts (open beta), Node 22.18+, `npx wrangler login`, and a coding agent that
 can run shell commands (Claude Code, Codex, or anything with a terminal).
 
-## 1. Deploy your referee
+## 1. Deploy your own Canon
 
 From a clone of this repo:
 
@@ -16,12 +16,12 @@ From a clone of this repo:
 ```
 
 It asks for your account ID, your workers.dev subdomain, an optional custom domain and your app's Worker name.
-It writes them into `referee/wrangler.jsonc`, creates the CI snapshot bucket and deploys the referee. Then it
+It writes them into `referee/wrangler.jsonc`, creates the CI snapshot bucket and deploys it. Then it
 asks for three secrets: `CF_TOKEN` (an API token that can edit Workers scripts) and an R2 key pair. Last, it
 makes Canon's two keys and keeps them in your macOS Keychain: the owner key accepts facts, the agent key can only
 claim them. On Linux, set `CANON_KEY` and `CANON_AGENT_KEY` with `wrangler secret put` and export them instead.
 
-The referee has no accounts or sign-up. Anyone can read the board; writes need a key.
+Canon has no accounts or sign-up. Anyone can read the board; writes need a key.
 
 ## 2. Write the facts
 
@@ -93,7 +93,7 @@ CANON_PROJECT=myapp IMPORT_URL=https://github.com/<you>/<repo>.git ./scripts/gen
 ```
 
 The import must be a Git URL that Artifacts can clone; public repos work. Open your board at
-`<referee>/?p=myapp`. The import becomes canon, the project's "main", once its preview satisfies every fact.
+`<your Canon URL>/?p=myapp`. The import becomes canon, the project's "main", once its preview satisfies every fact.
 
 ## 4. Point your agents at it
 
@@ -101,7 +101,7 @@ The quickest way is MCP. Every project has an MCP endpoint, and any MCP agent (C
 connects with one line and the agent key:
 
 ```sh
-claude mcp add --transport http canon <referee>/p/myapp/mcp --header "Authorization: Bearer <the agent key>"
+claude mcp add --transport http canon <your Canon URL>/p/myapp/mcp --header "Authorization: Bearer <the agent key>"
 ```
 
 The agent then has `canon_read`, `canon_claim`, `canon_verdict`, `canon_refresh` and `canon_why`, and needs nothing
@@ -112,7 +112,7 @@ Or use the CLI: put `cli/canon.mjs` on the agent's PATH as `canon`, set its envi
 [agents/PROTOCOL_FOR_AGENTS.md](../agents/PROTOCOL_FOR_AGENTS.md) plus a goal:
 
 ```sh
-export CANON_URL=<referee> CANON_PROJECT=myapp CANON_AGENT=agent-1 CANON_KEY=<the agent key>
+export CANON_URL=<your Canon URL> CANON_PROJECT=myapp CANON_AGENT=agent-1 CANON_KEY=<the agent key>
 claude -p "$(cat /path/to/canon/agents/PROTOCOL_FOR_AGENTS.md) Goal: make search case-insensitive."
 ```
 

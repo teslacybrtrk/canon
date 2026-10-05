@@ -11,14 +11,15 @@ still push. The only new object is the fact that decides whether a push becomes 
 - **Fact**: a sentence plus a check that can fail a preview. If it cannot fail a preview, it is not a fact.
   A fact works like a required status check in branch protection, except it checks behaviour on a live preview, not a lint script.
 - **canon.json**: the facts, committed at the repo root. They travel with the code to GitHub, GitLab or a laptop clone.
-  The referee only decides which world they currently point at.
+  The judge only decides which world they currently point at.
 - **Canon**: the facts currently true, plus a pointer to the world that makes them true.
 - **Claim**: "agent-4 is trying to make *fact X* true." Agents coordinate by reading claims, not by locking files.
 - **World**: one attempt. An Artifacts fork of the canon world, written to with a fork-scoped token.
   A person pushing by hand is just another world and gets the same verdict. Worlds are never deleted, so a
   world that failed a fact stays clonable: the failed worlds are the project's memory. (Cloudflare keeps the newest
   500 Previews per Worker; an older one can be rebuilt from its commit.)
-- **Referee**: one Durable Object per project. The only writer of facts, claims and the canon pointer.
+- **Judge**: one Durable Object per project (the `Referee` class in the code). The only writer of facts, claims and the
+  canon pointer.
 
 ## The four moves
 
@@ -50,9 +51,9 @@ Propose a new fact:
 
 Or race for a fact someone already proposed: `{ "agent": "agent-3", "why": "…", "join": "no-double-booking" }`.
 
-The referee refuses a probe fact whose check already holds on canon (it is not new). A command fact needs CI, so every
+The judge refuses a probe fact whose check already holds on canon (it is not new). A command fact needs CI, so every
 push also runs it on the commit the world forked from; if it passes there too, the claim can never become ready.
-On success the referee forks the canon world and returns:
+On success the judge forks the canon world and returns:
 
 ```json
 { "claim": { "id": "c-…", "status": "open", … },
@@ -65,7 +66,7 @@ The token can write to this fork only. Agents cannot push to canon.
 ### 3. Push
 
 Plain Git: `git push origin main` inside the world. The Artifacts `pushed` event starts a Workflow that
-builds the world as a Workers Preview (`wrangler preview --name <world>`) and asks the referee to judge it.
+builds the world as a Workers Preview (`wrangler preview --name <world>`) and asks the judge for a verdict.
 
 ### 4. Verdict
 
@@ -93,7 +94,7 @@ builds the world as a Workers Preview (`wrangler preview --name <world>`) and as
 { "version": 1, "facts": [ { "id": "price-is-listed", "sentence": "The basket charges the listed price for every unit", "check": { … } } ] }
 ```
 
-The referee judges every world with canon's facts, never with the world's own copy, so editing canon.json
+The judge checks every world against canon's facts, never with the world's own copy, so editing canon.json
 cannot weaken a fact. A world's canon.json must equal canon plus the fact it claimed (`canon claim` adds it).
 
 | world's canon.json | ledger | effect |
@@ -127,7 +128,7 @@ Worlds that still carry the old fact are behind and refresh. Without a revision,
 | `{"kind":"command","run":"…"}` | a shell command on the commit's checkout, in a clean CI container | lint, type-check, tests, coverage thresholds, bundle size, pinned config |
 
 - **Latency budget:** a probe step with `"repeat": 20` and `"expect": {"p95Ms": 400}` sends one warm-up request, then 20 timed ones.
-- **Scope:** `"scope": ["src/db/**", "migrations/**"]` judges a fact only on worlds that change a matching file. The referee diffs
+- **Scope:** `"scope": ["src/db/**", "migrations/**"]` judges a fact only on worlds that change a matching file. The judge diffs
   the world's Git tree against the commit it forked from (in Artifacts), skipping identical subtrees. `canon read --for <path>`
   lists the facts that govern a file.
 - Commands are owned by canon, not by the world: they call tools directly (not package scripts), and a fact can pin the
@@ -146,14 +147,14 @@ proposed by agents themselves still wait for a person, so an agent cannot lower 
 ## Review and promotion
 
 `POST /p/:project/claims/:id/accept`: a person accepts a change in the facts; the code comes along as evidence.
-The referee freezes the world (revokes its write tokens), marks the fact canon, moves the canon pointer to the
+The judge freezes the world (revokes its write tokens), marks the fact canon, moves the canon pointer to the
 world, deploys it to production, and re-judges every other live world against the new canon.
 A world built before the accepted fact is **behind**; refreshed onto the new canon, a world that still loses the fact
-**contradicts** it. That is a conflict: a contradiction between worlds, not a textual diff. The referee never merges
+**contradicts** it. That is a conflict: a contradiction between worlds, not a textual diff. The judge never merges
 code: `canon refresh` replays a world's changes on the new canon, and its agent resolves any text conflict. If two
 good facts should both land, an agent declares a fresh world that satisfies both.
 
-After each deploy, and every hour, the referee runs canon's probe facts against production and shows the result on
+After each deploy, and every hour, the judge runs canon's probe facts against production and shows the result on
 the board.
 
 ## MCP

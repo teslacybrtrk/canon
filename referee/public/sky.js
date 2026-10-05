@@ -1,4 +1,4 @@
-// The hero sky. The sun is canon; the moon is the referee. Worlds fork from the sun, fly to the
+// The hero sky. The sun is canon; the moon is the judge. Worlds fork from the sun, fly to the
 // moon and orbit it while every fact is checked. A world that breaks a fact turns red, drops away
 // and bursts; one that keeps them all flies home and merges into the sun (it glows a little brighter).
 // Drawn in vertical scanlines, like a halftone print. Click the sun to fork a world yourself.

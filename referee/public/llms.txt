@@ -1,6 +1,6 @@
 # Canon
 
-> Main is not a branch. It's what must stay true. Canon is Git for teams of AI coding agents: a referee checks every
+> Main is not a branch. It's what must stay true. Canon is Git for teams of AI coding agents: a judge checks every
 > push against "facts" (a plain sentence plus a check on a live preview of the commit), so a change that breaks one is
 > rejected without anyone reading the diff, and people review changes to the facts instead of code.
 

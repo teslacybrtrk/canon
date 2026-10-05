@@ -10,8 +10,8 @@
 //   canon why <fact-id>                         the fact chain: who made it true, which worlds failed it
 //   canon init                                  a starter canon.json for the app in this folder
 //
-// Env: CANON_URL (referee origin), CANON_PROJECT (e.g. farmstand), CANON_AGENT (e.g. agent-3),
-//      CANON_KEY (the key that lets you claim; agents get the referee's CANON_AGENT_KEY),
+// Env: CANON_URL (where Canon runs, e.g. https://canon.rodeo), CANON_PROJECT (e.g. farmstand), CANON_AGENT (e.g. agent-3),
+//      CANON_KEY (the key that lets you claim; agents get the CANON_AGENT_KEY),
 //      CANON_WORKDIR (where worlds are cloned; default ./worlds)
 
 import { execFileSync } from "node:child_process";
@@ -33,7 +33,7 @@ const args = parseArgs(rest);
 try {
   if (!["read", "claim", "verdict", "refresh", "why", "init"].includes(cmd)) usage();
   if (cmd === "init") init();
-  else if (!URL_BASE) fail("set CANON_URL to the referee origin");
+  else if (!URL_BASE) fail("set CANON_URL to where Canon runs, e.g. https://canon.rodeo");
   else if (cmd === "read") await read();
   else if (cmd === "claim") await claim();
   else if (cmd === "verdict") await verdict();
@@ -89,7 +89,7 @@ async function claim() {
 }
 
 // Clone a new world, mark it as Canon's, and commit the claimed fact into its canon.json.
-// The fact travels with the code; the referee rejects a world whose canon.json changes anything else.
+// The fact travels with the code; the judge rejects a world whose canon.json changes anything else.
 async function setupWorld(dir, claim, world, fact) {
   const remote = new URL(world.remote);
   remote.username = "x";
@@ -115,7 +115,7 @@ async function setupWorld(dir, claim, world, fact) {
 
 // A world that is BEHIND was built on an older canon. Make a fresh world from the current
 // canon for the same fact, and re-apply this world's own changes on top of it. The agent
-// (not the referee) resolves any conflict; nothing is merged on the server.
+// (not the judge) resolves any conflict; nothing is merged on the server.
 async function refresh() {
   const old = worldContext();
   // Only a world that is behind needs a fresh copy of canon; refreshing anything else just makes noise.
@@ -264,7 +264,7 @@ git interpret-trailers --in-place --if-exists doNothing \\
   chmodSync(hook, 0o755);
 }
 
-// Same glob rules as the referee: ** spans directories, * stays within one.
+// Same glob rules as the judge: ** spans directories, * stays within one.
 function globToRegExp(glob) {
   let re = "";
   for (let i = 0; i < glob.length; i++) {

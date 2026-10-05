@@ -1,8 +1,8 @@
 // Canon Stampede: two 40-second rounds riding a stampede of agents' changes.
 // The herd streams past you; you make your way forward by lassoing the changes ahead.
 // Round 1 is Git: every change looks the same. Review one first (press and hold) or jump blind.
-// Round 2 is Canon: the moon (the referee) checks every change against every fact; only green can land,
-// and the autopilot button hands the lasso to the referee.
+// Round 2 is Canon: the moon (the judge) checks every change against every fact; only green can land,
+// and the autopilot button hands the lasso to the judge.
 (() => {
   const cv = document.getElementById("stage");
   const ctx = cv.getContext("2d");
@@ -263,7 +263,7 @@
           <tr><td>Broke production</td><td class="${git.broke ? "bad" : ""}">${git.broke}</td><td class="good">0</td></tr>
           <tr><td>Seconds spent reviewing</td><td>${git.review.toFixed(1)}</td><td class="good">0</td></tr>
         </table>
-        <p>The referee rejected ${canon.rejected} broken change${canon.rejected === 1 ? "" : "s"} before anyone could land on them, and re-checked the herd every time main moved.</p>
+        <p>The judge rejected ${canon.rejected} broken change${canon.rejected === 1 ? "" : "s"} before anyone could land on them, and re-checked the herd every time main moved.</p>
         <p><b>Same agents, same herd. Reading every diff made you choose between speed and safety. Canon gave you both.</b></p>
         <p class="fine">Here every broken change breaks a fact. In a real app a fact catches what it asserts, so write facts where a silent break costs most.</p>`,
       [{ label: "Play again", primary: true, run: () => { shown.clear(); intro(); } }, { label: "See how Canon works →", href: "/#how" }]);
@@ -276,7 +276,7 @@
     hud();
     card(`<p class="kicker">Same herd · 40 seconds</p>
       <h3>Round 2: <em>Canon</em></h3>
-      <p>Now the moon is the referee. It checks every change for you.</p>
+      <p>Now the moon is the judge. It checks every change for you.</p>
       <div class="legend">
         <span><i class="g"></i><span><b>Green</b> is safe. Tap to ship it.</span></span>
         <span><i class="r"></i><span><b>Red</b> breaks a fact. You can't land on it.</span></span>
@@ -300,7 +300,7 @@
     const html = mode === "git"
       ? `<span>Shipped <b>${git.shipped}</b></span><span>Broke production <b class="bad">${git.broke}</b></span><span>Reviewing <b>${git.review.toFixed(1)} s</b></span>`
       : mode === "canon"
-        ? `<span>Shipped <b class="good">${canon.shipped + canon.auto}</b></span><span>Broke production <b class="good">0</b></span><span>Rejected by the referee <b>${canon.rejected}</b></span>`
+        ? `<span>Shipped <b class="good">${canon.shipped + canon.auto}</b></span><span>Broke production <b class="good">0</b></span><span>Rejected by the judge <b>${canon.rejected}</b></span>`
         : "";
     if (html !== lastStats) {
       el("stats").innerHTML = html;
@@ -451,7 +451,7 @@
         flashes.push({ a, bad, born: clock });
         if (bad && playing) canon.rejected++;
         if (bad && a.against == null && partnerLanded(a)) a.against = landedPairs.get(a.pair).claim;
-        if (bad) tip("Red: the referee checked that change and it breaks a fact. It can never land, and nobody read its diff.", "red");
+        if (bad) tip("Red: the judge checked that change and it breaks a fact. It can never land, and nobody read its diff.", "red");
       } else if (a.state === "behind" && a.st >= RECHECK) {
         if (brokenNow(a)) {
           a.state = "red";
@@ -589,7 +589,7 @@
       const t0 = sy - h;
       if (t0 < horizon) ctx.fillRect(x, t0, 3, horizon - t0);
     }
-    // The moon: the referee. It only rises in the Canon round.
+    // The moon: the judge. It only rises in the Canon round.
     if (moonShown > 0.01) {
       // Below the HUD (and the autopilot button), above the horizon.
       const mr = small ? 16 : 24, mx = W * (small ? 0.84 : 0.86), my = Math.min(horizon - mr * 2.2, Math.max(horizon * 0.42, hudBottom + mr * 2));
@@ -609,7 +609,7 @@
         if (h > 0) ctx.fillRect(x, my - h, 2, h * 2);
       }
       ctx.globalAlpha = 1;
-      label("REFEREE", mx, my + mr + 16, c.muted, moonShown, `600 ${small ? 9.5 : 10.5}px "Martian Mono", ui-monospace, monospace`);
+      label("JUDGE", mx, my + mr + 16, c.muted, moonShown, `600 ${small ? 9.5 : 10.5}px "Martian Mono", ui-monospace, monospace`);
       moonAt = { x: mx, y: my, r: mr };
     }
     // Far ridge, scrolling slowly.
@@ -895,7 +895,7 @@
     return patterns.fork;
   }
 
-  // Moonlight on every change the referee is checking: drawn over the ground and under the herd, so it lands on the field.
+  // Moonlight on every change the judge is checking: drawn over the ground and under the herd, so it lands on the field.
   function drawBeams() {
     if (moonShown < 0.01 || !moonAt) return;
     const { x: mx, y: my, r: mr } = moonAt;
@@ -1099,7 +1099,7 @@
     if (!playing || ready > 0) return;
     if (mode === "git") return tip("In this round nothing checks a change but you, so nothing can land changes for you.\nSomeone has to read every diff.");
     autopilot = !autopilot;
-    if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself.\nPeople decide the facts; agents do the rest.");
+    if (autopilot) tip("Autopilot on: with one line in canon.json, the judge lands every green change by itself.\nPeople decide the facts; agents do the rest.");
     hud();
   });
   cv.addEventListener("pointercancel", () => { press = null; });

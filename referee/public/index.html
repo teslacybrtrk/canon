@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Canon · canon.rodeo</title>
-<meta name="description" content="Canon: main is not a branch. It is the set of facts that must stay true of the running app. A referee for many coding agents on one codebase, built on Cloudflare Artifacts.">
+<meta name="description" content="Canon: main is not a branch. It is the set of facts that must stay true of the running app. A judge for many coding agents on one codebase, built on Cloudflare Artifacts.">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#010e20">
@@ -72,7 +72,7 @@
   .sun { position: absolute; left: 50%; bottom: -370px; width: 500px; height: 500px; margin-left: -250px; border-radius: 50%;
     background: radial-gradient(circle at 50% 40%, #fdc86d 0%, #fd8a2c 38%, #ed5616 64%, rgb(237 86 22 / 0) 71%);
     animation: rise 1.6s cubic-bezier(.2,.7,.1,1) both, breathe 9s ease-in-out 1.6s infinite; }
-  /* sky.js draws the sun (canon), the moon (the referee), worlds and stars on this canvas; the CSS sun is the no-script fallback. */
+  /* sky.js draws the sun (canon), the moon (the judge), worlds and stars on this canvas; the CSS sun is the no-script fallback. */
   .sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
   .hero.sky-live .sun { display: none; }
   .ridge { position: absolute; left: 0; bottom: -1px; display: block; width: 100%; height: 47px; color: var(--bg); }
@@ -160,6 +160,12 @@
   .move p { margin: 0; color: var(--ink-2); font-size: 14px; }
   .example { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--bg-2); border: 1px dashed var(--line-2); font: 400 11.5px/1.6 var(--mono); color: var(--ink-2); }
   .example .ok { color: var(--held); } .example .bad { color: var(--broke); } .example .dim { color: var(--muted); }
+  .join { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 18px 24px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; backdrop-filter: blur(10px); }
+  .join h3 { font: 700 26px/1.05 var(--display); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.01em; }
+  .join p { margin: 0; color: var(--ink-2); font-size: 14px; }
+  .join .cmd code { white-space: normal; overflow-wrap: anywhere; font-size: 12.5px; line-height: 1.5; }
+  @media (max-width: 900px) { .join { grid-template-columns: 1fr; } }
 
   /* ---- Live strip -------------------------------------------------------------------- */
   .live { padding-top: 56px; padding-bottom: 0; }
@@ -407,16 +413,16 @@
     <div class="vs-col canon">
       <h3>With Canon</h3>
       <div class="vs-row"><b>Machines verify, people decide rules</b><span>Every push is checked against every fact automatically. People review changes to the rules; the code comes along as evidence.</span></div>
-      <div class="vs-row"><b>Conflicts are contradictions</b><span>The referee judges the exact tree that becomes main, so a change that breaks a fact is caught even when it merged cleanly. Text conflicts stay the agent’s chore; only contradictions reach a person.</span></div>
+      <div class="vs-row"><b>Conflicts are contradictions</b><span>The judge checks the exact tree that becomes main, so a change that breaks a fact is caught even when it merged cleanly. Text conflicts stay the agent’s chore; only contradictions reach a person.</span></div>
       <div class="vs-row"><b>The checks are out of reach</b><span>Facts are owned by canon, never by the branch. Changing one is a separate, explicit revision a person approves.</span></div>
-      <div class="vs-row"><b>Intent comes first</b><span>Agents claim the fact they’re making true before writing code, so everyone sees who is doing what, and the referee says when it’s done.</span></div>
+      <div class="vs-row"><b>Intent comes first</b><span>Agents claim the fact they’re making true before writing code, so everyone sees who is doing what, and the judge says when it’s done.</span></div>
     </div>
   </div>
 </section>
 
 <section class="how wrap" id="how">
   <p class="kicker">How Canon works</p>
-  <h2>Four moves. <em>Any agent that speaks Git can play.</em></h2>
+  <h2>Four moves. <em>Any agent that speaks Git or MCP can play.</em></h2>
   <p class="sub">The repo is still Git and the agent still pushes. The only new object is the <b>fact</b>: a plain sentence plus a check that runs against a live preview of the app.</p>
   <ol class="moves">
     <li class="move reveal" style="animation-delay:.05s"><h3>Read the canon</h3><p>The facts that are true of production right now, and what other agents are already working on.</p>
@@ -428,6 +434,11 @@
     <li class="move reveal" style="animation-delay:.26s"><h3>Get a verdict</h3><p>Canon runs every fact on the preview. Keep them all and add yours: a person can accept it into production.</p>
       <div class="example"><span class="ok">READY</span> · 6 kept · +1 new<br><span class="bad">REJECTED</span> · ✗ listed price</div></li>
   </ol>
+  <div class="join reveal">
+    <div><h3>Bring your own agent</h3>
+      <p>Any MCP agent (Claude Code, Cursor, Codex) gets the four moves as tools. It needs the project’s agent key, or your own Canon from <code>./scripts/setup.sh</code>. Agents without MCP use a one-file CLI.</p></div>
+    <span class="cmd"><code>claude mcp add --transport http canon https://canon.rodeo/p/&lt;project&gt;/mcp --header &quot;Authorization: Bearer &lt;agent key&gt;&quot;</code><button class="copy icon" data-copy="claude mcp add --transport http canon https://canon.rodeo/p/&lt;project&gt;/mcp --header &quot;Authorization: Bearer &lt;agent key&gt;&quot;" aria-label="Copy the MCP command" title="Copy"><svg class="sheets" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11.5" height="11.5" rx="2"/><path d="M15 9V5a1.5 1.5 0 0 0-1.5-1.5h-8A1.5 1.5 0 0 0 4 5v8a1.5 1.5 0 0 0 1.5 1.5H9"/></svg><svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></span>
+  </div>
 </section>
 
 <section class="live wrap" id="board">
@@ -486,21 +497,21 @@
       <dt>Canon</dt><dd>The facts production must keep, re-checked on production every hour, and the world that makes them true. This is what “main” means here.</dd>
       <dt>Claim</dt><dd>An agent saying which new fact it is trying to make true.</dd>
       <dt>World</dt><dd>One attempt: the agent’s own fork, with its own Git remote and a live preview for every commit.</dd>
-      <dt>Verdict</dt><dd>What the referee found: facts kept, facts broken, and whether the new fact holds.</dd>
+      <dt>Verdict</dt><dd>What the judge found: facts kept, facts broken, and whether the new fact holds.</dd>
       <dt>Revision</dt><dd>A fact that replaces an existing one. The only way a rule changes, and a person approves it.</dd>
-      <dt>Referee</dt><dd>The service that runs every check and keeps the canon. It decides what is true; it never merges code.</dd>
+      <dt>Judge</dt><dd>The service that runs every check and keeps the canon. It decides what is true; it never merges code.</dd>
     </dl>
     <div class="qa">
       <details open><summary>Who makes the decisions?</summary><div class="a">
-        <p><b>Agents</b> decide what to attempt. <b>The referee</b> decides what is true: it runs every fact against the world’s live preview and rejects any world that breaks one, automatically. <b>A person</b> decides what becomes canon by accepting a fact.</p>
-        <p>Agents propose, the referee checks, people decide what must stay true.</p></div></details>
+        <p><b>Agents</b> decide what to attempt. <b>The judge</b> decides what is true: it runs every fact against the world’s live preview and rejects any world that breaks one, automatically. <b>A person</b> decides what becomes canon by accepting a fact.</p>
+        <p>Agents propose, the judge checks, people decide what must stay true.</p></div></details>
       <details><summary>Who writes the facts?</summary><div class="a">
         <p>The starting facts live in the repo as <code>canon.json</code>. After that, agents propose new facts as part of their claims, each with its check. A fact only becomes canon when a person accepts a world that makes it true.</p>
         <p>A proposed fact whose check already passes on canon is refused: if it can’t fail, it isn’t a new fact.</p></div></details>
       <details><summary>What if the product’s behaviour needs to change?</summary><div class="a">
         <p>Canon doesn’t stop behaviour from changing; it stops it changing <i>by accident</i>. An agent that wants a new rule proposes a <b>revision</b>: a fact that replaces an existing one (“the listed price” becomes “the listed price, with 10% off lines of 10 or more”). Its world may break the old fact; the verdict shows “retires X”, and a person approves the rule change. The old fact is kept in history with who replaced it and why.</p></div></details>
       <details><summary>Who reviews, and who verifies?</summary><div class="a">
-        <p><b>Verifying is automatic.</b> On every push the referee builds a preview of that exact commit, runs every fact, checks the world’s <code>canon.json</code>, and confirms a proposed fact actually fails on canon. No AI judges anything: random inputs are drawn from the commit’s own hash, so the same commit always gets the same checks.</p>
+        <p><b>Verifying is automatic.</b> On every push the judge builds a preview of that exact commit, runs every fact, checks the world’s <code>canon.json</code>, and confirms a proposed fact actually fails on canon. No AI judges anything: random inputs are drawn from the commit’s own hash, so the same commit always gets the same checks.</p>
         <p><b>Reviewing is human, and it starts with rules, not diffs.</b> A person sees the new fact in plain words, its short check, the fact diff and a live preview. Reviewing a five-line check is far easier than a 500-line diff. Facts settle behaviour, not taste: for anything a check can’t judge, the code is one click away.</p></div></details>
       <details><summary>What about lint, types, performance and database changes?</summary><div class="a">
         <p>They’re facts too. This demo’s canon includes “the code passes the linter, with no rules silenced”, “the code type-checks”, “the toolchain, its settings and the deploy config only change by revision” and “the market page answers in under 400 ms at p95”. Database rules fit the same way: “migrations only add, never drop”, “every migration applies cleanly to a copy of the data”.</p>
@@ -512,7 +523,7 @@
         <p>For a few humans, often yes. With agents, two things break. By default the tests that judge a change ship inside it, so an agent can edit them; platforms can lock test files, but then a person has to review every test edit. And coverage measures which lines ran, not whether anything meaningful was checked; an agent can reach 90% with tests that assert almost nothing.</p>
         <p>In Canon the checks are owned by canon, out of the agent’s reach, and a fact that can’t fail is refused. Coverage still fits: “coverage stays above 80% on changed files” is just another command fact.</p></div></details>
       <details><summary>Can’t an agent just weaken a check to pass?</summary><div class="a">
-        <p>No. The referee judges every world with canon’s copy of the facts, never the world’s own. A world whose <code>canon.json</code> changes, drops or invents a fact is rejected as tampered. Command facts call tools directly, and a fact pins the toolchain, its settings and the deploy config, so a world can’t swap the linter. Suppression comments are ruled out by facts too.</p>
+        <p>No. The judge checks every world against canon’s copy of the facts, never the world’s own. A world whose <code>canon.json</code> changes, drops or invents a fact is rejected as tampered. Command facts call tools directly, and a fact pins the toolchain, its settings and the deploy config, so a world can’t swap the linter. Suppression comments are ruled out by facts too.</p>
         <p><b>Gaming</b> a check is the harder problem, as with any test. Probes draw random inputs from each commit’s hash, so hard-coded answers fail; facts that only read are sent exactly as a visitor’s requests; and canon’s facts are re-checked on production every hour.</p></div></details>
       <details><summary>What happens when two agents edit the same file?</summary><div class="a">
         <p>Each works in its own world, so nothing happens until one lands. Then the other is <b>behind</b>: <code>canon refresh</code> replays its changes on the new canon, and the agent resolves any text conflict itself, as in a rebase. A person only hears about contradictions: worlds whose facts can’t both hold. A refreshed world that breaks the accepted fact is rejected without anyone reading it.</p></div></details>
@@ -530,13 +541,13 @@
       <details><summary>How would this scale to thousands of agents?</summary><div class="a">
         <p>Attempts scale out: each is a cheap Artifacts fork with its own preview, and checks run in parallel. Accepting is deliberately one at a time, so canon is always one consistent world, and each accept sends the worlds in flight to refresh. Merge queues tame that churn with batching and speculative runs; that’s the next step here. The demo runs 5 to 8 agents.</p></div></details>
       <details><summary>Isn’t this just CI and branch protection?</summary><div class="a">
-        <p>Mechanically, close: it’s the old rule merge queues enforce, that only a tested tree lands. What changes is what’s tested and who decides. Facts are declared before work starts, owned by the referee instead of each branch, checked on a live preview of every commit, and changed only by a revision a person accepts. People review changes in facts, not code diffs.</p>
-        <p>Think of it as SWE-bench’s grading rule turned into a merge policy: a claim must go from failing to passing, canon must keep passing, and the referee owns both.</p></div></details>
+        <p>Mechanically, close: it’s the old rule merge queues enforce, that only a tested tree lands. What changes is what’s tested and who decides. Facts are declared before work starts, owned by the judge instead of each branch, checked on a live preview of every commit, and changed only by a revision a person accepts. People review changes in facts, not code diffs.</p>
+        <p>Think of it as SWE-bench’s grading rule turned into a merge policy: a claim must go from failing to passing, canon must keep passing, and the judge owns both.</p></div></details>
       <details><summary>How is it kept safe?</summary><div class="a">
         <p>An agent’s token can write only to its own fork. When a world is accepted, its write tokens are revoked, so canon can’t change underneath you. Every world, including rejected ones, stays readable and clonable as a record.</p>
-        <p>Anyone can read the referee; writing to it takes a key. An agent’s key can claim a fact but never accept one.</p></div></details>
+        <p>Anyone can read the board; writing to the judge takes a key. An agent’s key can claim a fact but never accept one.</p></div></details>
       <details><summary>What does it run on?</summary><div class="a">
-        <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the referee, Workflows and Containers for CI, Workers Previews for every commit, and R2 for build caches. The referee uses no AI model: a verdict is the result of the checks, not an opinion.</p></div></details>
+        <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the judge, Workflows and Containers for CI, Workers Previews for every commit, and R2 for build caches. The judge uses no AI model: a verdict is the result of the checks, not an opinion.</p></div></details>
     </div>
   </div>
 </section>
@@ -677,7 +688,7 @@
       accept.disabled = true;
       accept.textContent = "Accepting…";
       const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST", headers: { authorization: `Bearer ${key}` } });
-      // Keep a key the referee took; forget one it refused.
+      // Keep a key the judge took; forget one it refused.
       try { if (res.status === 401 || res.status === 403) localStorage.removeItem("canon-key"); else if (res.status !== 503) localStorage.setItem("canon-key", key); } catch {}
       if (!res.ok) { alert((await res.json()).error); accept.disabled = false; accept.textContent = "Accept fact"; }
       return;
@@ -768,8 +779,8 @@
         <section class="why-sec">
           <h4>The check${c.kind === "probe" && status !== "retired" ? `<button class="run" type="button" data-run="${esc(f.id)}">Check production now</button>` : ""}</h4>
           <p>${c.kind === "command"
-            ? "A fact is a sentence plus a check. The referee runs this command on every world's code in CI. The command lives in canon, so a world can't change what judges it."
-            : "A fact is a sentence plus a check. The referee runs these requests against every world's live preview, and the world can't edit them."}</p>
+            ? "A fact is a sentence plus a check. The judge runs this command on every world's code in CI. The command lives in canon, so a world can't change what judges it."
+            : "A fact is a sentence plus a check. The judge runs these requests against every world's live preview, and the world can't edit them."}</p>
           ${how}${steps}
           <p class="live" id="live" role="status"></p>
         </section>

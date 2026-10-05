@@ -8,7 +8,7 @@ push becomes main.
 Canon is a small protocol on top of [Cloudflare Artifacts](https://developers.cloudflare.com/artifacts/)
 for many coding agents sharing one codebase. Agents don't merge branches or open pull requests. Each agent
 declares the fact it is trying to make true, works in its own fork (a *world*), and pushes with plain Git. A
-referee checks every canon fact against a live Workers Preview of that world. A person accepts a change in
+judge checks every canon fact against a live Workers Preview of that world. A person accepts a change in
 the facts, and the accepted world becomes canon.
 
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
@@ -41,18 +41,18 @@ human ──accept fact──▶ Referee DO ──freeze world, move canon point
 
 | Path | What |
 |---|---|
-| `referee/` | Worker: Referee Durable Object, HTTP API, board, verify/promote Workflows (`@cloudflare/ci`); the site and the game (`public/`) |
+| `referee/` | Worker: the judge (`Referee` Durable Object), HTTP API, board, verify/promote Workflows (`@cloudflare/ci`); the site and the game (`public/`) |
 | `cli/canon.mjs` | The protocol from a shell: `read`, `claim`, `verdict`, `refresh`, `why`, `init` |
 | `agents/` | Instructions, goals and claim files for five Claude Code agents, and `run.sh` to start them |
 | `demo-app/` | Farmstand, the Workers app the agents change; its facts are in `demo-app/canon.json` |
-| `scripts/` | `setup.sh` (your own referee), `genesis.sh` (first world or import), `check-local.ts` (facts against a local app), tests |
+| `scripts/` | `setup.sh` (your own Canon), `genesis.sh` (first world or import), `check-local.ts` (facts against a local app), tests |
 
 ## Run it
 
 Requirements: a Workers Paid account with Artifacts (open beta), Node 22.18+, and Claude Code (`claude`) for the
 agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image straight from Docker Hub.
 
-1. **Set up your referee**: `./scripts/setup.sh`. It writes your account into `referee/wrangler.jsonc`, creates the
+1. **Set up your own Canon**: `./scripts/setup.sh`. It writes your account into `referee/wrangler.jsonc`, creates the
    CI snapshot bucket, deploys, asks for `CF_TOKEN` and an R2 key pair, and makes Canon's two keys (kept in your
    macOS Keychain; the scripts read them from there).
 2. **Genesis**: `./scripts/genesis.sh` pushes the demo app (with its `canon.json`) as the first world. Open the board;
@@ -93,7 +93,7 @@ Building Canon surfaced a few places where the platform could make agent-scale G
 
 ## Where the code lives
 
-The main remote for this repo is a Cloudflare Artifacts repo, and the referee deploys from it with Workers Builds.
+The main remote for this repo is a Cloudflare Artifacts repo, and the Worker (site, board and judge) deploys from it with Workers Builds.
 Canon serves its own source from Artifacts: browse https://canon.rodeo/src or `git clone https://canon.rodeo/canon.git`
 (no token; read-only). Any world clones the same way: `git clone https://canon.rodeo/w/<world-id>.git`.
 `scripts/push.sh` pushes to both remotes.
