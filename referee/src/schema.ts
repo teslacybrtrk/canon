@@ -8,6 +8,8 @@ export const UPGRADES = [
   `ALTER TABLE facts ADD COLUMN retired_by TEXT`,
   `ALTER TABLE facts ADD COLUMN retired_at INTEGER`,
   `ALTER TABLE worlds ADD COLUMN base_sha TEXT`,
+  // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
+  `DELETE FROM facts WHERE id IS NULL`,
 ];
 
 export const SCHEMA = `

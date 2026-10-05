@@ -120,7 +120,8 @@ export class Referee extends DurableObject<Env> {
       factId = fact.id;
     } else {
       const def = req.fact;
-      if (!/^[a-z0-9-]{3,48}$/.test(def.id)) throw new ProtocolError(400, "fact id must be a 3-48 char slug");
+      if (typeof def?.id !== "string" || !/^[a-z0-9-]{3,48}$/.test(def.id)) throw new ProtocolError(400, 'a fact needs "id": a 3-48 char slug');
+      if (typeof def.sentence !== "string" || !def.sentence.trim()) throw new ProtocolError(400, 'a fact needs "sentence": what must be true, in plain words');
       if (this.fact(def.id)) throw new ProtocolError(409, `fact "${def.id}" exists; join it instead`);
       validateCheck(def.check);
       validateScope(def.scope);
