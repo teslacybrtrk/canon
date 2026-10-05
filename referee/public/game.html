@@ -55,8 +55,10 @@
   .stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 400 12px var(--mono); color: var(--ink-2); }
   .stats b { color: var(--ink); font-weight: 500; }
   .stats .bad { color: var(--broke); } .stats .good { color: var(--held); } .stats .auto { color: var(--brand); }
-  .auto-btn { margin-left: auto; pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; font: 600 13.5px var(--sans); color: var(--ink); cursor: pointer;
-    background: var(--panel); border: 1px solid var(--brand); border-radius: 999px; padding: 9px 16px; backdrop-filter: blur(10px); }
+  /* Bottom centre, below the herd. */
+  .auto-btn { position: absolute; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); pointer-events: auto; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 9px; font: 600 15px var(--sans); color: var(--ink); cursor: pointer;
+    background: var(--panel); border: 1px solid var(--brand); border-radius: 999px; padding: 12px 20px; backdrop-filter: blur(10px); box-shadow: 0 12px 30px -16px rgb(0 0 0 / .6); }
   .auto-btn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); }
   .auto-btn.git { color: var(--muted); border-color: var(--line-2); }
   .auto-btn.git::before { background: var(--muted); }
@@ -113,10 +115,10 @@
     <div class="hud">
       <div class="round"><b data-r="round">Canon Stampede</b><span class="time"><i data-r="time"></i></span></div>
       <div class="stats" data-r="stats"></div>
-      <button class="auto-btn" data-r="auto" type="button" hidden>Turn on autopilot</button>
     </div>
     <p class="tip" data-r="tip" role="status"></p>
   </div>
+  <button class="auto-btn" data-r="auto" type="button" hidden>Turn on autopilot</button>
   <div class="card" data-r="card" hidden></div>
 </div>
 </body>

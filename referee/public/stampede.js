@@ -41,7 +41,7 @@
   const easeOut = (x) => 1 - (1 - x) ** 3;
   const quad = (a, c, b, t) => ({ x: (1 - t) ** 2 * a.x + 2 * (1 - t) * t * c.x + t * t * b.x, y: (1 - t) ** 2 * a.y + 2 * (1 - t) * t * c.y + t * t * b.y });
 
-  let W = 0, H = 0, small = false, horizon = 0, PX = 0, lanes = [], scales = [], hudBottom = 100;
+  let W = 0, H = 0, small = false, horizon = 0, PX = 0, yMin = 0, yMax = 0, base = 1, hudBottom = 100;
   let mode = null, playing = false, time = 0, clock = 0, last = 0;
   let herd = [], me = null, floaters = [], dust = [], lines = [], stars = [], ridge = [], scroll = 0;
   let press = null, nextSpawn = 0, nextConflict = 0, nextId = 401, pool = [], pairSeq = 0, landedPairs = new Map(), shown = new Set();
@@ -58,9 +58,10 @@
     small = W < 700;
     horizon = H * (small ? 0.46 : 0.44);
     const g = H - horizon;
-    lanes = [horizon + g * 0.3, horizon + g * 0.56, horizon + g * 0.84];
-    const base = small ? 0.72 : Math.min(1.15, Math.max(0.85, W / 1300));
-    scales = [0.74 * base, 0.88 * base, 1.04 * base];
+    yMin = horizon + g * 0.2;
+    yMax = H - 70; // the autopilot button sits below the herd
+    base = small ? 0.72 : Math.min(1.15, Math.max(0.85, W / 1300));
+    for (const a of herd) a.y = Math.min(yMax, Math.max(yMin, a.y));
     PX = W * (small ? 0.2 : 0.24);
     stars = Array.from({ length: Math.round((W * horizon) / 7000) }, () => ({ x: rand(0, W), y: rand(0, horizon * 0.85), s: Math.random() < 0.12 ? 2 : 1, ph: rand(0, 6.3) }));
     lines = Array.from({ length: Math.round(W / 40) }, () => ({ x: rand(0, W), y: rand(horizon + 6, H), len: rand(20, 70) }));
@@ -91,34 +92,49 @@
   function spawn(extra = {}) {
     // Every change enters ahead of you and drifts back past the rider: you push forward through the herd.
     const x = extra.x ?? W + 80;
-    // A lane with room at the edge, so animals don't spawn on top of each other.
-    const lane = extra.lane ?? shuffle([0, 1, 2]).find((l) => herd.every((a) => a.lane !== l || Math.abs(a.x - x) > 130));
-    if (lane == null) return;
+    const y = extra.y ?? freeY(x);
+    if (y == null) return;
     herd.push({
-      id: nextId++, kind: Math.random() < 0.35 ? "bull" : "horse", lane,
-      x, v: laneSpeed(lane), seed: rand(0, 6.3),
+      id: nextId++, kind: Math.random() < 0.35 ? "bull" : "horse", y,
+      x, seed: rand(0, 6.3),
       bad: Math.random() < BAD, reason: pick(FACTS), claim: pool.pop() ?? pick(CLAIMS),
       pair: null, side: 0, state: "new", st: 0, reviewed: null, main: false, past: false, ...extra,
     });
   }
-  // One speed per lane (far lanes drift slower), so animals never run into each other.
-  const laneSpeed = (lane) => -(60 + Math.max(W, 375) * 0.08) * [0.8, 1, 1.2][lane];
+  // Depth on the prairie: 0 at the far edge, 1 up close. Size and speed follow it.
+  const depth = (y) => Math.min(1, Math.max(0, (y - yMin) / (yMax - yMin)));
+  const scaleAt = (y) => base * (0.72 + 0.34 * depth(y));
+  const sc = (a) => scaleAt(a.y);
+  const speedAt = (y) => -(60 + Math.max(W, 375) * 0.08) * (0.8 + 0.4 * depth(y));
+  // The space an animal needs so neither bodies nor the labels above them overlap.
+  const room = (s) => ({ x: 84 * s + 6, y: 56 * s + 18 });
+  // A random depth with room around it at this x, or null when the edge is crowded.
+  function freeY(x) {
+    for (let i = 0; i < 16; i++) {
+      const y = rand(yMin, yMax);
+      const clear = herd.every((a) => {
+        const r = room(Math.max(sc(a), scaleAt(y)));
+        return Math.abs(a.x - x) > r.x + 40 || Math.abs(a.y - y) > r.y;
+      });
+      if (clear) return y;
+    }
+    return null;
+  }
   const spawnEvery = () => rand(0.55, 0.8) * Math.min(1.8, Math.max(1, 1100 / W));
 
   function spawnConflict() {
     const pair = pairSeq++;
     const [a, b] = CONFLICTS[pair % CONFLICTS.length];
-    const lanesFree = shuffle([0, 1, 2]);
-    spawn({ pair, side: 0, claim: a, bad: false, lane: lanesFree[0], x: W + 80 });
-    spawn({ pair, side: 1, claim: b, bad: false, lane: lanesFree[1], x: W + 150 });
+    spawn({ pair, side: 0, claim: a, bad: false, x: W + 80 });
+    spawn({ pair, side: 1, claim: b, bad: false, x: W + 150 });
   }
   const partnerLanded = (a) => a.pair != null && landedPairs.has(a.pair) && landedPairs.get(a.pair).side !== a.side;
   const brokenNow = (a) => a.bad || partnerLanded(a);
-  const top = (a) => ({ x: a.x, y: lanes[a.lane] - 50 * scales[a.lane] });
-  const center = (a) => ({ x: a.x, y: lanes[a.lane] - 26 * scales[a.lane] });
+  const top = (a) => ({ x: a.x, y: a.y - 50 * sc(a) });
+  const center = (a) => ({ x: a.x, y: a.y - 26 * sc(a) });
 
   function newMain() {
-    const a = { id: nextId++, kind: "horse", lane: 1, x: PX, v: 0, seed: rand(0, 6.3), bad: false, reason: "", claim: "", pair: null, side: 0, state: "green", st: 0, reviewed: null, main: true, past: false, fresh: 0 };
+    const a = { id: nextId++, kind: "horse", y: freeY(PX) ?? (yMin + yMax) / 2, x: PX, seed: rand(0, 6.3), bad: false, reason: "", claim: "", pair: null, side: 0, state: "green", st: 0, reviewed: null, main: true, past: false, fresh: 0 };
     herd.push(a);
     me = { a, ride: 0, jump: null, down: null };
   }
@@ -227,7 +243,7 @@
         <span><i class="r"></i><span><b>Red</b> breaks a fact. Your lasso won't catch it.</span></span>
         <span><i class="a"></i><span><b>Amber</b>: main just moved, so it's being re-checked.</span></span>
       </div>
-      <p>Ready to let go? Hit <b>Autopilot</b> and the referee lands green changes for you.</p>`,
+      <p>Ready to let go? Hit <b>Turn on autopilot</b> at the bottom and the referee lands green changes for you.</p>`,
     [{ label: "Start round 2", primary: true, run: () => begin("canon") }]);
   }
 
@@ -246,7 +262,7 @@
     }
     const btn = el("auto");
     const hide = !mode || !playing;
-    const text = autopilot ? "Autopilot on · take the reins" : mode === "git" ? "Autopilot" : "Turn on autopilot";
+    const text = autopilot ? "Autopilot on · take the reins" : "Turn on autopilot";
     if (btn.hidden !== hide) btn.hidden = hide;
     if (btn.textContent !== text) btn.textContent = text;
     btn.classList.toggle("on", autopilot);
@@ -260,8 +276,8 @@
   // ---- Moves ----------------------------------------------------------------------------------------
   const riderAt = () => {
     if (me.a) {
-      const s = scales[me.a.lane];
-      return { x: me.a.x - 2 * s, y: lanes[me.a.lane] - 44 * s };
+      const s = sc(me.a);
+      return { x: me.a.x - 2 * s, y: me.a.y - 44 * s };
     }
     return me.pos;
   };
@@ -278,7 +294,6 @@
     me.jump = { st: 0, from, target: t, auto };
     me.a.main = false;
     me.a.past = true;
-    me.a.v = laneSpeed(me.a.lane);
     me.a = null;
     me.pos = from;
   }
@@ -317,6 +332,31 @@
   }
 
   // ---- Simulation -----------------------------------------------------------------------------------
+  // Keep the herd from overlapping. When two animals are on a collision course, one steers up or down
+  // to clear the other: the one further ahead yields, and everyone gives way to the animal you're
+  // riding (or jumping onto), so the herd parts around you.
+  function separate(dt) {
+    const fixed = (a) => a === me?.a || a === me?.jump?.target;
+    const vx = (a) => (a === me?.a ? 0 : speedAt(a.y));
+    for (let i = 0; i < herd.length; i++) {
+      for (let j = i + 1; j < herd.length; j++) {
+        const a = herd[i], b = herd[j];
+        const r = room(Math.max(sc(a), sc(b)));
+        if (Math.abs(b.y - a.y) >= r.y) continue;
+        const dx = b.x - a.x, rel = vx(b) - vx(a);
+        const ahead = dx * rel < 0 ? Math.abs(rel) * 0.8 : 0;
+        if (Math.abs(dx) > r.x + ahead) continue;
+        let m = b, n = a;
+        if (fixed(b) || (!fixed(a) && a.x > b.x)) { m = a; n = b; }
+        if (fixed(m)) continue;
+        const sides = [n.y - r.y, n.y + r.y].filter((y) => y >= yMin && y <= yMax);
+        const target = sides.sort((p, q) => Math.abs(p - m.y) - Math.abs(q - m.y))[0] ?? (m.y < n.y ? yMin : yMax);
+        m.y += Math.sign(target - m.y) * Math.min(Math.abs(target - m.y), 170 * dt);
+      }
+    }
+    for (const a of herd) if (!fixed(a)) a.y = Math.min(yMax, Math.max(yMin, a.y));
+  }
+
   function step(dt) {
     clock += dt;
     scroll += SPEED * dt;
@@ -342,7 +382,7 @@
     }
     for (const a of herd) {
       a.st += dt;
-      if (a !== me?.a) a.x += a.v * dt;
+      if (a !== me?.a) a.x += speedAt(a.y) * dt;
       if (mode !== "canon") continue;
       if (a.state === "new" && a.x < W - 10 && a.x > 10 && !a.main) {
         a.state = "judging";
@@ -363,6 +403,7 @@
         } else a.state = "green";
       }
     }
+    separate(dt);
     herd = herd.filter((a) => a === me?.a || (a.x > -140 && a.x < W + 200));
 
     if (me) {
@@ -410,7 +451,7 @@
     }
     if (Math.random() < dt * 30) {
       const a = pick(herd);
-      if (a) dust.push({ x: a.x - 18 * scales[a.lane], y: lanes[a.lane] - 2, vx: -rand(40, 90), born: clock, s: rand(1.5, 3) * scales[a.lane] });
+      if (a) dust.push({ x: a.x - 18 * sc(a), y: a.y - 2, vx: -rand(40, 90), born: clock, s: rand(1.5, 3) * sc(a) });
     }
     for (const d of dust) d.x += d.vx * dt;
     dust = dust.filter((d) => clock - d.born < 0.9);
@@ -551,12 +592,12 @@
 
   // A side-on animal in vertical scanlines, galloping. Origin at its feet.
   function drawAnimal(a, fill, alpha = 1) {
-    const s = scales[a.lane];
+    const s = sc(a);
     const ph = clock * 12 + a.seed;
     const bob = Math.sin(ph * 2) * 1.6;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(a.x, lanes[a.lane]);
+    ctx.translate(a.x, a.y);
     ctx.scale(s, s);
     ctx.fillStyle = fill;
     for (const [lx, p] of [[-16, 0], [-10, Math.PI], [12, Math.PI / 2], [18, Math.PI * 1.5]]) {
@@ -639,19 +680,19 @@
     ctx.clearRect(0, 0, W, H);
     drawSky(c);
     drawGround(c);
-    const order = [...herd].sort((p, q) => p.lane - q.lane || p.x - q.x);
+    const order = [...herd].sort((p, q) => p.y - q.y);
     for (const a of order) {
       drawAnimal(a, colorOf(a, c), a.past && !a.main ? 0.75 : 1);
       if (a.main && me?.a === a && !me.jump) {
-        const s = scales[a.lane];
+        const s = sc(a);
         const bob = Math.sin((clock * 12 + a.seed) * 2) * 1.6 * s;
-        drawRider(a.x - 2 * s, lanes[a.lane] - 36 * s + bob, s, c.ink);
+        drawRider(a.x - 2 * s, a.y - 36 * s + bob, s, c.ink);
         if (a.fresh > 0) {
           ctx.strokeStyle = c.main;
           ctx.globalAlpha = a.fresh;
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(a.x, lanes[a.lane] - 26 * s, 50 * (1.4 - a.fresh * 0.4) * s, 0, Math.PI * 2);
+          ctx.arc(a.x, a.y - 26 * s, 50 * (1.4 - a.fresh * 0.4) * s, 0, Math.PI * 2);
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
@@ -660,13 +701,13 @@
     // Labels: PR numbers and reviews in Git; reasons for red in Canon.
     const font = `500 ${small ? 10 : 11}px "Martian Mono", ui-monospace, monospace`;
     for (const a of herd) {
-      if (a.main || a.past) continue;
+      if (a.main || a.past || a.x < PX - 30) continue; // behind you: can't be lassoed, so no label
       const p = top(a);
       if (mode === "git") {
         if (a.reviewed) label(a.reviewed === "ok" ? `#${a.id} ✓ reviewed` : `#${a.id} ✗ broken`, p.x, p.y - 4, a.reviewed === "ok" ? c.held : c.broke, 1, font);
         else label(`#${a.id}`, p.x, p.y - 4, c.muted, 0.85, font);
       } else if (mode === "canon" && a.state === "red") {
-        label(a.against ? `✗ contradicts “${a.against}”` : `✗ ${a.reason}`, p.x, p.y - 4, c.broke, 1, font, small ? 150 : 230);
+        label(a.against ? `✗ contradicts “${a.against}”` : `✗ ${a.reason}`, p.x, p.y - 4, c.broke, 1, font, small ? 130 : 190);
       }
     }
     // Two green changes that can't both be true: a red dashed tether between them.
@@ -695,7 +736,7 @@
     }
     // Review ring (Git).
     if (press && mode === "git") {
-      const p = center(press.a), s = scales[press.a.lane];
+      const p = center(press.a), s = sc(press.a);
       ctx.strokeStyle = c.pending;
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -705,8 +746,8 @@
     }
     // Jumping: the lasso rope and the rider in the air.
     if (me?.jump) {
-      const j = me.jump, t = j.target, s = scales[t.lane];
-      const to = { x: t.x - 2 * s, y: lanes[t.lane] - 36 * s };
+      const j = me.jump, t = j.target, s = sc(t);
+      const to = { x: t.x - 2 * s, y: t.y - 36 * s };
       const u = Math.min(1, j.st / JUMP);
       const ctrl = { x: (j.from.x + to.x) / 2, y: Math.min(j.from.y, to.y) - 70 };
       const p = quad(j.from, ctrl, to, ease(u));
@@ -744,7 +785,7 @@
     for (const a of herd) {
       if (a.main || a.past) continue;
       const p = center(a);
-      const d = Math.hypot((p.x - x) * 0.85, p.y - y) / Math.max(0.8, scales[a.lane]);
+      const d = Math.hypot((p.x - x) * 0.85, p.y - y) / Math.max(0.8, sc(a));
       if (d < bestD) {
         best = a;
         bestD = d;
