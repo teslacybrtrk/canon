@@ -113,6 +113,11 @@ async function setupWorld(dir, claim, world, fact) {
 // (not the referee) resolves any conflict; nothing is merged on the server.
 async function refresh() {
   const old = worldContext();
+  // Only a world that is behind needs a fresh copy of canon; refreshing anything else just makes noise.
+  const last = await api("GET", `/worlds/${old.worldId}/verdict`, undefined, true);
+  const mine = (await api("GET", "/canon")).claims.find((c) => c.id === old.claimId);
+  if (mine?.status === "superseded") fail(`this world was already refreshed or replaced; work in your newest world (canon verdict shows it)`);
+  if (last.outcome !== "behind") fail(`refresh is only for worlds that are BEHIND canon; this one is ${String(last.outcome).toUpperCase()}. Read its verdict instead.`);
   const head = git(["-C", old.root, "rev-parse", "HEAD"]).trim();
   const claimCommit = git(["-C", old.root, "log", "--format=%H", "--grep=^canon: claim", "-n", "1"]).trim();
   if (!claimCommit) fail("cannot find this world's claim commit");

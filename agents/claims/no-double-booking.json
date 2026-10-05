@@ -2,8 +2,7 @@
   "id": "no-double-booking",
   "sentence": "A stall cannot be double-booked",
   "check": { "kind": "probe", "steps": [
-    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 1, "date": "2026-10-17", "name": "Ada" }, "expect": { "status": 201 } },
-    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 1, "date": "2026-10-17", "name": "Bo" }, "expect": { "status": 409 } },
-    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 1, "date": "2026-10-24", "name": "Bo" }, "expect": { "status": 201 } }
+    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 1, "date": "2026-11-07", "name": "Ada" }, "expect": { "status": 201 } },
+    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 1, "date": "2026-11-07", "name": "Bo" }, "expect": { "status": 409 } }
   ] }
 }

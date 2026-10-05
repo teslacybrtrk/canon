@@ -17,7 +17,8 @@ const cases: Array<[string, any[], any[] | undefined, string]> = [
   ["weakened check", [...seed.map((f: any, i: number) => (i === 3 ? { ...clone(f), check: { kind: "probe", steps: [{ path: "/", expect: { status: 200 } }] } } : f)), claimed], undefined, "tampered"],
   ["drops a canon fact", [...seed.slice(1), claimed], undefined, "tampered"],
   ["invents an extra fact", [...seed, claimed, { ...clone(claimed), id: "free-honey" }], undefined, "tampered"],
-  ["key order differs", [...seed.map((f: any) => ({ check: f.check, sentence: f.sentence, id: f.id })), claimed], undefined, "ok"],
+  ["key order differs", [...seed.map((f: any) => Object.fromEntries(Object.entries(f).filter(([k]) => k !== "acceptedAt").reverse())), claimed], undefined, "ok"],
+  ["scope removed", [...seed.map((f: any) => { const { scope, ...rest } = f; return rest; }), claimed], undefined, seed.some((f: any) => f.scope) ? "tampered" : "ok"],
   ["canon moved after fork", [...seed, claimed], [...seed, { ...clone(seed[0]), id: "sold-out-refused", acceptedAt: 300 }], "behind"],
 ];
 // Revisions and retirement.
