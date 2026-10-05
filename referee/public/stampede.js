@@ -49,7 +49,7 @@
   let mode = null, playing = false, time = 0, clock = 0, last = 0, ready = 0, goAt = -10, lastSecs = "";
   let herd = [], me = null, floaters = [], dust = [], lines = [], stars = [], ridge = [], scroll = 0;
   let press = null, nextSpawn = 0, nextConflict = 0, nextId = 401, pool = [], pairSeq = 0, landedPairs = new Map(), shown = new Set();
-  let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [], flashes = [], autopilot = false, pace = "medium";
+  let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [], flashes = [], moonAt = null, autopilot = false, pace = "medium";
   try { const saved = localStorage.getItem("canon-stampede-pace"); if (PACES[saved]) pace = saved; } catch {}
 
   // ---- Layout ---------------------------------------------------------------------------------------
@@ -610,26 +610,7 @@
       }
       ctx.globalAlpha = 1;
       label("REFEREE", mx, my + mr + 16, c.muted, moonShown, `600 ${small ? 9.5 : 10.5}px "Martian Mono", ui-monospace, monospace`);
-      // A beam of moonlight on every change it's checking, widening from the moon onto the animal.
-      for (const b of beams) {
-        if (b.a.state !== "judging") continue;
-        const p = center(b.a), w = 34 * sc(b.a), k = Math.min(1, (clock - b.born) / 0.15);
-        const g = ctx.createLinearGradient(mx, my, p.x, p.y);
-        g.addColorStop(0, `rgba(253,200,109,${0.42 * k * moonShown})`);
-        g.addColorStop(1, `rgba(253,200,109,${0.16 * k * moonShown})`);
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.moveTo(mx - mr * 0.35, my + mr * 0.6);
-        ctx.lineTo(mx + mr * 0.35, my + mr * 0.6);
-        ctx.lineTo(p.x + w, p.y + w * 0.5);
-        ctx.lineTo(p.x - w, p.y + w * 0.5);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = `rgba(253,200,109,${0.22 * k * moonShown})`;
-        ctx.beginPath();
-        ctx.ellipse(b.a.x, b.a.y + 2, w * 1.1, w * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      moonAt = { x: mx, y: my, r: mr };
     }
     // Far ridge, scrolling slowly.
     ctx.fillStyle = c.ridge;
@@ -914,11 +895,37 @@
     return patterns.fork;
   }
 
+  // Moonlight on every change the referee is checking: drawn over the ground and under the herd, so it lands on the field.
+  function drawBeams() {
+    if (moonShown < 0.01 || !moonAt) return;
+    const { x: mx, y: my, r: mr } = moonAt;
+    for (const b of beams) {
+      if (b.a.state !== "judging") continue;
+      const p = center(b.a), w = 34 * sc(b.a), k = Math.min(1, (clock - b.born) / 0.15);
+      const g = ctx.createLinearGradient(mx, my, p.x, p.y);
+      g.addColorStop(0, `rgba(253,200,109,${0.42 * k * moonShown})`);
+      g.addColorStop(1, `rgba(253,200,109,${0.16 * k * moonShown})`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(mx - mr * 0.35, my + mr * 0.6);
+      ctx.lineTo(mx + mr * 0.35, my + mr * 0.6);
+      ctx.lineTo(p.x + w, p.y + w * 0.5);
+      ctx.lineTo(p.x - w, p.y + w * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = `rgba(253,200,109,${0.22 * k * moonShown})`;
+      ctx.beginPath();
+      ctx.ellipse(b.a.x, b.a.y + 2, w * 1.1, w * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   function draw() {
     const c = palette();
     ctx.clearRect(0, 0, W, H);
     drawSky(c);
     drawGround(c);
+    drawBeams();
     const order = [...herd].sort((p, q) => p.y - q.y);
     for (const a of order) {
       drawAnimal(a, colorOf(a, c), c, a.past && !a.main ? 0.75 : 1);
