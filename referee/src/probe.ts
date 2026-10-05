@@ -9,11 +9,14 @@ const RETRY_DELAY_MS = 1_500;
 
 type StepFailure = { message: string; transient: boolean };
 
-/** Runs one check against a preview origin. Deterministic given the app's seed data. */
-export async function runCheck(check: ProbeCheck, origin: string): Promise<CheckResult> {
+/**
+ * Runs one check against an origin. Its random inputs are drawn from `seed`: the referee passes the
+ * commit and the fact, so the same commit always gets the same inputs. Without a seed they are fresh.
+ */
+export async function runCheck(check: ProbeCheck, origin: string, seed: string = crypto.randomUUID()): Promise<CheckResult> {
   const started = Date.now();
   for (let attempt = 0; ; attempt++) {
-    const failure = await runOnce(check, origin);
+    const failure = await runSamples(check, origin, seed);
     if (!failure) return { held: true, detail: "ok", ms: Date.now() - started };
     if (!failure.transient || attempt >= TRANSIENT_RETRIES) {
       return { held: false, detail: failure.message, ms: Date.now() - started };
@@ -22,9 +25,25 @@ export async function runCheck(check: ProbeCheck, origin: string): Promise<Check
   }
 }
 
-async function runOnce(check: ProbeCheck, origin: string): Promise<StepFailure | null> {
-  const run = crypto.randomUUID();
-  const vars: Record<string, unknown> = {};
+// Each sample draws its own inputs and runs every step in a run of its own; all of them must hold.
+async function runSamples(check: ProbeCheck, origin: string, seed: string): Promise<StepFailure | null> {
+  const next = random(seed);
+  const samples = check.samples ?? 1;
+  for (let s = 0; s < samples; s++) {
+    const inputs = draw(check.vars, next);
+    const failure = await runOnce(check, origin, inputs);
+    if (failure) {
+      const given = Object.entries(inputs).map(([name, v]) => `${name} = ${label(v)}`).join(", ");
+      return { ...failure, message: `${samples > 1 ? `sample ${s + 1}, ` : ""}${failure.message}${given ? ` (with ${given})` : ""}` };
+    }
+  }
+  return null;
+}
+
+async function runOnce(check: ProbeCheck, origin: string, inputs: Record<string, unknown>): Promise<StepFailure | null> {
+  // An isolated run gets state of its own through the x-canon-run header; a visitor run sends no Canon header.
+  const run = check.isolate === false ? null : crypto.randomUUID();
+  const vars: Record<string, unknown> = { ...inputs };
   for (const [i, step] of check.steps.entries()) {
     const failure = await runStep(step, origin, run, vars);
     if (failure) return { ...failure, message: `step ${i + 1}: ${failure.message}` };
@@ -35,7 +54,7 @@ async function runOnce(check: ProbeCheck, origin: string): Promise<StepFailure |
 async function runStep(
   step: ProbeStep,
   origin: string,
-  run: string,
+  run: string | null,
   vars: Record<string, unknown>,
 ): Promise<StepFailure | null> {
   const fail = (message: string, transient = false): StepFailure => ({ message, transient });
@@ -46,7 +65,7 @@ async function runStep(
   try {
     res = await fetch(url, {
       method,
-      headers: { "x-canon-run": run, "content-type": "application/json" },
+      headers: headersFor(run, step.body !== undefined),
       body: step.body === undefined ? undefined : JSON.stringify(fill(step.body, vars)),
       signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
     });
@@ -90,7 +109,7 @@ async function runStep(
 async function runRepeated(
   step: ProbeStep,
   origin: string,
-  run: string,
+  run: string | null,
   vars: Record<string, unknown>,
   fail: (message: string, transient?: boolean) => StepFailure,
 ): Promise<StepFailure | null> {
@@ -98,7 +117,7 @@ async function runRepeated(
   const url = new URL(fill(step.path, vars) as string, origin);
   const init = () => ({
     method,
-    headers: { "x-canon-run": run, "content-type": "application/json" },
+    headers: headersFor(run, step.body !== undefined),
     body: step.body === undefined ? undefined : JSON.stringify(fill(step.body, vars)),
     signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
   });
@@ -134,13 +153,17 @@ function pick(value: unknown, path: string): unknown {
   return cur;
 }
 
-// Replaces whole-string "{{var}}" with the saved value (keeping its type) and
-// inline "{{var}}" occurrences with their string form.
+function headersFor(run: string | null, hasBody: boolean): Record<string, string> {
+  return { ...(run ? { "x-canon-run": run } : {}), ...(hasBody ? { "content-type": "application/json" } : {}) };
+}
+
+// Replaces a whole-string "{{expr}}" with its value (keeping its type) and inline "{{expr}}" with
+// its string form.
 function fill(value: unknown, vars: Record<string, unknown>): unknown {
   if (typeof value === "string") {
-    const whole = value.match(/^\{\{(\w+)\}\}$/);
-    if (whole) return vars[whole[1]];
-    return value.replace(/\{\{(\w+)\}\}/g, (_, name) => String(vars[name]));
+    const whole = value.match(/^\{\{([^{}]+)\}\}$/);
+    if (whole) return evaluate(whole[1], vars);
+    return value.replace(/\{\{([^{}]+)\}\}/g, (_, expr) => String(evaluate(expr, vars)));
   }
   if (Array.isArray(value)) return value.map((v) => fill(v, vars));
   if (value && typeof value === "object") {
@@ -155,4 +178,61 @@ function isExists(v: unknown): v is { $exists: boolean } {
 
 function same(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+// An expression is a value ("qty", "item.id") or a sum of products of numbers ("qa * a.cents + qb * b.cents").
+function evaluate(expr: string, vars: Record<string, unknown>): unknown {
+  if (!/[+*]/.test(expr)) return pick(vars, expr.trim());
+  let sum = 0;
+  for (const term of expr.split("+")) {
+    let product = 1;
+    for (const factor of term.split("*").map((f) => f.trim())) {
+      const n = /^\d+(\.\d+)?$/.test(factor) ? Number(factor) : pick(vars, factor);
+      if (typeof n !== "number") return undefined;
+      product *= n;
+    }
+    sum += product;
+  }
+  return sum;
+}
+
+/** The input names a check's templates use ("{{qa * a.cents}}" uses qa and a), so a check can be validated. */
+export function templateNames(value: unknown): string[] {
+  if (typeof value === "string") {
+    return [...value.matchAll(/\{\{([^{}]+)\}\}/g)].flatMap(([, expr]) =>
+      expr.split(/[+*]/).map((f) => f.trim()).filter((f) => f && !/^\d+(\.\d+)?$/.test(f)).map((f) => f.split(".")[0]),
+    );
+  }
+  if (Array.isArray(value)) return value.flatMap(templateNames);
+  if (value && typeof value === "object") return Object.values(value).flatMap(templateNames);
+  return [];
+}
+
+function draw(specs: ProbeCheck["vars"], next: () => number): Record<string, unknown> {
+  const inputs: Record<string, unknown> = {};
+  for (const [name, spec] of Object.entries(specs ?? {})) {
+    inputs[name] = "int" in spec
+      ? spec.int[0] + Math.floor(next() * (spec.int[1] - spec.int[0] + 1))
+      : spec.oneOf[Math.floor(next() * spec.oneOf.length)];
+  }
+  return inputs;
+}
+
+// How an input reads in a verdict: an object by its id, anything else as itself.
+function label(v: unknown): string {
+  if (v && typeof v === "object" && "id" in v) return String((v as { id: unknown }).id);
+  return typeof v === "string" ? v : JSON.stringify(v);
+}
+
+// A small seeded generator (an FNV-1a hash of the seed driving mulberry32): one seed, one sequence of draws.
+function random(seed: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  let a = h >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }

@@ -12,19 +12,22 @@ referee checks every canon fact against a live Workers Preview of that world. A 
 the facts, and the accepted world becomes canon.
 
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
-- **Conflicts**: a conflict is a contradiction between worlds. Overlapping edits that keep the facts are fine.
-  A clean merge that breaks a fact is not.
+- **Conflicts**: a conflict is a contradiction between worlds. Overlapping edits that keep the facts are fine (the
+  agent resolves any text conflict when it refreshes onto canon). A clean merge that breaks a fact is not.
 - **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check.
 - **Why**: the fact chain. Every fact links to the world that made it true and to the worlds that failed it.
-  Failed worlds are never deleted, so they remain the project's memory.
+  Failed worlds stay clonable, so they remain the project's memory.
 
 The facts live in the repo as `canon.json`, so the canon survives outside Cloudflare. A fact works like a
-required check in branch protection, but it checks behaviour on a live preview. A person pushing by hand is
-just another world and gets the same verdict. You can start from an existing Git repo by importing it.
+required check in branch protection, but it checks behaviour on a live preview. As in a merge queue, only a tested
+tree lands; unlike one, the checks are facts the agents can't edit, and people review changes to the facts instead
+of code. Probes draw random inputs seeded by each commit, and canon's facts are re-checked on production every
+hour. A person pushing by hand is just another world and gets the same verdict. You can start from an existing
+Git repo by importing it.
 
 See [PROTOCOL.md](PROTOCOL.md) for the four moves. To feel the difference, play
-[Canon Stampede](https://canon.rodeo/game): ride a stampede of agents' changes for 40 seconds the Git way,
-then 40 the Canon way.
+[Canon Stampede](https://canon.rodeo/game): ride a stampede of agents' changes for 40 seconds reviewing every
+change yourself, then 40 the Canon way.
 
 ## How it works
 

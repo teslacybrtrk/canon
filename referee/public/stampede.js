@@ -182,12 +182,12 @@
     hud();
     card(`<p class="kicker">Two rounds · 40 seconds each</p>
       <h3>Round 1: <em>Git</em></h3>
-      <p>You're riding main. Each animal is an agent's change: jump on one to ship it.</p>
+      <p>You're riding main, and you're the only check. Each animal is an agent's change: jump on one to ship it.</p>
       <div class="legend">
         <span><kbd>Tap</kbd><span>Jump on and ship it.</span></span>
         <span><kbd>Hold</kbd><span>Review it first. Takes a second.</span></span>
       </div>
-      <p><b>1 in 3 is broken, and they all look the same.</b> Land on one and production breaks.</p>
+      <p><b>In this herd, 1 in 3 is broken, and they all look the same.</b> Land on one and production breaks.</p>
       <div class="pace" role="radiogroup" aria-label="Speed"><span>Speed</span>${Object.entries(PACES).map(([k, p]) =>
         `<button type="button" role="radio" data-pace="${k}" aria-checked="${k === pace}">${p.label}</button>`).join("")}</div>`,
     [{ label: "Start round 1", primary: true, run: () => begin("git") }]);
@@ -247,7 +247,8 @@
           <tr><td>Seconds spent reviewing</td><td>${git.review.toFixed(1)}</td><td class="good">0</td></tr>
         </table>
         <p>The referee rejected ${canon.rejected} broken change${canon.rejected === 1 ? "" : "s"} before anyone could land on them, and re-checked the herd every time main moved.</p>
-        <p><b>Same agents, same herd. Git made you choose between speed and safety. Canon gave you both.</b></p>`,
+        <p><b>Same agents, same herd. Reading every diff made you choose between speed and safety. Canon gave you both.</b></p>
+        <p class="fine">Here every broken change breaks a fact. In a real app a fact catches what it asserts, so write facts where a silent break costs most.</p>`,
       [{ label: "Play again", primary: true, run: () => { shown.clear(); intro(); } }, { label: "See how Canon works →", href: "/#how" }]);
     }
     hud();
@@ -1026,7 +1027,7 @@
   cv.addEventListener("pointerup", release);
   el("auto").addEventListener("click", () => {
     if (!playing) return;
-    if (mode === "git") return tip("Git has no referee, so nothing can safely land changes for you.\nSomeone has to read every diff.", null, "above");
+    if (mode === "git") return tip("In this round nothing checks a change but you, so nothing can land changes for you.\nSomeone has to read every diff.", null, "above");
     autopilot = !autopilot;
     if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself.\nPeople decide the facts; agents do the rest.", null, "above");
     hud();

@@ -194,6 +194,7 @@
   .fact.retired .glyph { background: transparent; box-shadow: none; border: 1.5px solid var(--line-2); }
   .fact.retired .text { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--broke); }
   .fact small .tag { padding: 0 6px; border: 1px solid var(--line-2); border-radius: 5px; }
+  .fact small .off { color: var(--broke); }
   .fact .text { font: 500 15.5px/1.4 var(--sans); }
   .fact.proposed .text { color: var(--ink-2); font-weight: 400; }
   .fact small { display: flex; gap: 8px; margin-top: 4px; font: 400 11px var(--mono); color: var(--muted); }
@@ -293,6 +294,7 @@
   .steps .n { color: var(--muted); }
   .steps .req { display: block; color: var(--ink); overflow-wrap: anywhere; }
   .steps .exp { display: block; color: var(--held); overflow-wrap: anywhere; }
+  .why-sec > p.inputs { font: 400 12.5px/1.55 var(--mono); color: var(--muted); }
   .live { display: none; margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 14px; }
   .live.on { display: block; }
   .live.wait { color: var(--muted); border: 1px dashed var(--line-2); }
@@ -357,7 +359,7 @@
   <canvas class="sky" id="sky" aria-hidden="true"></canvas>
   <div class="sun" aria-hidden="true"></div>
   <svg class="ridge" viewBox="0 0 1440 46" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 46V30l60-6 70 8 90-14 80 10 70-6 110 12 90-16 70 8 120-10 80 12 100-6 90 10 80-14 110 10 70-4 80 8 70-6v34z"/></svg>
-  <a class="ride" href="/game" aria-label="Play Canon Stampede: ride agents’ changes for 40 seconds the Git way, then 40 the Canon way">
+  <a class="ride" href="/game" aria-label="Play Canon Stampede: ride agents’ changes for 40 seconds reviewing every change yourself, then 40 the Canon way">
     <canvas aria-hidden="true"></canvas>
     <span class="ride-text" aria-hidden="true"><small>Mini game · Git vs Canon</small><b>Play Canon Stampede <i>→</i></b></span>
   </a>
@@ -374,7 +376,7 @@
   <div class="hero-body wrap reveal">
     <p class="kicker">Git for teams of AI coding agents</p>
     <h1>Main is not a branch.<br><em>It’s what must stay true.</em></h1>
-    <p class="lede">Agents push with plain Git. Canon checks every rule your app must keep on a live preview, so a change that breaks one is rejected without anyone reading the diff.</p>
+    <p class="lede">Agents push with plain Git. Canon checks each commit, on its own live preview, against the facts your app must keep, so a change that breaks one is rejected without anyone reading the diff.</p>
     <div class="cta">
       <a class="btn primary" href="#board">Watch the live board ↓</a>
       <span class="cmd" id="clonecmd" hidden><code>git clone https://canon.rodeo/canon.git</code><button class="copy icon" data-copy="git clone https://canon.rodeo/canon.git" aria-label="Copy the clone command" title="Copy"><svg class="sheets" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11.5" height="11.5" rx="2"/><path d="M15 9V5a1.5 1.5 0 0 0-1.5-1.5h-8A1.5 1.5 0 0 0 4 5v8a1.5 1.5 0 0 0 1.5 1.5H9"/></svg><svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></span>
@@ -391,22 +393,22 @@
 
 <section class="problem wrap" id="problem">
   <p class="kicker">The problem</p>
-  <h2>Git’s workflow was built for a few humans. <em>Agents break it.</em></h2>
-  <p class="sub">Branches, pull requests and code review assume a handful of people who can read each other’s diffs. Put dozens of agents on one repo and every step becomes the bottleneck — or stops meaning anything.</p>
+  <h2>Code review was built for a few humans. <em>Agents break it.</em></h2>
+  <p class="sub">Pull requests assume a person reads every change. Put dozens of agents on one repo and that person becomes the bottleneck, or stops really reading.</p>
   <div class="vs">
     <div class="vs-col git">
-      <h3>With Git today</h3>
-      <div class="vs-row"><b>Review is the bottleneck</b><span>Every change waits for a person to read a diff. Dozens of agents produce more diffs than anyone can read.</span></div>
-      <div class="vs-row"><b>Merges lie</b><span>Two changes can merge with no conflict and still break the product — or conflict on text while both being fine.</span></div>
-      <div class="vs-row"><b>Agents can grade their own work</b><span>Tests live in the same branch as the change, so an agent can edit the tests that judge it.</span></div>
-      <div class="vs-row"><b>Intent is invisible</b><span>Branch names don’t say what each agent is trying to achieve, so agents collide on goals, not just files.</span></div>
+      <h3>With pull requests today</h3>
+      <div class="vs-row"><b>Review is the bottleneck</b><span>Every agent change waits for a person to approve it, and agents write more diffs than anyone can read.</span></div>
+      <div class="vs-row"><b>A clean merge can still break</b><span>Git merges text, not behaviour. Two changes that each pass can merge without a conflict and break the product together.</span></div>
+      <div class="vs-row"><b>Agents can grade their own work</b><span>By default the tests that judge a change ship inside it, so an agent can edit them, and agents have been measured doing it.</span></div>
+      <div class="vs-row"><b>Intent is prose</b><span>An issue says what an agent means to do, but nothing checks it, or tells you two agents want contradictory things.</span></div>
     </div>
     <div class="vs-col canon">
       <h3>With Canon</h3>
-      <div class="vs-row"><b>Machines verify, people decide rules</b><span>Every push is checked against every fact automatically. People only review changes to the rules, not code.</span></div>
-      <div class="vs-row"><b>Conflicts are contradictions</b><span>Overlapping edits that keep every fact are fine. A change that breaks one is caught — even when the merge is clean.</span></div>
+      <div class="vs-row"><b>Machines verify, people decide rules</b><span>Every push is checked against every fact automatically. People review changes to the rules; the code comes along as evidence.</span></div>
+      <div class="vs-row"><b>Conflicts are contradictions</b><span>The referee judges the exact tree that becomes main, so a change that breaks a fact is caught even when it merged cleanly. Text conflicts stay the agent’s chore; only contradictions reach a person.</span></div>
       <div class="vs-row"><b>The checks are out of reach</b><span>Facts are owned by canon, never by the branch. Changing one is a separate, explicit revision a person approves.</span></div>
-      <div class="vs-row"><b>Intent comes first</b><span>Agents claim the fact they’re making true before writing code, so everyone can see who is doing what.</span></div>
+      <div class="vs-row"><b>Intent comes first</b><span>Agents claim the fact they’re making true before writing code, so everyone sees who is doing what, and the referee says when it’s done.</span></div>
     </div>
   </div>
 </section>
@@ -451,7 +453,7 @@
 <main class="board wrap">
   <section>
     <div class="col-head"><h3>The canon</h3><span class="count" id="factcount"></span></div>
-    <p class="hint">What production must keep true. Click a fact for its history.</p>
+    <p class="hint" id="canonhint">What production must keep true. Click a fact for its history.</p>
     <div class="ledger" id="facts"></div>
   </section>
   <section>
@@ -467,9 +469,9 @@
   <h2>Facts, not files. <em>Contradictions, not merge conflicts.</em></h2>
   <div class="grid4">
     <div class="card"><span class="k">Coordination</span><h3>Agents read claims, not locks</h3><p>“agent-4 is trying to make <i>sold-out items can’t be bought</i> true.” Intent is visible before anyone writes code.</p><p class="was">Instead of <s>branch names and file locks</s></p></div>
-    <div class="card"><span class="k">Conflicts</span><h3>A conflict is a contradiction</h3><p>Edits that keep every fact are fine. A clean merge that breaks one is not. Accepting one fact can reject a rival world on its own.</p><p class="was">Instead of <s>textual merge conflicts</s></p></div>
+    <div class="card"><span class="k">Conflicts</span><h3>A conflict is a contradiction</h3><p>Edits that keep every fact are fine; a clean merge that breaks one is not. Accept one fact and every other world is re-judged against it: a rival that can’t keep it never lands.</p><p class="was">Instead of <s>textual merge conflicts</s></p></div>
     <div class="card"><span class="k">Review</span><h3>Review the fact diff</h3><p>Facts kept, lost and added, each with a live preview. A person accepts a change in the facts; the code comes along as evidence.</p><p class="was">Instead of <s>reading every line of a pull request</s></p></div>
-    <div class="card"><span class="k">Why</span><h3>The fact chain is the memory</h3><p>Every fact links to the world that made it true, the agent’s reason, and every world that failed it — still clickable, still clonable.</p><p class="was">Instead of <s>commit messages and lost context</s></p></div>
+    <div class="card"><span class="k">Why</span><h3>The fact chain is the memory</h3><p>Every fact links to the world that made it true, the agent’s reason, and every world that failed it, with the reason, each one still clonable.</p><p class="was">Instead of <s>commit messages and lost context</s></p></div>
   </div>
 </section>
 
@@ -479,8 +481,8 @@
   <h2>The ones you’re <em>about to ask.</em></h2>
   <div class="faq-grid">
     <dl class="glossary">
-      <dt>Fact</dt><dd>A plain sentence plus a check that can fail on a live preview. “A stall cannot be double-booked.”</dd>
-      <dt>Canon</dt><dd>The facts that are true of production right now, and the world that makes them true. This is what “main” means here.</dd>
+      <dt>Fact</dt><dd>A plain sentence plus a check that can fail: requests to a live preview, or a command on the code. “A stall cannot be double-booked.”</dd>
+      <dt>Canon</dt><dd>The facts production must keep, re-checked on production every hour, and the world that makes them true. This is what “main” means here.</dd>
       <dt>Claim</dt><dd>An agent saying which new fact it is trying to make true.</dd>
       <dt>World</dt><dd>One attempt: the agent’s own fork, with its own Git remote and a live preview for every commit.</dd>
       <dt>Verdict</dt><dd>What the referee found: facts kept, facts broken, and whether the new fact holds.</dd>
@@ -497,21 +499,22 @@
       <details><summary>What if the product’s behaviour needs to change?</summary><div class="a">
         <p>Canon doesn’t stop behaviour from changing; it stops it changing <i>by accident</i>. An agent that wants a new rule proposes a <b>revision</b>: a fact that replaces an existing one (“the listed price” becomes “the listed price, with 10% off lines of 10 or more”). Its world may break the old fact; the verdict shows “retires X”, and a person approves the rule change. The old fact is kept in history with who replaced it and why.</p></div></details>
       <details><summary>Who reviews, and who verifies?</summary><div class="a">
-        <p><b>Verifying is automatic.</b> On every push the referee builds a preview of that exact commit, runs every fact, checks the world’s <code>canon.json</code>, and confirms a proposed fact actually fails on the current canon. No AI, no judgement: the same commit always gets the same verdict.</p>
-        <p><b>Reviewing is human, and it’s about rules, not diffs.</b> A person sees the new fact in plain words, its short check, the fact diff and a live preview. Reviewing a five-line check is far easier than a 500-line diff; anyone can still clone the world and read the code.</p></div></details>
+        <p><b>Verifying is automatic.</b> On every push the referee builds a preview of that exact commit, runs every fact, checks the world’s <code>canon.json</code>, and confirms a proposed fact actually fails on canon. No AI judges anything: random inputs are drawn from the commit’s own hash, so the same commit always gets the same checks.</p>
+        <p><b>Reviewing is human, and it starts with rules, not diffs.</b> A person sees the new fact in plain words, its short check, the fact diff and a live preview. Reviewing a five-line check is far easier than a 500-line diff. Facts settle behaviour, not taste: for anything a check can’t judge, the code is one click away.</p></div></details>
       <details><summary>What about lint, types, performance and database changes?</summary><div class="a">
-        <p>They’re facts too. This demo’s canon includes “the code passes the linter”, “the code type-checks”, “lint and type settings only change by revision” and “the market page answers in under 400 ms at p95”. Database rules fit the same way: “migrations only add, never drop”, “every migration applies cleanly to a copy of the data”.</p>
+        <p>They’re facts too. This demo’s canon includes “the code passes the linter, with no rules silenced”, “the code type-checks”, “the toolchain, its settings and the deploy config only change by revision” and “the market page answers in under 400 ms at p95”. Database rules fit the same way: “migrations only add, never drop”, “every migration applies cleanly to a copy of the data”.</p>
         <p>Facts can be <b>scoped</b> to files, so a rule about database code is only judged on worlds that change database code. Agents run <code>canon read --for &lt;file&gt;</code> to see which rules govern a file before touching it. Judgement about design quality can’t be reduced to checks; Canon keeps that as a review, not a pretence.</p></div></details>
       <details><summary>How do you write facts for a big, complex codebase?</summary><div class="a">
         <p>You don’t write them all up front. Start with the few dozen invariants where a silent break is expensive (money, permissions, data integrity, critical flows). After that, every accepted change adds a fact, so the spec grows as a side effect of shipping, each fact linked to the change and reason that introduced it. Existing tests become command facts.</p>
         <p>Facts only protect what they assert, just like tests. The difference is that every behaviour change that <i>is</i> captured is deliberate, reviewed and explained.</p></div></details>
       <details><summary>Isn’t Git plus enforced test coverage enough?</summary><div class="a">
-        <p>For a few humans, often yes. With agents, two things break. Tests live in the same branch as the change, so an agent can edit the tests that judge it. And coverage measures which lines ran, not whether anything meaningful was checked; an agent can reach 90% with tests that assert almost nothing.</p>
+        <p>For a few humans, often yes. With agents, two things break. By default the tests that judge a change ship inside it, so an agent can edit them; platforms can lock test files, but then a person has to review every test edit. And coverage measures which lines ran, not whether anything meaningful was checked; an agent can reach 90% with tests that assert almost nothing.</p>
         <p>In Canon the checks are owned by canon, out of the agent’s reach, and a fact that can’t fail is refused. Coverage still fits: “coverage stays above 80% on changed files” is just another command fact.</p></div></details>
       <details><summary>Can’t an agent just weaken a check to pass?</summary><div class="a">
-        <p>No. The referee judges every world with canon’s copy of the facts, never the world’s own. A world whose <code>canon.json</code> changes, drops or invents a fact is rejected as tampered. Command facts call tools directly, and the lint and type settings are themselves pinned by a fact.</p></div></details>
+        <p>No. The referee judges every world with canon’s copy of the facts, never the world’s own. A world whose <code>canon.json</code> changes, drops or invents a fact is rejected as tampered. Command facts call tools directly, and a fact pins the toolchain, its settings and the deploy config, so a world can’t swap the linter. Suppression comments are ruled out by facts too.</p>
+        <p><b>Gaming</b> a check is the harder problem, as with any test. Probes draw random inputs from each commit’s hash, so hard-coded answers fail; facts that only read are sent exactly as a visitor’s requests; and canon’s facts are re-checked on production every hour.</p></div></details>
       <details><summary>What happens when two agents edit the same file?</summary><div class="a">
-        <p>Nothing, as long as every fact still holds. Overlapping edits aren’t a conflict here. A conflict is a contradiction: two worlds that can’t both be true. When one is accepted, the other is re-checked and rejected on its own.</p></div></details>
+        <p>Each works in its own world, so nothing happens until one lands. Then the other is <b>behind</b>: <code>canon refresh</code> replays its changes on the new canon, and the agent resolves any text conflict itself, as in a rebase. A person only hears about contradictions: worlds whose facts can’t both hold. A refreshed world that breaks the accepted fact is rejected without anyone reading it.</p></div></details>
       <details><summary>What if canon changes while an agent is still working?</summary><div class="a">
         <p>Its world is marked <b>behind canon</b>, not rejected: it simply predates the new fact. <code>canon refresh</code> makes a fresh world from the current canon and re-applies the agent’s changes; the agent resolves any conflict and pushes again.</p></div></details>
       <details><summary>Is this a new Git? Does it replace GitHub?</summary><div class="a">
@@ -522,14 +525,15 @@
         <p>Yes, with a policy in <code>canon.json</code>: <code>"autoAccept": "backlog"</code>. People write a backlog of facts they want; agents race to make them true, and the first world that keeps every canon fact and makes one true lands on its own. Humans decide <i>what</i> must be true; agents decide <i>how</i>.</p>
         <p>Facts that agents propose themselves still wait for a person, so an agent can’t lower the bar by inventing an easy rule.</p></div></details>
       <details><summary>How would this scale to thousands of agents?</summary><div class="a">
-        <p>Each attempt is a cheap Artifacts fork with its own preview, so attempts don’t contend with each other. One referee per project serializes the few decisions that matter, and checks run in parallel. The demo runs 5 agents; the design has no step that grows with the number of files or branches.</p></div></details>
+        <p>Attempts scale out: each is a cheap Artifacts fork with its own preview, and checks run in parallel. Accepting is deliberately one at a time, so canon is always one consistent world, and each accept sends the worlds in flight to refresh. Merge queues tame that churn with batching and speculative runs; that’s the next step here. The demo runs 5 to 8 agents.</p></div></details>
       <details><summary>Isn’t this just CI and branch protection?</summary><div class="a">
-        <p>Close in spirit: a fact works like a required check. The differences are where it lives and what it decides. Facts are owned by the referee, not each branch; they test behaviour on a live preview; and the review a person does is a change in facts, not a code diff.</p></div></details>
+        <p>Mechanically, close: it’s the old rule merge queues enforce, that only a tested tree lands. What changes is what’s tested and who decides. Facts are declared before work starts, owned by the referee instead of each branch, checked on a live preview of every commit, and changed only by a revision a person accepts. People review changes in facts, not code diffs.</p>
+        <p>Think of it as SWE-bench’s grading rule turned into a merge policy: a claim must go from failing to passing, canon must keep passing, and the referee owns both.</p></div></details>
       <details><summary>How is it kept safe?</summary><div class="a">
         <p>An agent’s token can write only to its own fork. When a world is accepted, its write tokens are revoked, so canon can’t change underneath you. Every world, including rejected ones, stays readable and clonable as a record.</p>
         <p>Anyone can read the referee; writing to it takes a key. An agent’s key can claim a fact but never accept one.</p></div></details>
       <details><summary>What does it run on?</summary><div class="a">
-        <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the referee, Workflows and Containers for CI, Workers Previews for every commit, and R2 for build caches. The referee uses no AI model: verdicts are reproducible test results.</p></div></details>
+        <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the referee, Workflows and Containers for CI, Workers Previews for every commit, and R2 for build caches. The referee uses no AI model: a verdict is the result of the checks, not an opinion.</p></div></details>
     </div>
   </div>
 </section>
@@ -584,11 +588,18 @@
     $("canonline").textContent = s.canon ? `${s.canon.worldId} @ ${s.canon.sha.slice(0, 8)} · #${s.canon.seq}${MOCK ? " · sample data" : ""}` : "no canon yet";
     $("factcount").textContent = `${canonFacts.length} true · ${proposed.length} proposed${retired.length ? ` · ${retired.length} retired` : ""}`;
     $("autopilot").hidden = s.policy?.autoAccept !== "backlog";
+    // Canon's probe facts run against production every hour and after each deploy.
+    const prod = s.production;
+    const offProd = (f) => f.status === "canon" && prod?.results?.[f.id] && !prod.results[f.id].held;
+    const failing = canonFacts.filter(offProd).length;
+    $("canonhint").textContent = !prod ? "What production must keep true. Click a fact for its history."
+      : failing ? `What production must keep true. ${failing} failed on production ${ago(prod.at)}. Click a fact for its history.`
+      : `What production must keep true, re-checked on production every hour (all held ${ago(prod.at)}). Click a fact for its history.`;
 
     const fact = (f) => `
       <div class="fact ${f.status}" data-fact="${esc(f.id)}" title="Why is this true?">
         <span class="glyph"></span>
-        <div><div class="text">${esc(f.sentence)}</div><small><span>${esc(f.id)}</span><span>${f.status === "canon" ? "holds" : f.status === "retired" ? "retired" : f.replaces ? `revises ${esc(f.replaces)}` : "proposed"}</span>${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs ${esc(f.check.run.split(" ").slice(0, 3).join(" "))}</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small></div>
+        <div><div class="text">${esc(f.sentence)}</div><small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : `<span>${f.status === "canon" ? "holds" : f.status === "retired" ? "retired" : f.replaces ? `revises ${esc(f.replaces)}` : "proposed"}</span>`}${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs ${esc(f.check.run.split(" ").slice(0, 3).join(" "))}</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small></div>
         <span class="go">why →</span>
       </div>`;
     $("facts").innerHTML = (canonFacts.map(fact).join("") || `<div class="empty">No canon yet.</div>`)
@@ -677,16 +688,18 @@
     const sec = Math.max(1, Math.round((Date.now() - ms) / 1000));
     return sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
   };
+  // A value in plain words: an input like "{{qty1 * item1.cents}}" reads as {{qty1 × item1.cents}}.
+  const plain = (v) => JSON.stringify(v).replace(/"(\{\{[^{}]+\}\})"/g, "$1").replace(/ \* /g, " × ");
   // One probe step in plain words: the request, then what has to come back.
   function describeStep(step) {
-    const req = `${step.method ?? "GET"} ${step.path}${step.body === undefined ? "" : ` ${JSON.stringify(step.body)}`}`;
+    const req = `${step.method ?? "GET"} ${step.path}${step.body === undefined ? "" : ` ${plain(step.body)}`}`;
     const e = step.expect ?? {};
     const want = [];
     if (step.repeat) want.push(`${step.repeat} requests, p95 under ${e.p95Ms} ms`);
     if (e.status !== undefined) want.push(`status ${[e.status].flat().join(" or ")}`);
     if (e.bodyIncludes) want.push(`page includes “${e.bodyIncludes}”`);
     for (const [path, v] of Object.entries(e.json ?? {})) {
-      want.push(v && typeof v === "object" && "$exists" in v ? `${path} is ${v.$exists ? "present" : "absent"}` : `${path} = ${JSON.stringify(v)}`);
+      want.push(v && typeof v === "object" && "$exists" in v ? `${path} is ${v.$exists ? "present" : "absent"}` : `${path} = ${plain(v)}`);
     }
     for (const [name, path] of Object.entries(step.save ?? {})) want.push(`remember ${path} as {{${name}}}`);
     return { req, want: want.join(" · ") || "any answer" };
@@ -717,6 +730,13 @@
     }, new Map()).values()];
     const m = w.madeTrueBy;
 
+    // Random inputs are drawn again for every run, seeded by the commit; a visitor run sends no Canon header.
+    const inputs = c.kind === "probe" && c.vars ? Object.entries(c.vars).map(([name, v]) =>
+      `${name}: ${v.int ? `${v.int[0]}–${v.int[1]}` : `one of ${v.oneOf.map((o) => o?.id ?? JSON.stringify(o)).join(", ")}`}`) : [];
+    const how = [
+      inputs.length ? `Random inputs, drawn again for each of ${c.samples ?? 1} run${(c.samples ?? 1) === 1 ? "" : "s"} from the commit's hash (the same commit always gets the same ones): ${inputs.join(" · ")}.` : "",
+      c.kind === "probe" && c.isolate === false ? "Sent exactly as a visitor's requests, with no Canon header, so the app can't tell it's being checked." : "",
+    ].filter(Boolean).map((t) => `<p class="inputs">${esc(t)}</p>`).join("");
     const steps = c.kind === "command"
       ? `<ol class="steps"><li><span class="n">$</span><span><span class="req">${esc(c.run)}</span><span class="exp">→ must exit 0</span></span></li></ol>`
       : `<ol class="steps">${c.steps.map((st, i) => { const d = describeStep(st); return `<li><span class="n">${i + 1}</span><span><span class="req">${esc(d.req)}</span><span class="exp">→ ${esc(d.want)}</span></span></li>`; }).join("")}</ol>`;
@@ -738,7 +758,7 @@
       <div class="why-head">
         <p class="kicker">${status === "proposed" ? "What would make this true?" : status === "retired" ? "Why was this true?" : "Why is this true?"}</p>
         <h3>${esc(f.sentence)}</h3>
-        <div class="why-meta"><span class="why-chip ${status}">${status === "canon" ? "Canon" : status === "retired" ? "Retired" : "Proposed"}</span><span>${esc(f.id)}</span><span>${c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
+        <div class="why-meta"><span class="why-chip ${status}">${status === "canon" ? "Canon" : status === "retired" ? "Retired" : "Proposed"}</span><span>${esc(f.id)}</span><span>${c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview${(c.samples ?? 1) > 1 ? ` × ${c.samples} runs` : ""}`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
       </div>
       <div class="why-body">
         <section class="why-sec">
@@ -746,7 +766,7 @@
           <p>${c.kind === "command"
             ? "A fact is a sentence plus a check. The referee runs this command on every world's code in CI. The command lives in canon, so a world can't change what judges it."
             : "A fact is a sentence plus a check. The referee runs these requests against every world's live preview, and the world can't edit them."}</p>
-          ${steps}
+          ${how}${steps}
           <p class="live" id="live" role="status"></p>
         </section>
         <section class="why-sec">

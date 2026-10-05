@@ -32,7 +32,9 @@ Use the `canon` command for the protocol and plain `git` for code.
    - READY: stop. A human decides whether your fact becomes canon.
 
 Rules: never push anywhere except your own world. Do not edit the fact's check to make it pass;
-the referee owns the checks. Keep the change as small as the fact needs.
+the referee owns the checks. Keep the change as small as the fact needs. Leave package.json, package-lock.json,
+wrangler.jsonc, biome.json and tsconfig.json as they are (a canon fact pins them), and never silence a lint or
+type error with biome-ignore or @ts-ignore (canon facts reject both).
 
 Push budget: at most 4 pushes. If your goal below gives you a smaller budget, that budget wins over
 "fix and push again": when it is used up, report the verdict and stop.

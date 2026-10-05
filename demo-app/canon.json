@@ -6,6 +6,7 @@
       "sentence": "The market page lists every stall",
       "check": {
         "kind": "probe",
+        "isolate": false,
         "steps": [
           {
             "path": "/",
@@ -22,6 +23,7 @@
       "sentence": "All six products are for sale with a price",
       "check": {
         "kind": "probe",
+        "isolate": false,
         "steps": [
           {
             "path": "/api/products",
@@ -65,13 +67,63 @@
       "sentence": "The basket charges the listed price for every unit",
       "check": {
         "kind": "probe",
+        "samples": 4,
+        "vars": {
+          "qty1": {
+            "int": [
+              1,
+              20
+            ]
+          },
+          "item1": {
+            "oneOf": [
+              {
+                "id": "eggs",
+                "cents": 400
+              },
+              {
+                "id": "kale",
+                "cents": 300
+              }
+            ]
+          },
+          "qty2": {
+            "int": [
+              1,
+              20
+            ]
+          },
+          "item2": {
+            "oneOf": [
+              {
+                "id": "duck-eggs",
+                "cents": 650
+              },
+              {
+                "id": "greens",
+                "cents": 450
+              }
+            ]
+          }
+        },
         "steps": [
           {
             "method": "POST",
             "path": "/api/cart",
             "body": {
-              "productId": "eggs",
-              "qty": 12
+              "productId": "{{item1.id}}",
+              "qty": "{{qty1}}"
+            },
+            "expect": {
+              "status": 200
+            }
+          },
+          {
+            "method": "POST",
+            "path": "/api/cart",
+            "body": {
+              "productId": "{{item2.id}}",
+              "qty": "{{qty2}}"
             },
             "expect": {
               "status": 200
@@ -82,7 +134,7 @@
             "expect": {
               "status": 200,
               "json": {
-                "totalCents": 4800
+                "totalCents": "{{qty1 * item1.cents + qty2 * item2.cents}}"
               }
             }
           }
@@ -114,6 +166,7 @@
       "sentence": "The market page answers in under 400 ms (p95 of 20 requests)",
       "check": {
         "kind": "probe",
+        "isolate": false,
         "steps": [
           {
             "path": "/",
@@ -128,10 +181,10 @@
     },
     {
       "id": "code-typechecks",
-      "sentence": "The code type-checks with no errors",
+      "sentence": "The code type-checks, with no errors silenced",
       "check": {
         "kind": "command",
-        "run": "npx tsc --noEmit -p tsconfig.json"
+        "run": "npx tsc --noEmit -p tsconfig.json && ! grep -rnE '@ts-(ignore|nocheck|expect-error)' src"
       },
       "scope": [
         "src/**",
@@ -142,10 +195,10 @@
     },
     {
       "id": "code-lints",
-      "sentence": "The code passes the linter",
+      "sentence": "The code passes the linter, with no rules silenced",
       "check": {
         "kind": "command",
-        "run": "npx biome lint src"
+        "run": "npx biome lint src && ! grep -rn 'biome-ignore' src"
       },
       "scope": [
         "src/**",
@@ -156,14 +209,17 @@
     },
     {
       "id": "tooling-locked",
-      "sentence": "Lint and type-check settings only change by revision",
+      "sentence": "The toolchain, its settings and the deploy config only change by revision",
       "check": {
         "kind": "command",
-        "run": "printf '%s  %s\\n' 59a84695d901baa34c3e99fbdd740360528a175aac378dcf15ac29992af8dade biome.json a1ddb318478c949d6dea887eafb411b99e9cc602305330ff161315d6b33f9daa tsconfig.json | sha256sum -c --quiet -"
+        "run": "printf '%s  %s\\n' 59a84695d901baa34c3e99fbdd740360528a175aac378dcf15ac29992af8dade biome.json a1ddb318478c949d6dea887eafb411b99e9cc602305330ff161315d6b33f9daa tsconfig.json 09fae007142ecda384682d56b4e2722c8aa8e6dfe0cc22cc4fc7ddcdc2b0d347 package.json a98b8cef882d0c67f22ca1da2934aa734385472ff9a1d2a8a9e8f30037cd40a3 package-lock.json df602571a7500dbfd99f0e9fde1528fd0ef7f0b8633de633a537d1e8dab7e2b8 wrangler.jsonc | sha256sum -c --quiet -"
       },
       "scope": [
         "biome.json",
-        "tsconfig.json"
+        "tsconfig.json",
+        "package.json",
+        "package-lock.json",
+        "wrangler.jsonc"
       ]
     }
   ]

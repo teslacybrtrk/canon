@@ -69,7 +69,17 @@ export type Check = ProbeCheck | CommandCheck;
 export interface ProbeCheck {
   kind: "probe";
   steps: ProbeStep[];
+  // Random inputs, drawn again for every sample: {"qty": {"int": [1, 20]}, "item": {"oneOf": [...]}}.
+  // Steps use them as {{qty}} or {{item.id}}, and expectations can add and multiply: "{{qty * item.cents}}".
+  // The draws are seeded by the commit and the fact: unknown before the push, the same every time it is judged.
+  vars?: Record<string, VarSpec>;
+  samples?: number; // run the steps this many times (1-10), each with fresh inputs and a fresh run
+  // false: send the requests exactly as a visitor would, without the x-canon-run header, so the app
+  // cannot tell the referee from real traffic. Only for facts that need no state of their own.
+  isolate?: boolean;
 }
+
+export type VarSpec = { int: [number, number] } | { oneOf: unknown[] };
 
 // Runs in the CI container on the world's checkout: lint, types, tests, coverage, bundle size...
 // The command is owned by canon, so a world cannot change what judges it.
@@ -81,7 +91,7 @@ export interface CommandCheck {
 export interface ProbeStep {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string; // relative to the preview origin; may use {{var}}
-  body?: unknown; // JSON; string leaves may use {{var}}
+  body?: unknown; // JSON; string leaves may use {{var}} (a leaf that is only "{{var}}" keeps the value's type)
   repeat?: number; // send the request this many times (after one warm-up) to measure latency
   expect?: {
     p95Ms?: number; // latency budget across the repeats
@@ -132,6 +142,8 @@ export interface CanonState {
   facts: Fact[]; // canon + proposed
   claims: Array<Claim & { sentence: string; verdict: Verdict | null }>;
   policy: { autoAccept: "off" | "backlog" };
+  // The last time every canon probe fact ran against production (hourly, and after each deploy).
+  production: { at: number; url: string; results: Record<string, { held: boolean; detail: string }> } | null;
 }
 
 // ---- Move 2: declare --------------------------------------------------------------

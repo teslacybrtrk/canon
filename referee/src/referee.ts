@@ -1,8 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import type { CiParams, CloudflareArtifacts } from "@cloudflare/ci";
 import type { Env } from "./env";
+import type { Novelty } from "./commands";
 import { compareLedger } from "./ledger";
-import { runCheck } from "./probe";
+import { runCheck, templateNames } from "./probe";
 import {
   ProtocolError,
   errorStatus,
@@ -32,6 +33,9 @@ type Row = Record<string, SqlStorageValue>;
 type AutoAccept = "off" | "backlog";
 
 const LIVE_CHECK_TTL_MS = 30_000;
+const PRODUCTION_CHECK_EVERY_MS = 60 * 60_000;
+// The forked-from files travel to CI inside the command line; past this size the novelty check is skipped.
+const NOVELTY_MAX_B64 = 48_000;
 
 /** One referee per project. The only writer of facts, claims and the canon pointer. */
 export class Referee extends DurableObject<Env> {
@@ -97,6 +101,7 @@ export class Referee extends DurableObject<Env> {
       facts,
       claims,
       policy: { autoAccept: this.autoAccept() },
+      production: JSON.parse(this.meta("production") ?? "null"),
     };
   }
 
@@ -124,10 +129,10 @@ export class Referee extends DurableObject<Env> {
         if (!old || old.status !== "canon") throw new ProtocolError(404, `a revision must replace a canon fact; "${def.replaces}" is not one`);
       }
       // A fact canon already satisfies is not new, and a check that cannot fail is not a fact.
-      // (Command checks run in CI, so they are judged on the world's first push instead.)
+      // (Command checks need CI: each push also runs them on the commit the world forked from.)
       const canonPreview = this.world(canon.world_id as string)?.previewUrl;
       if (canonPreview && def.check.kind === "probe") {
-        const onCanon = await runCheck(def.check, canonPreview);
+        const onCanon = await runCheck(def.check, canonPreview, `${canon.sha}:${def.id}`);
         if (onCanon.held) throw new ProtocolError(422, `"${def.sentence}" already holds on canon; it cannot fail, so it is not a new fact`);
       }
       this.insertFact(def, "proposed", "agent", Date.now());
@@ -165,6 +170,29 @@ export class Referee extends DurableObject<Env> {
     return repo;
   }
 
+  /**
+   * A proposed command fact must fail on the commit its world forked from, or it is not a new fact. CI rebuilds
+   * that commit from the world's checkout with these files: each one the world changed, as it was at the fork.
+   */
+  async noveltyFor(repo: string, sha: string): Promise<Novelty | null> {
+    const world = this.world(repo);
+    const fact = world?.claimId ? this.fact(this.claim(world.claimId)?.factId ?? "") : null;
+    if (!world?.baseSha || fact?.status !== "proposed" || fact.check.kind !== "command") return null;
+    const changed = await this.changedPaths(world, sha);
+    if (!changed) return null;
+    using artifacts = await this.env.ARTIFACTS.get(world.id);
+    const files: Novelty["files"] = [];
+    let size = 0;
+    for (const path of changed) {
+      const blob = await artifacts.readFile({ ref: world.baseSha, path });
+      const b64 = blob ? base64(new Uint8Array(await blob.arrayBuffer())) : null;
+      size += b64?.length ?? 0;
+      if (size > NOVELTY_MAX_B64) return null;
+      files.push({ path, b64 });
+    }
+    return { factId: fact.id, run: fact.check.run, files };
+  }
+
   /** Command facts the CI pipeline must run for this commit (lint, types, tests...), already filtered by scope. */
   async commandsFor(repo: string, sha: string): Promise<Array<{ factId: string; run: string }>> {
     const world = this.world(repo);
@@ -189,9 +217,13 @@ export class Referee extends DurableObject<Env> {
    * Judges a world at a commit against canon. `commands` are the results of the command facts
    * the CI pipeline ran. Throws while the preview is not serving yet (the Workflow step retries).
    */
-  async judge(repo: string, sha: string, previewUrl: string, commands: Record<string, CheckResult> = {}): Promise<Verdict | null> {
+  async judge(repo: string, sha: string, previewUrl: string, commands: Record<string, CheckResult> = {}, notNew?: string): Promise<Verdict | null> {
     const world = this.world(repo);
     if (!world) return null;
+    // A claimed command fact that already passed on the commit its world forked from cannot fail: it is not new.
+    if (notNew && commands[notNew]?.held) {
+      commands = { ...commands, [notNew]: { held: false, detail: "it already passes on the commit this world forked from, so it can't fail: not a new fact", ms: 0 } };
+    }
     if (world.headSha && world.headSha !== sha) return null; // a newer push will be judged instead
     this.sql.exec(`UPDATE worlds SET preview_url = ?, head_sha = ? WHERE id = ?`, previewUrl, sha, repo);
     await waitForPreview(previewUrl);
@@ -213,6 +245,7 @@ export class Referee extends DurableObject<Env> {
       this.sql.exec(`INSERT INTO canon (world_id, sha, at) VALUES (?, ?, ?)`, repo, sha, Date.now());
       this.sql.exec(`UPDATE worlds SET frozen = 1 WHERE id = ?`, repo);
       await this.revokeWriteTokens(repo);
+      await this.scheduleProductionCheck(20_000);
     }
     this.broadcast();
     await this.autopilot(world.claimId, verdict);
@@ -295,25 +328,63 @@ export class Referee extends DurableObject<Env> {
 
     const seq = this.currentCanon()!.seq as number;
     await this.env.PROMOTE_WORKFLOW.create({ id: `promote-${seq}-${verdict.sha.slice(0, 12)}`, params: this.ciParams(world.id, verdict.sha) });
-    // Every other live world is now judged against the new canon. A world that loses
-    // the fact just accepted contradicts it: that is the conflict, not a textual diff.
+    // Every other live world is now judged against the new canon. A world built before the fact is behind;
+    // refreshed onto the new canon, a world that still loses it contradicts it: that is the conflict.
+    this.setMeta("rejudge", "1");
     await this.ctx.storage.setAlarm(Date.now() + 1_000);
     this.broadcast();
     return { canonSeq: seq, worldId: world.id, sha: verdict.sha };
   }
 
-  promoted(seq: number, ok: boolean) {
+  async promoted(seq: number, ok: boolean) {
     this.sql.exec(`UPDATE canon SET deployed = ? WHERE seq = ?`, ok ? 1 : -1, seq);
+    // Production just changed: check canon's facts on it shortly, once the new version is serving.
+    await this.scheduleProductionCheck(20_000);
     this.broadcast();
   }
 
+  // One alarm, two jobs: re-judging live worlds after canon moves, and checking canon's facts on production hourly.
   async alarm() {
-    const live = this.rows(`SELECT * FROM claims WHERE status IN (${LIVE.map(() => "?").join(",")})`, ...LIVE).map(toClaim);
-    for (const claim of live) {
-      const world = this.world(claim.worldId);
-      if (world?.headSha && world.previewUrl) await this.evaluate(world, world.headSha, world.previewUrl);
+    // An alarm set before the production check existed was a re-judge.
+    if (this.meta("rejudge") === "1" || this.meta("prodCheckAt") === null) {
+      this.setMeta("rejudge", "0");
+      const live = this.rows(`SELECT * FROM claims WHERE status IN (${LIVE.map(() => "?").join(",")})`, ...LIVE).map(toClaim);
+      for (const claim of live) {
+        const world = this.world(claim.worldId);
+        if (world?.headSha && world.previewUrl) await this.evaluate(world, world.headSha, world.previewUrl);
+      }
+    }
+    const canon = this.currentCanon();
+    if (canon && Date.now() >= Number(this.meta("prodCheckAt") ?? 0)) {
+      // While an accepted world is still deploying, production runs the old canon: wait for promoted().
+      const deploying = canon.accepted_fact !== null && canon.deployed === 0;
+      if (!deploying) await this.checkCanonOnProduction();
+      this.setMeta("prodCheckAt", String(Date.now() + (deploying ? 5 * 60_000 : PRODUCTION_CHECK_EVERY_MS)));
     }
     this.broadcast();
+    // A fact accepted while this alarm ran needs its re-judge now, not at the next production check.
+    const next = this.meta("rejudge") === "1" ? Date.now() + 1_000 : Number(this.meta("prodCheckAt") ?? 0);
+    if (next) await this.ctx.storage.setAlarm(next);
+  }
+
+  /** Runs every canon probe fact against production, one at a time so latency budgets don't skew each other. */
+  private async checkCanonOnProduction() {
+    const url = this.env.PRODUCTION_URL.replace("{project}", this.requireProject());
+    const results: Record<string, { held: boolean; detail: string }> = {};
+    for (const f of this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact)) {
+      if (f.check.kind !== "probe") continue;
+      const r = await runCheck(f.check, url);
+      results[f.id] = { held: r.held, detail: r.detail };
+    }
+    this.setMeta("production", JSON.stringify({ at: Date.now(), url, results }));
+  }
+
+  // The production check shares the one alarm with re-judging; never move an earlier alarm later.
+  private async scheduleProductionCheck(inMs: number) {
+    const at = Date.now() + inMs;
+    this.setMeta("prodCheckAt", String(at));
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || current > at) await this.ctx.storage.setAlarm(at);
   }
 
   // ---- Why: the fact chain -----------------------------------------------------------
@@ -436,7 +507,8 @@ export class Referee extends DurableObject<Env> {
       facts.map(async (f) => {
         if (forced) return results.set(f.id, forced);
         if (f.id !== claim?.factId && !inScope(f.scope, changed)) return skipped.push(f.id);
-        if (f.check.kind === "probe") return results.set(f.id, await runCheck(f.check, previewUrl));
+        // Random inputs are seeded by the commit and the fact: the same commit always gets the same inputs.
+        if (f.check.kind === "probe") return results.set(f.id, await runCheck(f.check, previewUrl, `${sha}:${f.id}`));
         // Command facts ran in CI for this commit; a re-judge reuses that result (same commit, same answer).
         const ran = commands?.[f.id] ?? this.storedResult(world.id, sha, f.id);
         if (ran) results.set(f.id, ran);
@@ -685,9 +757,22 @@ function validateCheck(check: Check) {
     throw new ProtocolError(400, 'check must be {"kind":"probe","steps":[...]} or {"kind":"command","run":"..."}');
   }
   if (!check.steps.some((s) => s.expect)) throw new ProtocolError(400, "a check with no expectations cannot fail");
+  if (check.samples !== undefined && (!Number.isInteger(check.samples) || check.samples < 1 || check.samples > 10)) throw new ProtocolError(400, "samples must be 1-10");
+  if (check.isolate !== undefined && typeof check.isolate !== "boolean") throw new ProtocolError(400, "isolate must be true or false");
+  for (const [name, spec] of Object.entries(check.vars ?? {})) {
+    const s = typeof spec === "object" && spec !== null ? (spec as Record<string, unknown>) : {};
+    const int = Array.isArray(s.int) && s.int.length === 2 && s.int.every(Number.isInteger) && s.int[0] <= s.int[1];
+    const oneOf = Array.isArray(s.oneOf) && s.oneOf.length > 0;
+    if (!/^[A-Za-z]\w*$/.test(name) || !(int || oneOf)) throw new ProtocolError(400, `input "${name}" must be {"int":[min,max]} or {"oneOf":[...]}`);
+  }
+  // Every {{name}} must be an input, or a value an earlier step saved.
+  const known = new Set(Object.keys(check.vars ?? {}));
   for (const s of check.steps) {
     if (typeof s.path !== "string" || !s.path.startsWith("/")) throw new ProtocolError(400, "every step needs a path starting with /");
     if (s.repeat !== undefined && (!Number.isInteger(s.repeat) || s.repeat < 1 || s.repeat > 100)) throw new ProtocolError(400, "repeat must be 1-100");
+    const unknown = templateNames([s.path, s.body, s.expect]).find((n) => !known.has(n));
+    if (unknown) throw new ProtocolError(400, `{{${unknown}}} is not an input or a value an earlier step saved`);
+    for (const name of Object.keys(s.save ?? {})) known.add(name);
   }
 }
 
@@ -714,6 +799,12 @@ async function waitForPreview(origin: string) {
   }
   if (lastStatus >= 500) return;
   throw new Error(`preview ${origin} is not serving yet`);
+}
+
+function base64(bytes: Uint8Array): string {
+  let text = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(text);
 }
 
 function shortId() {

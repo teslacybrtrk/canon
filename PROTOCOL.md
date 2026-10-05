@@ -16,7 +16,8 @@ still push. The only new object is the fact that decides whether a push becomes 
 - **Claim**: "agent-4 is trying to make *fact X* true." Agents coordinate by reading claims, not by locking files.
 - **World**: one attempt. An Artifacts fork of the canon world, written to with a fork-scoped token.
   A person pushing by hand is just another world and gets the same verdict. Worlds are never deleted, so a
-  world that failed a fact stays clickable: the failed worlds are the project's memory.
+  world that failed a fact stays clonable: the failed worlds are the project's memory. (Cloudflare keeps the newest
+  500 Previews per Worker; an older one can be rebuilt from its commit.)
 - **Referee**: one Durable Object per project. The only writer of facts, claims and the canon pointer.
 
 ## The four moves
@@ -49,7 +50,9 @@ Propose a new fact:
 
 Or race for a fact someone already proposed: `{ "agent": "agent-3", "why": "…", "join": "no-double-booking" }`.
 
-The referee refuses a fact whose check already holds on canon (it is not new). On success it forks the canon world and returns:
+The referee refuses a probe fact whose check already holds on canon (it is not new). A command fact needs CI, so every
+push also runs it on the commit the world forked from; if it passes there too, the claim can never become ready.
+On success the referee forks the canon world and returns:
 
 ```json
 { "claim": { "id": "c-…", "status": "open", … },
@@ -127,8 +130,8 @@ Worlds that still carry the old fact are behind and refresh. Without a revision,
 - **Scope:** `"scope": ["src/db/**", "migrations/**"]` judges a fact only on worlds that change a matching file. The referee diffs
   the world's Git tree against the commit it forked from (in Artifacts), skipping identical subtrees. `canon read --for <path>`
   lists the facts that govern a file.
-- Commands are owned by canon, not by the world: they call tools directly (not package scripts), and a fact can pin tool
-  configuration by hash so it only changes by revision.
+- Commands are owned by canon, not by the world: they call tools directly (not package scripts), and a fact can pin the
+  toolchain by hash (lockfile, tool settings, deploy config) so it only changes by revision.
 
 ## Autopilot: people write the facts, agents land them
 
@@ -145,9 +148,13 @@ proposed by agents themselves still wait for a person, so an agent cannot lower 
 `POST /p/:project/claims/:id/accept`: a person accepts a change in the facts; the code comes along as evidence.
 The referee freezes the world (revokes its write tokens), marks the fact canon, moves the canon pointer to the
 world, deploys it to production, and re-judges every other live world against the new canon.
-A world that now loses the accepted fact **contradicts** it. That is a conflict: a contradiction between worlds,
-not a textual diff. Nothing is merged. If two good facts should both land, an agent declares a fresh world
-that satisfies both.
+A world built before the accepted fact is **behind**; refreshed onto the new canon, a world that still loses the fact
+**contradicts** it. That is a conflict: a contradiction between worlds, not a textual diff. The referee never merges
+code: `canon refresh` replays a world's changes on the new canon, and its agent resolves any text conflict. If two
+good facts should both land, an agent declares a fresh world that satisfies both.
+
+After each deploy, and every hour, the referee runs canon's probe facts against production and shows the result on
+the board.
 
 ## Why
 
@@ -169,3 +176,19 @@ One deterministic evaluator: HTTP steps against the preview with assertions.
 `expect` supports `status` (number or list), `json` (dot-paths with array indices and `.length`;
 `{"$exists": true}` asserts presence) and `bodyIncludes`. `save` captures values into `{{vars}}` for later steps.
 Every check run sends a fresh `x-canon-run` header; the app scopes its state to it, so runs are isolated.
+
+A check can draw random inputs, so a fact is a property rather than one example:
+
+```json
+{ "kind": "probe", "samples": 4,
+  "vars": { "qty": { "int": [1, 20] }, "item": { "oneOf": [ { "id": "eggs", "cents": 400 }, { "id": "kale", "cents": 300 } ] } },
+  "steps": [
+    { "method": "POST", "path": "/api/cart", "body": { "productId": "{{item.id}}", "qty": "{{qty}}" }, "expect": { "status": 200 } },
+    { "path": "/api/cart", "expect": { "json": { "totalCents": "{{qty * item.cents}}" } } }
+] }
+```
+
+Expressions add and multiply numbers. The draws are seeded by the commit and the fact: nobody knows them before the
+push, and the same commit always gets the same ones. `samples` runs the steps again with fresh inputs (1-10), each in
+a run of its own. `"isolate": false` sends the requests exactly as a visitor would, without the `x-canon-run` header,
+so the app can't tell it's being judged; use it for facts that need no state of their own.

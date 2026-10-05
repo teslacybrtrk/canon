@@ -1,5 +1,5 @@
 import { CIWorkflow, isCiRunnerFailure, type CiContext, type CiParams, type CiRunnerResult, type CloudflareArtifacts } from "@cloudflare/ci";
-import { commandFailure, commandScript, exitedNonZero, parseCommandResults, PLATFORM_RETRIES } from "./commands";
+import { commandFailure, commandScript, exitedNonZero, heldOnBase, parseCommandResults, PLATFORM_RETRIES, type Novelty } from "./commands";
 import type { CheckResult } from "./protocol";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { Env } from "./env";
@@ -60,13 +60,21 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     // Command facts (lint, types, tests, budgets) run on this commit's checkout in ONE container,
     // from the installed snapshot. The commands come from canon, never from the world.
     const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
+    // A claimed command fact also runs on the commit the world forked from: if it passes there, it isn't new.
+    const base: Novelty | null = await step.do("forked-from commit", async () => {
+      const n = await referee.noveltyFor(repo, sha);
+      return n ? { factId: n.factId, run: n.run, files: n.files.map((f) => ({ path: f.path, b64: f.b64 })) } : null;
+    });
     let results: Record<string, CheckResult> = {};
+    let notNew: string | undefined;
     if (commands.length) {
       try {
         const ran = await withRetries("facts", (a) =>
-          deps.runner({ name: named("command facts", a), command: commandScript(commands), config: once }),
+          deps.runner({ name: named("command facts", a), command: commandScript(commands, base), config: once }),
         );
-        results = parseCommandResults(commands, typeof ran.logs.stdout === "string" ? ran.logs.stdout : "");
+        const stdout = typeof ran.logs.stdout === "string" ? ran.logs.stdout : "";
+        results = parseCommandResults(commands, stdout);
+        if (base && heldOnBase(base, stdout)) notNew = base.factId;
       } catch (err) {
         await step.do("could not judge", () => referee.couldNotJudge(repo, sha, isCiRunnerFailure(err) ? err.message : String(err)));
         return;
@@ -74,7 +82,7 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     }
 
     await step.do("judge", { retries: { limit: 4, delay: 10_000, backoff: "linear" }, timeout: 5 * 60_000 }, async () => {
-      await referee.judge(repo, sha, previewUrl, results);
+      await referee.judge(repo, sha, previewUrl, results, notNew);
     });
   }
 }
