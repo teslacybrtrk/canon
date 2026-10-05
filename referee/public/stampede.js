@@ -10,7 +10,7 @@
   const el = (k) => ui.querySelector(`[data-r="${k}"]`);
 
   const ROUND = 40, JUMP = 0.42, REVIEW = 1.0, TAP = 0.22, ROLLBACK = 2.6;
-  const JUDGE = 0.6, RECHECK = 0.7, BAD = 0.32, SPEED = 260, RIDER = 1.2;
+  const JUDGE = 0.8, RECHECK = 0.7, BAD = 0.32, SPEED = 260, RIDER = 1.2;
   // How fast the herd runs, picked before round 1 and kept for both rounds so they compare fairly.
   const PACES = { easy: { label: "Easy", x: 0.7 }, medium: { label: "Medium", x: 1 }, hard: { label: "Hard", x: 1.45 } };
   // Facts the demo app keeps (demo-app/canon.json); a broken change breaks one of them.
@@ -49,7 +49,7 @@
   let mode = null, playing = false, time = 0, clock = 0, last = 0;
   let herd = [], me = null, floaters = [], dust = [], lines = [], stars = [], ridge = [], scroll = 0;
   let press = null, nextSpawn = 0, nextConflict = 0, nextId = 401, pool = [], pairSeq = 0, landedPairs = new Map(), shown = new Set();
-  let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [], autopilot = false, pace = "medium";
+  let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [], flashes = [], autopilot = false, pace = "medium";
   try { const saved = localStorage.getItem("canon-stampede-pace"); if (PACES[saved]) pace = saved; } catch {}
 
   // ---- Layout ---------------------------------------------------------------------------------------
@@ -71,8 +71,7 @@
     stars = Array.from({ length: Math.round((W * horizon) / 7000) }, () => ({ x: rand(0, W), y: rand(0, horizon * 0.85), s: Math.random() < 0.12 ? 2 : 1, ph: rand(0, 6.3) }));
     lines = Array.from({ length: Math.round(W / 40) }, () => ({ x: rand(0, W), y: rand(horizon + 6, H), len: rand(20, 70) }));
     ridge = Array.from({ length: 40 }, (_, i) => ({ x: i / 39, h: rand(6, 22) }));
-    el("tip-above").style.top = `${Math.round(horizon - 30)}px`; // just above the ridge
-    el("tip-below").style.top = `${Math.round(horizon + 14)}px`;
+    el("tips").style.top = `${Math.round(horizon - 10)}px`; // the stack's bottom edge, just above the ridge
     theme = null;
   }
 
@@ -148,6 +147,7 @@
 
   // ---- Rounds and cards -----------------------------------------------------------------------------
   function card(html, actions) {
+    for (const t of [...el("tips").children]) dropTip(t);
     const c = el("card");
     c.innerHTML = `${html}<div class="actions"></div>`;
     for (const a of actions) {
@@ -163,18 +163,34 @@
     c.querySelector(".btn")?.focus({ preventScroll: true });
   }
 
-  const tipTimers = {};
-  // `at` ("above" or "below") shows the tip at the horizon instead of under the HUD; each spot keeps its own tip.
-  function tip(text, once, at) {
+  // Tips stack just above the horizon, newest nearest it, at most three, each sentence on its own line.
+  // The same tip again restarts its timer instead of stacking twice.
+  function tip(text, once) {
     if (once) {
       if (shown.has(once)) return;
       shown.add(once);
     }
-    const k = at ? `tip-${at}` : "tip", t = el(k);
-    t.textContent = text;
-    t.classList.add("on");
-    clearTimeout(tipTimers[k]);
-    tipTimers[k] = setTimeout(() => t.classList.remove("on"), 5200);
+    const box = el("tips"), lines = text.replace(/([.!?])\s+(?=[A-Z“"])/g, "$1\n");
+    let t = [...box.children].find((x) => x.textContent === lines && !x.dropping);
+    if (!t) {
+      t = document.createElement("p");
+      t.className = "tip";
+      t.textContent = lines;
+      box.appendChild(t);
+      requestAnimationFrame(() => t.classList.add("on"));
+      // Keep the stack between the scoreboard and the horizon: the oldest goes first when it doesn't fit.
+      let live = [...box.children].filter((x) => !x.dropping);
+      const room = horizon - 10 - hudBottom - 12;
+      while (live.length > 1 && (live.length > 3 || live.reduce((h, x) => h + x.offsetHeight + 8, 0) > room)) dropTip(live.shift());
+    }
+    clearTimeout(t.timer);
+    t.timer = setTimeout(() => dropTip(t), 5200);
+  }
+  function dropTip(t) {
+    t.dropping = true;
+    clearTimeout(t.timer);
+    t.classList.remove("on");
+    setTimeout(() => t.remove(), 360);
   }
 
   function intro() {
@@ -217,10 +233,10 @@
     el("card").hidden = true;
     if (m === "git") {
       git = { shipped: 0, broke: 0, review: 0, stale: 0 };
-      tip("Tap an animal to jump on it.\nHold to review it first.", null, "below");
+      tip("Tap an animal to jump on it.\nHold to review it first.");
     } else {
       canon = { shipped: 0, auto: 0, rejected: 0 };
-      tip("Tap a green one to ship it.", null, "below");
+      tip("Tap a green one to ship it.");
     }
     for (let i = 0; i < 5; i++) spawn({ x: rand(PX + 140, W - 40) });
     hud();
@@ -421,6 +437,7 @@
       } else if (a.state === "judging" && a.st >= JUDGE) {
         const bad = brokenNow(a);
         a.state = bad ? "red" : "green";
+        flashes.push({ a, bad, born: clock });
         if (bad && playing) canon.rejected++;
         if (bad && a.against == null && partnerLanded(a)) a.against = landedPairs.get(a.pair).claim;
         if (bad) tip("Red: the referee checked that change and it breaks a fact. It can never land, and nobody read its diff.", "red");
@@ -473,6 +490,7 @@
 
     moonShown += ((mode === "canon" ? 1 : 0) - moonShown) * Math.min(1, dt * 2);
     beams = beams.filter((b) => clock - b.born < JUDGE + 0.2);
+    flashes = flashes.filter((f) => clock - f.born < 0.6);
     floaters = floaters.filter((f) => clock - f.born < 2.2);
     for (const l of lines) {
       l.x -= SPEED * PACES[pace].x * (0.6 + (l.y - horizon) / (H - horizon)) * dt;
@@ -564,8 +582,9 @@
     if (moonShown > 0.01) {
       // Below the HUD (and the autopilot button), above the horizon.
       const mr = small ? 16 : 24, mx = W * (small ? 0.84 : 0.86), my = Math.min(horizon - mr * 2.2, Math.max(horizon * 0.42, hudBottom + mr * 2));
+      const judging = beams.some((b) => b.a.state === "judging");
       const mg = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 3.4);
-      mg.addColorStop(0, `rgba(205,218,238,${0.18 * moonShown})`);
+      mg.addColorStop(0, `rgba(205,218,238,${(judging ? 0.34 + 0.08 * Math.sin(clock * 14) : 0.18) * moonShown})`);
       mg.addColorStop(1, "rgba(205,218,238,0)");
       ctx.fillStyle = mg;
       ctx.fillRect(mx - mr * 3.4, my - mr * 3.4, mr * 6.8, mr * 6.8);
@@ -579,21 +598,27 @@
         if (h > 0) ctx.fillRect(x, my - h, 2, h * 2);
       }
       ctx.globalAlpha = 1;
-      // Judging beams from the moon to the changes it's checking.
-      ctx.lineWidth = 1.2;
+      label("REFEREE", mx, my + mr + 16, c.muted, moonShown, `600 ${small ? 9.5 : 10.5}px "JetBrains Mono", ui-monospace, monospace`);
+      // A beam of moonlight on every change it's checking, widening from the moon onto the animal.
       for (const b of beams) {
         if (b.a.state !== "judging") continue;
-        const p = top(b.a);
-        ctx.globalAlpha = 0.35 * moonShown;
-        ctx.strokeStyle = c.pending;
-        ctx.setLineDash([3, 5]);
+        const p = center(b.a), w = 34 * sc(b.a), k = Math.min(1, (clock - b.born) / 0.15);
+        const g = ctx.createLinearGradient(mx, my, p.x, p.y);
+        g.addColorStop(0, `rgba(253,200,109,${0.42 * k * moonShown})`);
+        g.addColorStop(1, `rgba(253,200,109,${0.16 * k * moonShown})`);
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.moveTo(mx, my + mr);
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        ctx.moveTo(mx - mr * 0.35, my + mr * 0.6);
+        ctx.lineTo(mx + mr * 0.35, my + mr * 0.6);
+        ctx.lineTo(p.x + w, p.y + w * 0.5);
+        ctx.lineTo(p.x - w, p.y + w * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = `rgba(253,200,109,${0.22 * k * moonShown})`;
+        ctx.beginPath();
+        ctx.ellipse(b.a.x, b.a.y + 2, w * 1.1, w * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
-      ctx.globalAlpha = 1;
     }
     // Far ridge, scrolling slowly.
     ctx.fillStyle = c.ridge;
@@ -983,6 +1008,17 @@
       ctx.restore();
       label(d.why, me.pos.x + 40, me.pos.y - 30, me.down.dur === ROLLBACK ? c.broke : c.muted, 1, font);
     }
+    // The verdict lands: a ring of green (keeps every fact) or red (breaks one) grows out from the change.
+    for (const f of flashes) {
+      const k = (clock - f.born) / 0.6, p = center(f.a);
+      ctx.strokeStyle = f.bad ? c.broke : c.held;
+      ctx.globalAlpha = 1 - k;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, (24 + 30 * easeOut(k)) * sc(f.a), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
     for (const f of floaters) {
       const age = clock - f.born;
       const color = f.tone === "broke" ? c.broke : f.tone === "held" ? c.held : f.tone === "muted" ? c.muted : c.ink;
@@ -1027,9 +1063,9 @@
   cv.addEventListener("pointerup", release);
   el("auto").addEventListener("click", () => {
     if (!playing) return;
-    if (mode === "git") return tip("In this round nothing checks a change but you, so nothing can land changes for you.\nSomeone has to read every diff.", null, "above");
+    if (mode === "git") return tip("In this round nothing checks a change but you, so nothing can land changes for you.\nSomeone has to read every diff.");
     autopilot = !autopilot;
-    if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself.\nPeople decide the facts; agents do the rest.", null, "above");
+    if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself.\nPeople decide the facts; agents do the rest.");
     hud();
   });
   cv.addEventListener("pointercancel", () => { press = null; });

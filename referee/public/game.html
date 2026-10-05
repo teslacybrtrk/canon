@@ -66,15 +66,12 @@
   .auto-btn.on::before { background: #1a0b02; animation: blink 1s infinite; }
   .auto-btn[hidden] { display: none; }
   @keyframes blink { 50% { opacity: .25; } }
-  .tip { margin: 0; max-width: 620px; text-align: center; font: 500 14.5px/1.45 var(--sans); background: var(--panel); border: 1px solid var(--line-2);
+  /* Tips stack just above the horizon (top is set from the canvas layout), newest nearest it, one sentence per line. */
+  .tips { position: absolute; left: 50%; transform: translate(-50%, -100%); width: max-content; max-width: min(760px, calc(100% - 32px));
+    display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+  .tip { margin: 0; text-align: center; font: 500 14.5px/1.45 var(--sans); background: var(--panel); border: 1px solid var(--line-2); white-space: pre-line;
     border-radius: 12px; padding: 10px 16px; backdrop-filter: blur(10px); opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
   .tip.on { opacity: 1; transform: none; }
-  /* One sentence per line, just above or below the horizon (top is set from the canvas layout). */
-  .tip.above, .tip.below { position: absolute; left: 50%; width: max-content; max-width: min(760px, calc(100% - 32px)); white-space: pre-line; text-wrap: balance; }
-  .tip.above { transform: translate(-50%, calc(-100% + 6px)); }
-  .tip.above.on { transform: translate(-50%, -100%); }
-  .tip.below { transform: translate(-50%, 6px); }
-  .tip.below.on { transform: translate(-50%, 0); }
   .card { position: absolute; left: 50%; top: 54%; transform: translate(-50%, -50%); width: min(580px, calc(100% - 32px)); max-height: calc(100% - 110px); overflow: auto;
     pointer-events: auto; background: var(--panel-solid); border: 1px solid var(--line-2); border-radius: 18px; padding: 26px 26px 22px; box-shadow: 0 30px 80px -30px rgb(0 0 0 / .6);
     -webkit-user-select: text; user-select: text; animation: rise .45s cubic-bezier(.2,.7,.1,1) both; }
@@ -130,10 +127,8 @@
       <div class="round"><b data-r="round">Canon Stampede</b><span class="time"><i data-r="time"></i></span></div>
       <div class="stats" data-r="stats"></div>
     </div>
-    <p class="tip" data-r="tip" role="status"></p>
   </div>
-  <p class="tip above" data-r="tip-above" role="status"></p>
-  <p class="tip below" data-r="tip-below" role="status"></p>
+  <div class="tips" data-r="tips" role="status" aria-live="polite"></div>
   <button class="auto-btn" data-r="auto" type="button" hidden>Turn on autopilot</button>
   <div class="card" data-r="card" hidden></div>
 </div>
