@@ -24,7 +24,7 @@ for agent in "$@"; do
   (
     cd "$dir"
     # Agents get the agent key: it can claim but never accept, and the owner's key never reaches them.
-    CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md")
+    CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" CANON_CLAIMS="$PWD/claims" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md")
 
 $PROMPT" \
       --model haiku --allowedTools "${TOOLS[@]}" --strict-mcp-config --disable-slash-commands \

@@ -15,7 +15,7 @@ ROOT="$PWD"
 # Cheap by default. The two reservation racers get different models so their worlds differ.
 model_for() {
   case "$1" in
-    agent-2-*) echo sonnet ;;
+    agent-1-* | agent-2-*) echo sonnet ;; # agent-1 also writes a revision, the trickiest move
     *) echo haiku ;;
   esac
 }
@@ -28,12 +28,14 @@ for prompt in agents/prompts/*.md; do
   [ -n "${ONLY:-}" ] && [[ "$name" != "$ONLY"* ]] && continue   # ONLY=agent-4 runs one agent
   agent="$(echo "$name" | cut -d- -f1-2)"     # agent-1
   dir="runs/$name"
+  [ -d "$dir" ] && chmod -R u+w "$dir" # the claims copy is read-only
   rm -rf "$dir" && mkdir -p "$dir"
-  ln -s "$ROOT/agents/claims" "$dir/claims"
+  # Each agent gets its own read-only copy of the claim files, so no agent can rewrite a fact for the others.
+  cp -R "$ROOT/agents/claims" "$dir/claims" && chmod -R a-w "$dir/claims"
   (
     cd "$dir"
     # Agents get the agent key: it can claim but never accept, and the owner's key never reaches them.
-    CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md" "$ROOT/$prompt")" \
+    CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" CANON_CLAIMS="$PWD/claims" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md" "$ROOT/$prompt")" \
       --model "$(model_for "$name")" \
       --allowedTools "${TOOLS[@]}" \
       --strict-mcp-config --disable-slash-commands \

@@ -73,7 +73,7 @@ async function claim() {
   const body = { agent: AGENT, why: args.why };
   if (args.join && args.fact) fail("use either --fact <file.json> (a new fact or a revision) or --join <fact-id>, not both");
   if (args.join) body.join = args.join;
-  else if (args.fact) body.fact = JSON.parse(readFileSync(args.fact, "utf8"));
+  else if (args.fact) body.fact = JSON.parse(readFileSync(factFile(args.fact), "utf8"));
   else fail("pass --fact <file.json> (id, sentence, check) or --join <fact-id>");
 
   const { claim, world } = await api("POST", "/claims", body);
@@ -204,6 +204,14 @@ async function why(factId) {
 }
 
 // ---- helpers --------------------------------------------------------------------
+
+// A fact file path works from anywhere: relative to here, or a file in the agent's claims folder (CANON_CLAIMS).
+function factFile(path) {
+  if (existsSync(path)) return path;
+  const claimed = process.env.CANON_CLAIMS ? join(process.env.CANON_CLAIMS, path.split("/").pop()) : "";
+  if (claimed && existsSync(claimed)) return claimed;
+  fail(`no fact file ${path}${process.env.CANON_CLAIMS ? ` (also looked in ${process.env.CANON_CLAIMS})` : ""}`);
+}
 
 async function api(method, path, body, allowPending = false) {
   const res = await fetch(`${URL_BASE}/p/${PROJECT}${path}`, {
