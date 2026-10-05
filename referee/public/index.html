@@ -17,6 +17,7 @@
   })();
 </script>
 <script src="/sky.js" defer></script>
+<script src="/ride.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..800&family=Archivo:ital,wdth,wght@0,100..125,400..700;1,100..125,400..600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -75,6 +76,19 @@
   .sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
   .hero.sky-live .sun { display: none; }
   .ridge { position: absolute; left: 0; bottom: -1px; display: block; width: 100%; height: 47px; color: var(--bg); }
+  /* The rider from Canon Stampede, galloping in place on the horizon (ride.js), with the link to the game. */
+  .ride { position: absolute; z-index: 3; bottom: 0; left: max(8px, calc((100% - 1240px) / 2 + 8px)); display: flex; align-items: flex-end; gap: 4px;
+    text-decoration: none; color: var(--ink); animation: fadein .8s ease 1.2s both; }
+  .ride canvas { display: block; width: 150px; height: 114px; }
+  .ride-text { display: flex; flex-direction: column; gap: 6px; margin-bottom: 22px; padding: 10px 14px 9px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line-2); backdrop-filter: blur(10px); transition: border-color .2s; }
+  .ride:hover .ride-text, .ride:focus-visible .ride-text { border-color: var(--brand); }
+  .ride-text small { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
+  .ride-text b { font: 800 24px/1 var(--display); letter-spacing: .01em; text-transform: uppercase; white-space: nowrap; }
+  .ride-text b i { font-style: normal; color: var(--brand); display: inline-block; transition: transform .25s; }
+  .ride:hover .ride-text b, .ride:focus-visible .ride-text b { color: var(--brand); }
+  .ride:hover .ride-text b i, .ride:focus-visible .ride-text b i { transform: translateX(5px); }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
   .bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 14px; padding-top: 18px; padding-bottom: 18px; }
   .brand { display: flex; align-items: center; gap: 10px; font: 800 24px/1 var(--display); text-transform: uppercase; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
   .brand img { width: 34px; height: 34px; filter: drop-shadow(0 6px 14px rgb(253 111 22 / 0.45)); }
@@ -121,10 +135,6 @@
   .vs-col { border-radius: 16px; padding: 6px 18px 10px; border: 1px solid var(--line); background: var(--panel); }
   .vs-col h3 { font: 700 24px/1 var(--display); text-transform: uppercase; margin: 14px 0 6px; letter-spacing: .01em; }
   .vs-col.git h3 { color: var(--muted); } .vs-col.canon h3 { color: var(--brand); }
-  .play-link { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; margin-top: 14px; padding: 14px 18px; border-radius: 16px;
-    border: 1px dashed var(--line-2); background: var(--panel); color: var(--ink-2); text-decoration: none; transition: border-color .2s; }
-  .play-link b { color: var(--brand); font-weight: 600; white-space: nowrap; }
-  .play-link:hover { border-color: var(--brand); }
   .vs-col.canon { border-color: rgb(253 111 22 / 0.45); box-shadow: 0 20px 50px -30px rgb(253 111 22 / 0.5); }
   .vs-row { padding: 12px 0; border-top: 1px dashed var(--line); }
   .vs-row:first-of-type { border-top: 0; }
@@ -327,6 +337,9 @@
     .moves, .grid4 { grid-template-columns: 1fr; }
     nav.links { display: none; }
     .hero-body { padding-bottom: 170px; }
+    .ride canvas { width: 106px; height: 80px; }
+    .ride-text { margin-bottom: 18px; padding: 8px 12px 7px; }
+    .ride-text b { font-size: 19px; }
   }
 </style>
 </head>
@@ -335,6 +348,10 @@
   <canvas class="sky" id="sky" aria-hidden="true"></canvas>
   <div class="sun" aria-hidden="true"></div>
   <svg class="ridge" viewBox="0 0 1440 46" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 46V30l60-6 70 8 90-14 80 10 70-6 110 12 90-16 70 8 120-10 80 12 100-6 90 10 80-14 110 10 70-4 80 8 70-6v34z"/></svg>
+  <a class="ride" href="/game" aria-label="Play Canon Stampede: ride agents’ changes for 40 seconds the Git way, then 40 the Canon way">
+    <canvas aria-hidden="true"></canvas>
+    <span class="ride-text" aria-hidden="true"><small>Mini game · Git vs Canon</small><b>Play Canon Stampede <i>→</i></b></span>
+  </a>
   <div class="bar wrap">
     <a class="brand" href="/" aria-label="canon.rodeo"><img src="/icon.png" alt=""><span>Canon<span class="tld">.rodeo</span></span></a>
     <div class="bar-right">
@@ -383,7 +400,6 @@
       <div class="vs-row"><b>Intent comes first</b><span>Agents claim the fact they’re making true before writing code, so everyone can see who is doing what.</span></div>
     </div>
   </div>
-  <a class="play-link" href="/game"><span>Ride a stampede of agents’ changes: 40 seconds the Git way, then 40 the Canon way.</span><b>Play Canon Stampede →</b></a>
 </section>
 
 <section class="how wrap" id="how">
