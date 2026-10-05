@@ -121,6 +121,10 @@
   .vs-col { border-radius: 16px; padding: 6px 18px 10px; border: 1px solid var(--line); background: var(--panel); }
   .vs-col h3 { font: 700 24px/1 var(--display); text-transform: uppercase; margin: 14px 0 6px; letter-spacing: .01em; }
   .vs-col.git h3 { color: var(--muted); } .vs-col.canon h3 { color: var(--brand); }
+  .play-link { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; margin-top: 14px; padding: 14px 18px; border-radius: 16px;
+    border: 1px dashed var(--line-2); background: var(--panel); color: var(--ink-2); text-decoration: none; transition: border-color .2s; }
+  .play-link b { color: var(--brand); font-weight: 600; white-space: nowrap; }
+  .play-link:hover { border-color: var(--brand); }
   .vs-col.canon { border-color: rgb(253 111 22 / 0.45); box-shadow: 0 20px 50px -30px rgb(253 111 22 / 0.5); }
   .vs-row { padding: 12px 0; border-top: 1px dashed var(--line); }
   .vs-row:first-of-type { border-top: 0; }
@@ -356,6 +360,7 @@
       <div class="vs-row"><b>Intent comes first</b><span>Agents claim the fact they’re making true before writing code, so everyone can see who is doing what.</span></div>
     </div>
   </div>
+  <a class="play-link" href="/game"><span>Feel the difference in 45 seconds: run main the Git way, then the Canon way.</span><b>Play Canon Rodeo →</b></a>
 </section>
 
 <section class="how wrap" id="how">

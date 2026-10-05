@@ -2,6 +2,7 @@
 // moon and orbit it while every fact is checked. A world that breaks a fact turns red, drops away
 // and bursts; one that keeps them all flies home and merges into the sun (it glows a little brighter).
 // Drawn in vertical scanlines, like a halftone print. Click the sun to fork a world yourself.
+// A game (rodeo.js, on /game) can take over the sky with window.canonSky.play(scene).
 (() => {
   const hero = document.querySelector(".hero");
   const canvas = document.getElementById("sky");
@@ -12,15 +13,16 @@
   const still = matchMedia("(prefers-reduced-motion: reduce)");
   const PALETTE = {
     dark: { fork: "#fd8a2c", held: "#4cc38a", broke: "#ff6b86", pending: "#fdc86d", node: "#fff3dc", ember: "#fdc86d", glow: 0.42, trail: 0.6,
-      moonLit: "#fbf3e4", moonDim: "#6f7d93", moonGlow: "205,218,238", scan: "#ffffff" },
+      moonLit: "#fbf3e4", moonDim: "#6f7d93", moonGlow: "205,218,238", scan: "#ffffff", ink: "#f5efe6", muted: "#8796ab", panel: "rgba(1,14,32,0.82)" },
     light: { fork: "#ed5616", held: "#1e7b4f", broke: "#c0264e", pending: "#b7791f", node: "#ffffff", ember: "#ed5616", glow: 0.3, trail: 0.7,
-      moonLit: "#2a3a52", moonDim: "#01132a", moonGlow: "1,19,42", scan: "#fdc86d" },
+      moonLit: "#2a3a52", moonDim: "#01132a", moonGlow: "1,19,42", scan: "#fdc86d", ink: "#01132a", muted: "#5b6577", panel: "rgba(255,255,255,0.9)" },
   };
   const FLY = 2.6, HOLD = 0.8, BACK = 2.4, FADE = 1.4, DROP = 1.1, POP = 1.0, OMEGA = 1.3, GRAVITY = 110, SWELL = 2.2;
 
   let W = 0, H = 0, R = 250, VIS = 130, small = false;
   let stars = [], embers = [], worlds = [], rings = [], moonRings = [];
   let px = 0, pxTarget = 0, flare = 0, swells = [], nextFork = 2.2, last = 0, clock = 0, raf = 0;
+  let scene = null, moonShown = 1; // a game scene replaces the ambient worlds; it can hide the moon
 
   const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
   const easeIn = (x) => x * x * x;
@@ -227,8 +229,10 @@
     }
   }
 
+  const palette = () => PALETTE[document.documentElement.dataset.theme === "light" ? "light" : "dark"];
+
   function draw(t) {
-    const c = PALETTE[document.documentElement.dataset.theme === "light" ? "light" : "dark"];
+    const c = palette();
     const s = sun();
     const m = moon();
     ctx.globalAlpha = 1;
@@ -242,6 +246,8 @@
       }
     }
 
+    m.fade *= moonShown;
+    if (scene) scene.draw("back", env);
     const placed = worlds.map((w) => [w, place(w, s, m, clock - w.born)]);
     ctx.lineWidth = 1.3;
     ctx.setLineDash([3, 4]);
@@ -262,6 +268,7 @@
       ctx.arc(p.base.x, p.base.y, 2.6, 0, Math.PI * 2);
       ctx.fill();
     }
+    if (scene) scene.draw("mid", env);
     for (const r of rings) {
       const u = (clock - r.at) / 1.8;
       ctx.globalAlpha = 0.32 * (1 - u);
@@ -281,7 +288,7 @@
     const size = small ? 9 : 11;
     const orbiting = (p) => p.state === "check" || p.state === "pass" || p.state === "fail";
     for (const [w, p] of placed) if (orbiting(p) && !p.front) drawWorld(w, p, c, size);
-    drawMoon(m, c, t, placed.some(([, p]) => p.state === "check"));
+    drawMoon(m, c, t, scene ? scene.judging : placed.some(([, p]) => p.state === "check"));
     for (const r of moonRings) {
       const u = (clock - r.at) / 1.2;
       ctx.globalAlpha = 0.7 * (1 - u);
@@ -292,6 +299,7 @@
       ctx.stroke();
     }
     for (const [w, p] of placed) if (!orbiting(p) || p.front) drawWorld(w, p, c, size);
+    if (scene) scene.draw("front", env);
     ctx.globalAlpha = 1;
   }
 
@@ -301,7 +309,9 @@
     // A merge swells the sun's glow in and out over two seconds, never a sudden flash.
     swells = swells.filter((at) => clock - at < SWELL);
     flare = Math.min(0.45, swells.reduce((sum, at) => sum + 0.3 * Math.sin((Math.PI * (clock - at)) / SWELL), 0));
-    if (clock > nextFork) {
+    moonShown += ((scene && !scene.moon ? 0 : 1) - moonShown) * Math.min(1, dt * 2.5);
+    if (scene) scene.step(dt, env);
+    else if (clock > nextFork) {
       fork();
       nextFork = clock + rand(1.8, 3.0);
     }
@@ -384,9 +394,25 @@
     return Math.hypot(x - s.x, y - s.y) < R && y < H - 30 && !e.target.closest("a, button, .cmd");
   };
   hero.addEventListener("pointermove", (e) => {
+    if (scene) return;
     pxTarget = (e.clientX / W - 0.5) * 2;
     hero.style.cursor = !still.matches && onSun(e) ? "pointer" : "";
   });
   hero.addEventListener("pointerleave", () => { pxTarget = 0; hero.style.cursor = ""; });
-  hero.addEventListener("click", (e) => { if (onSun(e) && raf) fork(undefined, true); });
+  hero.addEventListener("click", (e) => { if (!scene && onSun(e) && raf) fork(undefined, true); });
+
+  // What a game scene gets: the canvas, live sizes, the sun and moon, colours and drawing helpers.
+  const env = {
+    ctx, sun, moon, rim, palette, block, stroke, quad, ease, easeIn, easeOut, rand,
+    get W() { return W; }, get H() { return H; }, get R() { return R; }, get VIS() { return VIS; }, get small() { return small; }, get clock() { return clock; },
+    swell: () => swells.push(clock),
+    ring: () => rings.push({ at: clock }),
+    moonRing: (ok) => moonRings.push({ at: clock, ok }),
+  };
+  window.canonSky = {
+    env,
+    play(next) { scene = next; worlds = []; px = pxTarget = 0; hero.style.cursor = ""; start(); },
+    stop() { scene = null; nextFork = clock + 1.2; },
+  };
+
 })();

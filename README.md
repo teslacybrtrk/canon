@@ -22,7 +22,8 @@ The facts live in the repo as `canon.json`, so the canon survives outside Cloudf
 required check in branch protection, but it checks behaviour on a live preview. A person pushing by hand is
 just another world and gets the same verdict. You can start from an existing Git repo by importing it.
 
-See [PROTOCOL.md](PROTOCOL.md) for the four moves.
+See [PROTOCOL.md](PROTOCOL.md) for the four moves. To feel the difference in 45 seconds, play
+[Canon Rodeo](https://canon.rodeo/game): one round running main the Git way, one the Canon way.
 
 ## How it works
 
@@ -36,7 +37,7 @@ human ──accept fact──▶ Referee DO ──freeze world, move canon point
 
 | Path | What |
 |---|---|
-| `referee/` | Worker: Referee Durable Object, HTTP API, board, verify/promote Workflows (`@cloudflare/ci`) |
+| `referee/` | Worker: Referee Durable Object, HTTP API, board, verify/promote Workflows (`@cloudflare/ci`); the site and the game (`public/`) |
 | `cli/canon.mjs` | The protocol from a shell: `read`, `claim`, `verdict`, `why` |
 | `agents/` | Instructions, goals and claim files for five Claude Code agents, and `run.sh` to start them |
 | `demo-app/` | Farmstand, the Workers app the agents change; its facts are in `demo-app/canon.json` |
