@@ -10,7 +10,7 @@
   const el = (k) => ui.querySelector(`[data-r="${k}"]`);
 
   const ROUND = 40, JUMP = 0.42, REVIEW = 1.0, TAP = 0.22, ROLLBACK = 2.6;
-  const JUDGE = 0.6, RECHECK = 0.7, BAD = 0.32, SPEED = 260;
+  const JUDGE = 0.6, RECHECK = 0.7, BAD = 0.32, SPEED = 260, RIDER = 1.2;
   // Facts the demo app keeps (demo-app/canon.json); a broken change breaks one of them.
   const FACTS = ["The basket charges the listed price", "The code passes the linter", "The code type-checks",
     "The page answers in under 400 ms", "Unknown products are refused", "A new basket is empty", "The market lists every stall"];
@@ -28,10 +28,12 @@
   const PALETTE = {
     dark: { skyTop: "#010e20", skyLow: "#2a1a33", glow: "253,111,22", groundTop: "#0b1a33", groundLow: "#020b18", ridge: "#05122a", lines: "rgba(135,150,171,0.16)",
       fork: "#fd8a2c", held: "#4cc38a", broke: "#ff6b86", pending: "#fdc86d", main: "#fff1cc", past: "#55657d", ink: "#f5efe6", muted: "#8796ab",
-      panel: "rgba(1,14,32,0.84)", moonLit: "#fbf3e4", moonDim: "#6f7d93", dust: "rgba(253,200,109,0.35)" },
+      panel: "rgba(1,14,32,0.84)", moonLit: "#fbf3e4", moonDim: "#6f7d93", dust: "rgba(253,200,109,0.35)",
+      brand: "#fd6f16", rope: "#fdc86d", shadow: "rgba(0,0,0,0.35)", heldRgb: "76,195,138", riderEdge: "rgba(1,14,32,0.95)" },
     light: { skyTop: "#fbf6ef", skyLow: "#fde3c4", glow: "253,143,62", groundTop: "#efd2ad", groundLow: "#e2bb8c", ridge: "#d8ad7f", lines: "rgba(1,19,42,0.10)",
-      fork: "#ed5616", held: "#1e7b4f", broke: "#c0264e", pending: "#b7791f", main: "#01132a", past: "#a08a72", ink: "#01132a", muted: "#5b6577",
-      panel: "rgba(255,255,255,0.92)", moonLit: "#2a3a52", moonDim: "#01132a", dust: "rgba(1,19,42,0.18)" },
+      fork: "#ed5616", held: "#1e7b4f", broke: "#c0264e", pending: "#b7791f", main: "#ffffff", past: "#a08a72", ink: "#01132a", muted: "#5b6577",
+      panel: "rgba(255,255,255,0.92)", moonLit: "#2a3a52", moonDim: "#01132a", dust: "rgba(1,19,42,0.18)",
+      brand: "#ed5616", rope: "#b7791f", shadow: "rgba(1,19,42,0.14)", heldRgb: "30,123,79", riderEdge: "rgba(255,255,255,0.9)" },
   };
 
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -277,7 +279,7 @@
   const riderAt = () => {
     if (me.a) {
       const s = sc(me.a);
-      return { x: me.a.x - 2 * s, y: me.a.y - 44 * s };
+      return { x: me.a.x - 3 * s, y: me.a.y - 38 * s };
     }
     return me.pos;
   };
@@ -329,6 +331,8 @@
     t.state = "green";
     me.a = t;
     me.ride = 0;
+    me.landedAt = clock;
+    puff(t);
   }
 
   // ---- Simulation -----------------------------------------------------------------------------------
@@ -453,12 +457,20 @@
       const a = pick(herd);
       if (a) dust.push({ x: a.x - 18 * sc(a), y: a.y - 2, vx: -rand(40, 90), born: clock, s: rand(1.5, 3) * sc(a) });
     }
-    for (const d of dust) d.x += d.vx * dt;
+    for (const d of dust) {
+      d.x += d.vx * dt;
+      d.y += (d.vy ?? 0) * dt;
+    }
     dust = dust.filter((d) => clock - d.born < 0.9);
     if (mode) hud();
   }
 
   // ---- Drawing --------------------------------------------------------------------------------------
+  function puff(a) {
+    const s = sc(a);
+    for (let i = 0; i < 10; i++) dust.push({ x: a.x + rand(-22, 22) * s, y: a.y - 2, vx: rand(-80, 40), vy: -rand(10, 40), born: clock, s: rand(2, 3.6) * s });
+  }
+
   function float(text, at, tone) {
     let y = at.y - 14;
     while (floaters.some((f) => clock - f.born < 1.4 && Math.abs(f.x - at.x) < 180 && Math.abs(f.y - y) < 22)) y -= 24;
@@ -590,77 +602,240 @@
     ctx.globalAlpha = 1;
   }
 
-  // A side-on animal in vertical scanlines, galloping. Origin at its feet.
-  function drawAnimal(a, fill, alpha = 1) {
+  // How an animal is moving right now: gallop phase, and the body's rise, fall and pitch.
+  const gait = (a) => {
+    const ph = clock * (9 + 5 * depth(a.y)) + a.seed;
+    return { ph, bob: Math.sin(ph * 2) * 1.8, pitch: Math.sin(ph * 2 + 0.6) * 0.04 };
+  };
+
+  // One leg in two segments that folds as it swings forward. Angles from straight down, forward positive.
+  function leg(x, y, phase, front) {
+    const swing = Math.sin(phase) * 0.62;
+    const fold = Math.max(0, Math.cos(phase)) * (front ? 1.15 : 0.7);
+    const knee = { x: x + Math.sin(swing) * 11, y: y + Math.cos(swing) * 11 };
+    const lower = swing + (front ? -fold : fold);
+    ctx.lineWidth = 4.6;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(knee.x, knee.y);
+    ctx.stroke();
+    ctx.lineWidth = 3.4;
+    ctx.beginPath();
+    ctx.moveTo(knee.x, knee.y);
+    ctx.lineTo(knee.x + Math.sin(lower) * 12.5, knee.y + Math.cos(lower) * 12.5);
+    ctx.stroke();
+  }
+
+  function horse(ph) {
+    ctx.beginPath();
+    ctx.moveTo(22, -24);
+    ctx.quadraticCurveTo(0, -17, -20, -22);
+    ctx.quadraticCurveTo(-30, -26, -27, -34);
+    ctx.quadraticCurveTo(-20, -40, -2, -37);
+    ctx.quadraticCurveTo(10, -36, 16, -40);
+    ctx.quadraticCurveTo(22, -50, 28, -54);
+    ctx.lineTo(31, -56);
+    ctx.lineTo(32.5, -61);
+    ctx.lineTo(35, -55.5);
+    ctx.quadraticCurveTo(41, -51, 44, -45);
+    ctx.quadraticCurveTo(44.5, -41, 40, -40.5);
+    ctx.quadraticCurveTo(34, -41, 30, -37);
+    ctx.quadraticCurveTo(26, -29, 22, -24);
+    ctx.closePath();
+    ctx.fill();
+    // Mane and tail stream back in the wind.
+    const w = Math.sin(ph * 1.5) * 2.5;
+    ctx.lineWidth = 2;
+    for (const [x, y] of [[18, -45], [22, -49.5], [26, -53]]) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 7, y - 1 + w * 0.4);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 3.6;
+    ctx.beginPath();
+    ctx.moveTo(-26, -34);
+    ctx.quadraticCurveTo(-37, -35 + w, -41, -24 + w * 0.6);
+    ctx.stroke();
+  }
+
+  function bull(ph) {
+    ctx.beginPath();
+    ctx.moveTo(24, -22);
+    ctx.quadraticCurveTo(0, -15, -21, -21);
+    ctx.quadraticCurveTo(-30, -25, -28, -33);
+    ctx.quadraticCurveTo(-22, -39, -6, -38);
+    ctx.quadraticCurveTo(6, -50, 18, -46);
+    ctx.quadraticCurveTo(28, -42, 34, -36);
+    ctx.quadraticCurveTo(40, -33, 41, -28);
+    ctx.quadraticCurveTo(41, -23, 36, -23);
+    ctx.quadraticCurveTo(30, -23, 27, -26);
+    ctx.quadraticCurveTo(26, -23, 24, -22);
+    ctx.closePath();
+    ctx.fill();
+    // Horns curve up and forward; a thin tail ends in a tuft.
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(33, -36);
+    ctx.quadraticCurveTo(37, -44, 44, -43);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(30, -37);
+    ctx.quadraticCurveTo(31, -45, 37, -47);
+    ctx.stroke();
+    const w = Math.sin(ph * 1.5) * 2;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-27, -32);
+    ctx.quadraticCurveTo(-35, -30 + w, -36, -21 + w);
+    ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-36, -21 + w);
+    ctx.lineTo(-36.5, -17 + w);
+    ctx.stroke();
+  }
+
+  // A side-on horse or bull in vertical scanlines, galloping, with its shadow. Origin at its feet.
+  function drawAnimal(a, fill, c, alpha = 1) {
     const s = sc(a);
-    const ph = clock * 12 + a.seed;
-    const bob = Math.sin(ph * 2) * 1.6;
+    const { ph, bob, pitch } = gait(a);
     ctx.save();
-    ctx.globalAlpha = alpha;
     ctx.translate(a.x, a.y);
     ctx.scale(s, s);
-    ctx.fillStyle = fill;
-    for (const [lx, p] of [[-16, 0], [-10, Math.PI], [12, Math.PI / 2], [18, Math.PI * 1.5]]) {
-      ctx.save();
-      ctx.translate(lx, -19 + bob);
-      ctx.rotate(Math.sin(ph + p) * 0.55);
-      ctx.fillRect(-2.4, 0, 4.8, 19);
-      ctx.restore();
-    }
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = c.shadow;
     ctx.beginPath();
-    ctx.ellipse(0, -27 + bob, 25, 10.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(2, 0.5, 26 - bob, 3.6, 0, 0, Math.PI * 2);
     ctx.fill();
-    if (a.kind === "bull") {
-      ctx.beginPath();
-      ctx.ellipse(6, -35 + bob, 13, 7, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(18, -32 + bob);
-      ctx.lineTo(30, -38 + bob);
-      ctx.lineTo(38, -32 + bob);
-      ctx.lineTo(36, -24 + bob);
-      ctx.lineTo(24, -20 + bob);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillRect(30, -44 + bob, 3, 7);
-      ctx.fillRect(35, -43 + bob, 3, 6);
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(15, -32 + bob);
-      ctx.lineTo(27, -46 + bob);
-      ctx.lineTo(37, -43 + bob);
-      ctx.lineTo(38, -36 + bob);
-      ctx.lineTo(30, -35 + bob);
-      ctx.lineTo(22, -22 + bob);
-      ctx.closePath();
-      ctx.fill();
+    // Ready changes glow, so they're easy to spot in the crowd.
+    if (mode === "canon" && a.state === "green" && !a.main && !a.past) {
+      const g = ctx.createRadialGradient(2, -28, 6, 2, -28, 48);
+      g.addColorStop(0, `rgba(${c.heldRgb},0.3)`);
+      g.addColorStop(1, `rgba(${c.heldRgb},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(-48, -76, 100, 92);
     }
-    ctx.lineWidth = 3;
+    ctx.fillStyle = fill;
     ctx.strokeStyle = fill;
-    ctx.beginPath();
-    ctx.moveTo(-24, -31 + bob);
-    ctx.quadraticCurveTo(-34, -30 + bob + Math.sin(ph) * 3, -33, -19 + bob);
-    ctx.stroke();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    // Far legs first, dimmer, for depth; then the body; then the near legs.
+    ctx.globalAlpha = alpha * 0.6;
+    leg(18, -25 + bob, ph + 0.5, true);
+    leg(-17, -25 + bob, ph + Math.PI + 0.5, false);
+    ctx.globalAlpha = alpha;
+    ctx.save();
+    ctx.translate(0, bob);
+    ctx.rotate(pitch);
+    if (a.kind === "bull") bull(ph);
+    else horse(ph);
+    if (a.main) {
+      // The saddle blanket marks the one you're riding: main.
+      ctx.fillStyle = c.brand;
+      ctx.beginPath();
+      ctx.roundRect(-11, -41, 17, 8, 2);
+      ctx.fill();
+      ctx.fillStyle = fill;
+    }
+    ctx.restore();
+    leg(15, -25 + bob, ph, true);
+    leg(-20, -25 + bob, ph + Math.PI, false);
     ctx.restore();
   }
 
-  // The rider: you, riding main. Hat, raised arm, like the icon.
-  function drawRider(x, y, s, color, tilt = 0) {
+  // A cowboy hat: curved brim, pinched crown. Origin at the middle of the brim.
+  function hat(x, y) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, 9.5, 2, -0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y);
+    ctx.quadraticCurveTo(x - 5.3, y - 5.5, x - 3, y - 6);
+    ctx.quadraticCurveTo(x, y - 4.2, x + 3, y - 6);
+    ctx.quadraticCurveTo(x + 5.3, y - 5.5, x + 5, y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // You: a cowboy riding main, with an orange bandana and a lasso circling overhead, like the icon.
+  // Origin is the saddle. Poses: "ride", "jump" (reaching for the next one) and "fall".
+  function drawRider(x, y, s, c, pose = "ride", o = {}) {
+    const jump = pose === "jump", fall = pose === "fall";
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(tilt);
-    ctx.scale(s, s);
-    ctx.fillStyle = color;
-    ctx.fillRect(-4, -14, 8, 16);
+    ctx.rotate(o.tilt ?? 0);
+    ctx.scale(s, s * (o.squash ?? 1));
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = c.riderEdge;
+    ctx.shadowBlur = 3;
+    ctx.strokeStyle = c.ink;
+    ctx.fillStyle = c.ink;
+    // Leg down the horse's flank, boot in the stirrup; tucked up in the air.
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(0, -19, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(-8, -24, 16, 2.4);
-    ctx.fillRect(-4.5, -29, 9, 5.5);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(jump ? 7 : 5, jump ? 4 : 8);
+    ctx.lineTo(jump ? 2 : 3, jump ? 9 : 14);
+    ctx.stroke();
     ctx.save();
-    ctx.translate(3, -12);
-    ctx.rotate(-2.3 + Math.sin(clock * 9) * 0.25);
-    ctx.fillRect(0, -1.5, 13, 3);
+    ctx.rotate(jump ? 0.25 : fall ? -0.3 : 0.1 + Math.sin(clock * 18) * 0.03);
+    ctx.lineWidth = 7.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -1);
+    ctx.lineTo(1, -14);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(1.5, -19.5, 4.3, 0, Math.PI * 2);
+    ctx.fill();
+    if (!o.noHat) hat(1.5, -23.5);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = c.brand;
+    ctx.beginPath();
+    ctx.moveTo(-2.5, -15.5);
+    ctx.lineTo(5.5, -15.5);
+    ctx.lineTo(1, -10.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.lineWidth = 3;
+    if (jump) {
+      // Both arms reaching for the next ride.
+      ctx.beginPath();
+      ctx.moveTo(1, -13);
+      ctx.lineTo(9, -16);
+      ctx.lineTo(15, -17);
+      ctx.moveTo(1, -12);
+      ctx.lineTo(8, -10);
+      ctx.lineTo(13, -11);
+      ctx.stroke();
+    } else if (fall) {
+      ctx.beginPath();
+      ctx.moveTo(1, -13);
+      ctx.lineTo(-6, -20);
+      ctx.lineTo(-9, -27);
+      ctx.moveTo(1, -12);
+      ctx.lineTo(8, -20);
+      ctx.lineTo(10, -27);
+      ctx.stroke();
+    } else {
+      // One hand on the reins, the other circling the lasso overhead.
+      const spin = clock * 8;
+      const hand = { x: 6 + Math.cos(spin) * 1.5, y: -31 };
+      ctx.beginPath();
+      ctx.moveTo(1, -12);
+      ctx.lineTo(7, -8);
+      ctx.lineTo(12, -7);
+      ctx.moveTo(1, -13);
+      ctx.lineTo(6, -22);
+      ctx.lineTo(hand.x, hand.y);
+      ctx.stroke();
+      ctx.strokeStyle = c.rope;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.ellipse(hand.x + Math.cos(spin) * 4, hand.y - 4, 10 + Math.sin(spin) * 2.5, 3, 0.12, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
     ctx.restore();
   }
@@ -682,11 +857,13 @@
     drawGround(c);
     const order = [...herd].sort((p, q) => p.y - q.y);
     for (const a of order) {
-      drawAnimal(a, colorOf(a, c), a.past && !a.main ? 0.75 : 1);
+      drawAnimal(a, colorOf(a, c), c, a.past && !a.main ? 0.75 : 1);
       if (a.main && me?.a === a && !me.jump) {
         const s = sc(a);
-        const bob = Math.sin((clock * 12 + a.seed) * 2) * 1.6 * s;
-        drawRider(a.x - 2 * s, a.y - 36 * s + bob, s, c.ink);
+        const { bob, pitch } = gait(a);
+        const since = clock - (me.landedAt ?? -9);
+        const squash = since < 0.2 ? 0.84 + 0.16 * (since / 0.2) : 1;
+        drawRider(a.x - 3 * s, a.y - (38 - bob) * s, s * RIDER, c, "ride", { squash, tilt: pitch });
         if (a.fresh > 0) {
           ctx.strokeStyle = c.main;
           ctx.globalAlpha = a.fresh;
@@ -747,7 +924,7 @@
     // Jumping: the lasso rope and the rider in the air.
     if (me?.jump) {
       const j = me.jump, t = j.target, s = sc(t);
-      const to = { x: t.x - 2 * s, y: t.y - 36 * s };
+      const to = { x: t.x - 3 * s, y: t.y - 38 * s };
       const u = Math.min(1, j.st / JUMP);
       const ctrl = { x: (j.from.x + to.x) / 2, y: Math.min(j.from.y, to.y) - 70 };
       const p = quad(j.from, ctrl, to, ease(u));
@@ -762,12 +939,20 @@
       ctx.ellipse(to.x, to.y - 2 * s, 16 * s, 9 * s, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
-      drawRider(p.x, p.y, s, c.ink, -0.3 + u * 0.3);
+      drawRider(p.x, p.y, s * RIDER, c, "jump", { tilt: -0.2 + u * 0.2 });
     }
     // Down: rolling back a broken production.
     if (me?.down) {
       const d = me.down, u = Math.min(1, d.st / 0.5);
-      drawRider(me.pos.x - u * 30, me.pos.y + u * 34, 0.9, c.ink, u * 1.6);
+      drawRider(me.pos.x - u * 30, me.pos.y + u * 34, 0.9, c, "fall", { tilt: u * 1.6, noHat: true });
+      // The hat flies off.
+      ctx.save();
+      ctx.translate(me.pos.x + 26 * d.st, me.pos.y - 40 * d.st + 70 * d.st * d.st);
+      ctx.rotate(d.st * 5);
+      ctx.scale(0.9, 0.9);
+      ctx.fillStyle = c.ink;
+      hat(0, 0);
+      ctx.restore();
       label(d.why, me.pos.x + 40, me.pos.y - 30, me.down.dur === ROLLBACK ? c.broke : c.muted, 1, font);
     }
     for (const f of floaters) {
