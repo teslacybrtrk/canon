@@ -73,6 +73,12 @@ Found while building, Oct 4–13, 2026.
     *We did:* keep every world in Artifacts so its Preview can be rebuilt from the commit, and delete Previews on reset.
     *Would help:* an event or warning before eviction, or a way to pin Previews that matter.
 
+14. **Redeploying a Worker kills its running Containers sessions.** A deploy of the referee (which hosts the CI
+    sandbox class) ended an in-flight preview build with `SessionTerminatedError: … shell exited (exit code: 1)`
+    after seven minutes; the Workflow retried it from scratch.
+    *We did:* treat it as a platform error (retry, never blame the code) and avoid deploying while agents push.
+    *Would help:* let running container sessions finish on the old version, like in-flight requests.
+
 ## Things that worked especially well
 
 - `fork()` returns in about a second, and a fork's `source` field records lineage (`artifacts:canon/<parent>`),

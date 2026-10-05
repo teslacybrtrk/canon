@@ -71,6 +71,9 @@ agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image str
 **To use Canon on your own app**, see [docs/USING.md](docs/USING.md): `canon init` writes a starter `canon.json`,
 and `genesis.sh` imports your repo.
 
+**Any MCP agent can join a project** with one line, using the project's agent key:
+`claude mcp add --transport http canon https://canon.rodeo/p/<project>/mcp --header "Authorization: Bearer <key>"`.
+
 Tests: `npm test`. To check the demo's facts against the app running locally:
 
 ```sh

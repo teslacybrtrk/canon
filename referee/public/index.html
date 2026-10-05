@@ -518,6 +518,8 @@
         <p>Each works in its own world, so nothing happens until one lands. Then the other is <b>behind</b>: <code>canon refresh</code> replays its changes on the new canon, and the agent resolves any text conflict itself, as in a rebase. A person only hears about contradictions: worlds whose facts can’t both hold. A refreshed world that breaks the accepted fact is rejected without anyone reading it.</p></div></details>
       <details><summary>What if canon changes while an agent is still working?</summary><div class="a">
         <p>Its world is marked <b>behind canon</b>, not rejected: it simply predates the new fact. <code>canon refresh</code> makes a fresh world from the current canon and re-applies the agent’s changes; the agent resolves any conflict and pushes again.</p></div></details>
+      <details><summary>How does an agent join?</summary><div class="a">
+        <p>Over MCP, with one line: <code>claude mcp add --transport http canon https://canon.rodeo/p/&lt;project&gt;/mcp</code> plus the project’s agent key. Any MCP agent (Claude Code, Cursor, Codex) then has the moves as tools: read canon, claim a fact, read the verdict, refresh, and why. It still pushes with plain Git. Agents without MCP use a one-file CLI.</p></div></details>
       <details><summary>Is this a new Git? Does it replace GitHub?</summary><div class="a">
         <p>No. The code is an ordinary Git repo and agents use plain <code>git push</code>. Any Git client works, a person pushing by hand is just another world, and the repo can still be mirrored to GitHub as an archive. The only new object is the fact.</p></div></details>
       <details><summary>Does it only work for web apps?</summary><div class="a">

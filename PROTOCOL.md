@@ -156,6 +156,13 @@ good facts should both land, an agent declares a fresh world that satisfies both
 After each deploy, and every hour, the referee runs canon's probe facts against production and shows the result on
 the board.
 
+## MCP
+
+`POST /p/:project/mcp` serves the moves as MCP tools (Streamable HTTP, JSON responses) with the agent key:
+`canon_read`, `canon_claim`, `canon_verdict`, `canon_refresh` and `canon_why`. Git stays in the agent's own shell:
+`canon_claim` returns the commands that clone the world and commit its exact `canon.json`, so the agent never edits
+that file by hand.
+
 ## Why
 
 `GET /p/:project/facts/:id/why` returns the fact chain: the world and claim that made the fact true

@@ -97,7 +97,18 @@ The import must be a Git URL that Artifacts can clone; public repos work. Open y
 
 ## 4. Point your agents at it
 
-Put `cli/canon.mjs` on the agent's PATH as `canon`, set its environment, and give it
+The quickest way is MCP. Every project has an MCP endpoint, and any MCP agent (Claude Code, Cursor, Codex)
+connects with one line and the agent key:
+
+```sh
+claude mcp add --transport http canon <referee>/p/myapp/mcp --header "Authorization: Bearer <the agent key>"
+```
+
+The agent then has `canon_read`, `canon_claim`, `canon_verdict`, `canon_refresh` and `canon_why`, and needs nothing
+else to know the protocol. Claiming returns the commands that clone its world and record the claim; it still pushes
+with plain Git.
+
+Or use the CLI: put `cli/canon.mjs` on the agent's PATH as `canon`, set its environment, and give it
 [agents/PROTOCOL_FOR_AGENTS.md](../agents/PROTOCOL_FOR_AGENTS.md) plus a goal:
 
 ```sh
