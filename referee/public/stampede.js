@@ -11,6 +11,8 @@
 
   const ROUND = 40, JUMP = 0.42, REVIEW = 1.0, TAP = 0.22, ROLLBACK = 2.6;
   const JUDGE = 0.6, RECHECK = 0.7, BAD = 0.32, SPEED = 260, RIDER = 1.2;
+  // How fast the herd runs, picked before round 1 and kept for both rounds so they compare fairly.
+  const PACES = { easy: { label: "Easy", x: 0.7 }, medium: { label: "Medium", x: 1 }, hard: { label: "Hard", x: 1.45 } };
   // Facts the demo app keeps (demo-app/canon.json); a broken change breaks one of them.
   const FACTS = ["The basket charges the listed price", "The code passes the linter", "The code type-checks",
     "The page answers in under 400 ms", "Unknown products are refused", "A new basket is empty", "The market lists every stall"];
@@ -47,7 +49,8 @@
   let mode = null, playing = false, time = 0, clock = 0, last = 0;
   let herd = [], me = null, floaters = [], dust = [], lines = [], stars = [], ridge = [], scroll = 0;
   let press = null, nextSpawn = 0, nextConflict = 0, nextId = 401, pool = [], pairSeq = 0, landedPairs = new Map(), shown = new Set();
-  let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [], autopilot = false;
+  let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [], autopilot = false, pace = "medium";
+  try { const saved = localStorage.getItem("canon-stampede-pace"); if (PACES[saved]) pace = saved; } catch {}
 
   // ---- Layout ---------------------------------------------------------------------------------------
   function resize() {
@@ -68,7 +71,8 @@
     stars = Array.from({ length: Math.round((W * horizon) / 7000) }, () => ({ x: rand(0, W), y: rand(0, horizon * 0.85), s: Math.random() < 0.12 ? 2 : 1, ph: rand(0, 6.3) }));
     lines = Array.from({ length: Math.round(W / 40) }, () => ({ x: rand(0, W), y: rand(horizon + 6, H), len: rand(20, 70) }));
     ridge = Array.from({ length: 40 }, (_, i) => ({ x: i / 39, h: rand(6, 22) }));
-    el("tip-low").style.top = `${Math.round(horizon - 30)}px`; // just above the ridge
+    el("tip-above").style.top = `${Math.round(horizon - 30)}px`; // just above the ridge
+    el("tip-below").style.top = `${Math.round(horizon + 14)}px`;
     theme = null;
   }
 
@@ -108,7 +112,7 @@
   const depth = (y) => Math.min(1, Math.max(0, (y - yMin) / (yMax - yMin)));
   const scaleAt = (y) => base * (0.72 + 0.34 * depth(y));
   const sc = (a) => scaleAt(a.y);
-  const speedAt = (y) => -(60 + Math.max(W, 375) * 0.08) * (0.8 + 0.4 * depth(y));
+  const speedAt = (y) => -(60 + Math.max(W, 375) * 0.08) * (0.8 + 0.4 * depth(y)) * PACES[pace].x;
   // The space an animal needs so neither bodies nor the labels above them overlap.
   const room = (s) => ({ x: 84 * s + 6, y: 56 * s + 18 });
   // A random depth with room around it at this x, or null when the edge is crowded.
@@ -123,7 +127,7 @@
     }
     return null;
   }
-  const spawnEvery = () => rand(0.55, 0.8) * Math.min(1.8, Math.max(1, 1100 / W));
+  const spawnEvery = () => rand(0.55, 0.8) * Math.min(1.8, Math.max(1, 1100 / W)) / PACES[pace].x;
 
   function spawnConflict() {
     const pair = pairSeq++;
@@ -160,13 +164,13 @@
   }
 
   const tipTimers = {};
-  // `low` shows the tip just above the horizon instead of under the HUD; the two don't replace each other.
-  function tip(text, once, low) {
+  // `at` ("above" or "below") shows the tip at the horizon instead of under the HUD; each spot keeps its own tip.
+  function tip(text, once, at) {
     if (once) {
       if (shown.has(once)) return;
       shown.add(once);
     }
-    const k = low ? "tip-low" : "tip", t = el(k);
+    const k = at ? `tip-${at}` : "tip", t = el(k);
     t.textContent = text;
     t.classList.add("on");
     clearTimeout(tipTimers[k]);
@@ -176,11 +180,24 @@
   function intro() {
     mode = null;
     hud();
-    card(`<p class="kicker">Canon Stampede · two rounds, 40 seconds each</p>
+    card(`<p class="kicker">Two rounds · 40 seconds each</p>
       <h3>Round 1: <em>Git</em></h3>
-      <p>Every animal in the stampede is an agent's change, and you're riding main. Make your way forward through the herd by lassoing the ones ahead: <b>every safe landing ships a change.</b></p>
-      <p><b>Tap an animal to jump.</b> About 1 in 3 is broken and they all look the same: land on one and production breaks. <b>Press and hold</b> to review one first, but the herd keeps moving while you read.</p>`,
+      <p>You're riding main. Each animal is an agent's change: jump on one to ship it.</p>
+      <div class="legend">
+        <span><kbd>Tap</kbd><span>Jump on and ship it.</span></span>
+        <span><kbd>Hold</kbd><span>Review it first. Takes a second.</span></span>
+      </div>
+      <p><b>1 in 3 is broken, and they all look the same.</b> Land on one and production breaks.</p>
+      <div class="pace" role="radiogroup" aria-label="Speed"><span>Speed</span>${Object.entries(PACES).map(([k, p]) =>
+        `<button type="button" role="radio" data-pace="${k}" aria-checked="${k === pace}">${p.label}</button>`).join("")}</div>`,
     [{ label: "Start round 1", primary: true, run: () => begin("git") }]);
+    for (const b of el("card").querySelectorAll("[data-pace]")) {
+      b.addEventListener("click", () => {
+        pace = b.dataset.pace;
+        try { localStorage.setItem("canon-stampede-pace", pace); } catch {}
+        for (const o of el("card").querySelectorAll("[data-pace]")) o.setAttribute("aria-checked", String(o === b));
+      });
+    }
   }
 
   function begin(m) {
@@ -200,10 +217,10 @@
     el("card").hidden = true;
     if (m === "git") {
       git = { shipped: 0, broke: 0, review: 0, stale: 0 };
-      tip("Tap an animal to jump onto it. Press and hold to review it first.");
+      tip("Tap an animal to jump on it.\nHold to review it first.", null, "below");
     } else {
       canon = { shipped: 0, auto: 0, rejected: 0 };
-      tip("The moon checks every change against every fact. Only green ones can land.");
+      tip("Tap a green one to ship it.", null, "below");
     }
     for (let i = 0; i < 5; i++) spawn({ x: rand(PX + 140, W - 40) });
     hud();
@@ -221,7 +238,7 @@
       [{ label: "Round 2: Canon →", primary: true, run: intro2 }]);
     } else {
       const total = canon.shipped + canon.auto;
-      card(`<p class="kicker">Canon Stampede · results</p>
+      card(`<p class="kicker">Canon Stampede · results · ${PACES[pace].label}</p>
         <h3>Same herd. <em>Two ways to run main.</em></h3>
         <table class="vs">
           <tr><th></th><th>Git</th><th>Canon</th></tr>
@@ -239,15 +256,15 @@
   function intro2() {
     mode = null;
     hud();
-    card(`<p class="kicker">Round 2 · Canon</p>
+    card(`<p class="kicker">Same herd · 40 seconds</p>
       <h3>Round 2: <em>Canon</em></h3>
-      <p>Same stampede. Now the moon is the referee: it checks every change against every fact in canon, and colours it.</p>
+      <p>Now the moon is the referee. It checks every change for you.</p>
       <div class="legend">
-        <span><i class="g"></i><span><b>Green</b> keeps every fact and adds one. Lasso it.</span></span>
-        <span><i class="r"></i><span><b>Red</b> breaks a fact. Your lasso won't catch it.</span></span>
-        <span><i class="a"></i><span><b>Amber</b>: main just moved, so it's being re-checked.</span></span>
+        <span><i class="g"></i><span><b>Green</b> is safe. Tap to ship it.</span></span>
+        <span><i class="r"></i><span><b>Red</b> breaks a fact. You can't land on it.</span></span>
+        <span><i class="a"></i><span><b>Amber</b> is being re-checked.</span></span>
       </div>
-      <p>Ready to let go? Hit <b>Turn on autopilot</b> at the bottom and the referee lands green changes for you.</p>`,
+      <p>Or tap <b>Turn on autopilot</b> and let it ship for you.</p>`,
     [{ label: "Start round 2", primary: true, run: () => begin("canon") }]);
   }
 
@@ -286,11 +303,17 @@
     return me.pos;
   };
 
+  // Why the rider can't lasso `t` from here, or null if they can. Autopilot picks by the same rule.
+  function outOfReach(t, from) {
+    if (t.x < from.x - 10) return "Lasso the ones ahead of you";
+    if (t.x - from.x > W * 0.62) return "Too far to lasso";
+    return null;
+  }
+
   function lasso(t, auto = false) {
     if (!me.a || me.jump || me.down || t === me.a || t.past) return;
-    const from = riderAt();
-    if (t.x < from.x - 10) return float("Lasso the ones ahead of you", top(t), "muted");
-    if (t.x - from.x > W * 0.62) return float("Too far to lasso", top(t), "muted");
+    const from = riderAt(), far = outOfReach(t, from);
+    if (far) return float(far, top(t), "muted");
     if (mode === "canon") {
       if (t.state === "red") return float(t.against ? `Refused: contradicts “${t.against}”` : `Refused: breaks “${t.reason}”`, top(t), "broke");
       if (t.state !== "green") return float("Still being checked", top(t), "muted");
@@ -365,7 +388,7 @@
 
   function step(dt) {
     clock += dt;
-    scroll += SPEED * dt;
+    scroll += SPEED * PACES[pace].x * dt;
     if (playing) {
       time += dt;
       nextSpawn -= dt;
@@ -426,8 +449,10 @@
       } else if (me.a) {
         if (playing) me.ride += dt;
         if (playing && autopilot && me.ride > 0.45) {
-          const next = herd.filter((a) => a.state === "green" && !a.past && a !== me.a && a.x > PX - 40 && Math.abs(a.x - PX) < W * 0.6)
-            .sort((p, q) => Math.abs(p.x - PX - 160) - Math.abs(q.x - PX - 160))[0];
+          // Only green ones clearly ahead; with none in reach yet, keep riding.
+          const from = riderAt();
+          const next = herd.filter((a) => a.state === "green" && !a.past && a !== me.a && a.x > from.x + 20 && !outOfReach(a, from))
+            .sort((p, q) => Math.abs(p.x - from.x - 160) - Math.abs(q.x - from.x - 160))[0];
           if (next) lasso(next, true);
         }
       }
@@ -449,7 +474,7 @@
     beams = beams.filter((b) => clock - b.born < JUDGE + 0.2);
     floaters = floaters.filter((f) => clock - f.born < 2.2);
     for (const l of lines) {
-      l.x -= SPEED * (0.6 + (l.y - horizon) / (H - horizon)) * dt;
+      l.x -= SPEED * PACES[pace].x * (0.6 + (l.y - horizon) / (H - horizon)) * dt;
       if (l.x + l.len < 0) {
         l.x = W + rand(0, 80);
         l.y = rand(horizon + 6, H);
@@ -1001,9 +1026,9 @@
   cv.addEventListener("pointerup", release);
   el("auto").addEventListener("click", () => {
     if (!playing) return;
-    if (mode === "git") return tip("Git has no referee, so nothing can safely land changes for you.\nSomeone has to read every diff.", null, true);
+    if (mode === "git") return tip("Git has no referee, so nothing can safely land changes for you.\nSomeone has to read every diff.", null, "above");
     autopilot = !autopilot;
-    if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself.\nPeople decide the facts; agents do the rest.", null, true);
+    if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself.\nPeople decide the facts; agents do the rest.", null, "above");
     hud();
   });
   cv.addEventListener("pointercancel", () => { press = null; });
