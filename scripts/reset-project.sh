@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 [ $# -ge 1 ] || { echo "usage: reset-project.sh <project> [project...]"; exit 1; }
 NAMESPACE=canon
-CANON_URL="${CANON_URL:-https://canon.rodeo}"
+source scripts/env.sh
 for PROJECT in "$@"; do
 
 # Every Preview the referee judged (one per pushed commit), before the board is reset.

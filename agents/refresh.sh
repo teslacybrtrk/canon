@@ -3,9 +3,9 @@
 #   CANON_URL=https://canon.rodeo ./agents/refresh.sh agent-3 agent-4 agent-5
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export CANON_URL="${CANON_URL:-https://canon.rodeo}"
+source scripts/env.sh
 # The agents' key: from the environment, or from the Keychain where scripts/keys.sh keeps it.
-CANON_AGENT_KEY="${CANON_AGENT_KEY:-$(security find-generic-password -a canon -s canon-agent-key -w 2>/dev/null || true)}"
+CANON_AGENT_KEY="${CANON_AGENT_KEY:-$(keychain canon-agent-key)}"
 : "${CANON_AGENT_KEY:?set CANON_AGENT_KEY to the agent key, or run ./scripts/keys.sh}"
 export CANON_PROJECT="${CANON_PROJECT:-farmstand}"
 export PATH="$PWD/cli:$PATH"

@@ -6,6 +6,7 @@
 #   security find-generic-password -a canon -s canon-owner-key -w | pbcopy
 set -euo pipefail
 cd "$(dirname "$0")/.."
+command -v security >/dev/null || { echo "keys.sh uses the macOS Keychain. Elsewhere, set CANON_KEY and CANON_AGENT_KEY with wrangler secret put and export them."; exit 1; }
 key() { security find-generic-password -a canon -s "$1" -w 2>/dev/null; }
 for item in canon-owner-key canon-agent-key; do
   key "$item" >/dev/null || security add-generic-password -a canon -s "$item" -w "$(openssl rand -hex 24)"

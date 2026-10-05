@@ -8,9 +8,9 @@
 #   CANON_URL=... IMPORT_URL=https://github.com/<you>/<repo>.git ./scripts/genesis.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
-CANON_URL="${CANON_URL:-https://canon.rodeo}"
+source scripts/env.sh
 # The owner key: from the environment, or from the Keychain where scripts/keys.sh keeps it.
-CANON_KEY="${CANON_KEY:-$(security find-generic-password -a canon -s canon-owner-key -w 2>/dev/null || true)}"
+CANON_KEY="${CANON_KEY:-$(keychain canon-owner-key)}"
 : "${CANON_KEY:?set CANON_KEY to the owner key, or run ./scripts/keys.sh}"
 PROJECT="${CANON_PROJECT:-farmstand}"
 

@@ -42,59 +42,40 @@ human ──accept fact──▶ Referee DO ──freeze world, move canon point
 | Path | What |
 |---|---|
 | `referee/` | Worker: Referee Durable Object, HTTP API, board, verify/promote Workflows (`@cloudflare/ci`); the site and the game (`public/`) |
-| `cli/canon.mjs` | The protocol from a shell: `read`, `claim`, `verdict`, `why` |
+| `cli/canon.mjs` | The protocol from a shell: `read`, `claim`, `verdict`, `refresh`, `why`, `init` |
 | `agents/` | Instructions, goals and claim files for five Claude Code agents, and `run.sh` to start them |
 | `demo-app/` | Farmstand, the Workers app the agents change; its facts are in `demo-app/canon.json` |
-| `scripts/` | `genesis.sh` (one-time setup), `check-local.ts` (run facts against a local app), `test-ledger.ts` |
+| `scripts/` | `setup.sh` (your own referee), `genesis.sh` (first world or import), `check-local.ts` (facts against a local app), tests |
 
 ## Run it
 
-Requirements: a Workers Paid account with Artifacts (open beta), Node 20+, and Claude Code (`claude`) for the
+Requirements: a Workers Paid account with Artifacts (open beta), Node 22.18+, and Claude Code (`claude`) for the
 agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image straight from Docker Hub.
 
-1. **Configure the referee**: in `referee/wrangler.jsonc`, set `CLOUDFLARE_ACCOUNT_ID` and replace
-   `REPLACE_WITH_SUBDOMAIN` with your workers.dev subdomain.
-2. **Create the snapshot bucket and secrets**:
-   ```sh
-   cd referee && npm install
-   npx wrangler r2 bucket create canon-ci-snapshots
-   npx wrangler secret put CF_TOKEN              # API token that can deploy Workers
-   npx wrangler secret put R2_ACCESS_KEY_ID      # R2 API token for CI snapshots
-   npx wrangler secret put R2_SECRET_ACCESS_KEY
-   npx wrangler secret put CANON_KEY             # owner key: genesis and accepting facts (a long random string)
-   npx wrangler secret put CANON_AGENT_KEY       # agents' key: can claim, never accept
-   npx wrangler deploy
-   ```
-   On a Mac, `./scripts/keys.sh` makes both keys, keeps them in your Keychain and sets them on the referee;
-   the scripts below then read them from the Keychain.
-3. **Genesis**: push the demo app (with its `canon.json`) as the first world:
-   ```sh
-   export CANON_URL=https://canon.rodeo   # or https://canon-referee.<subdomain>.workers.dev
-   export CANON_KEY=…                     # the owner key
-   ./scripts/genesis.sh
-   ```
-   Open `$CANON_URL`. When the genesis preview satisfies every fact in its `canon.json`, it becomes canon.
-   To start from an existing repo, set `IMPORT_URL=https://github.com/<you>/<repo>.git`; it needs a `canon.json`.
-4. **Start five agents**: with `CANON_AGENT_KEY` exported, `./agents/run.sh`. Claims appear on the board, then verdicts.
-5. **Accept a fact** on the board (it asks for the owner key once). The world becomes canon and production updates.
+1. **Set up your referee**: `./scripts/setup.sh`. It writes your account into `referee/wrangler.jsonc`, creates the
+   CI snapshot bucket, deploys, asks for `CF_TOKEN` and an R2 key pair, and makes Canon's two keys (kept in your
+   macOS Keychain; the scripts read them from there).
+2. **Genesis**: `./scripts/genesis.sh` pushes the demo app (with its `canon.json`) as the first world. Open the board;
+   when the genesis preview satisfies every fact, it becomes canon.
+3. **Start five agents**: `./agents/run.sh`. Claims appear on the board, then verdicts.
+4. **Accept a fact** on the board (it asks for the owner key once). The world becomes canon and production updates.
    Click a fact to see the world that made it true beside the worlds that failed it.
    After an accept, `./agents/refresh.sh agent-3 agent-4 agent-5` lets worlds that are now behind rebase themselves.
-6. **Autopilot** (optional): a second project whose `canon.json` carries a backlog of facts written by people and
+5. **Autopilot** (optional): a second project whose `canon.json` carries a backlog of facts written by people and
    `"autoAccept": "backlog"`. Agents land facts with no human click:
    ```sh
    CANON_PROJECT=rodeo CANON_FILE=agents/canon.autopilot.json ./scripts/genesis.sh
-   CANON_PROJECT=rodeo AGENTS=8 ./agents/autopilot.sh      # watch https://canon.rodeo/?p=rodeo
+   CANON_PROJECT=rodeo AGENTS=8 ./agents/autopilot.sh
    ```
 
-Work on the demo app locally:
+**To use Canon on your own app**, see [docs/USING.md](docs/USING.md): `canon init` writes a starter `canon.json`,
+and `genesis.sh` imports your repo.
+
+Tests: `npm test`. To check the demo's facts against the app running locally:
 
 ```sh
 cd demo-app && npm install && npx wrangler dev
 node scripts/check-local.ts http://localhost:8787   # canon.json facts hold; demo claims must not hold yet
-node scripts/test-ledger.ts                         # canon.json rules: tampering, revisions, retirement
-node scripts/test-scope.ts                          # fact scopes and changed-file detection
-node scripts/test-probe.ts                          # retries and latency budgets
-node scripts/test-page.mjs                          # board page: unique element ids
 ```
 
 Reads are public; every write needs a key. Agents get `CANON_AGENT_KEY`, which can claim but never accept;

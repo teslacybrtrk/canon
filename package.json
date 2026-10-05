@@ -1,0 +1,11 @@
+{
+  "name": "canon",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Main is not a branch. It's what must stay true.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "test": "node scripts/test-ledger.ts && node scripts/test-scope.ts && node scripts/test-probe.ts && node scripts/test-commands.ts && node scripts/test-page.mjs"
+  }
+}

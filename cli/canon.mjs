@@ -8,12 +8,14 @@
 //   canon verdict [--wait]                      4. which facts held, which broke, accepted or not
 //   canon refresh                               a BEHIND world: new world from current canon + your changes
 //   canon why <fact-id>                         the fact chain: who made it true, which worlds failed it
+//   canon init                                  a starter canon.json for the app in this folder
 //
 // Env: CANON_URL (referee origin), CANON_PROJECT (e.g. farmstand), CANON_AGENT (e.g. agent-3),
 //      CANON_KEY (the key that lets you claim; agents get the referee's CANON_AGENT_KEY),
 //      CANON_WORKDIR (where worlds are cloned; default ./worlds)
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
@@ -29,9 +31,10 @@ const [cmd, ...rest] = process.argv.slice(2);
 const args = parseArgs(rest);
 
 try {
-  if (!["read", "claim", "verdict", "refresh", "why"].includes(cmd)) usage();
-  if (!URL_BASE) fail("set CANON_URL to the referee origin");
-  if (cmd === "read") await read();
+  if (!["read", "claim", "verdict", "refresh", "why", "init"].includes(cmd)) usage();
+  if (cmd === "init") init();
+  else if (!URL_BASE) fail("set CANON_URL to the referee origin");
+  else if (cmd === "read") await read();
   else if (cmd === "claim") await claim();
   else if (cmd === "verdict") await verdict();
   else if (cmd === "refresh") await refresh();
@@ -278,6 +281,29 @@ function git(argv) {
   return execFileSync("git", argv, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
 }
 
+// A starter canon.json for the app in this folder, from what it finds: the home page answers, the code
+// type-checks (with tsconfig.json), and the toolchain and deploy config only change by revision. Never overwrites.
+function init() {
+  if (existsSync("canon.json")) fail("canon.json already exists here");
+  const facts = [
+    { id: "home-page-answers", sentence: "The home page answers", check: { kind: "probe", isolate: false, steps: [{ path: "/", expect: { status: 200 } }] } },
+  ];
+  if (existsSync("tsconfig.json")) {
+    facts.push({ id: "code-typechecks", sentence: "The code type-checks, with no errors silenced",
+      check: { kind: "command", run: "npx tsc --noEmit -p tsconfig.json && ! grep -rnE '@ts-(ignore|nocheck|expect-error)' src" } });
+  }
+  const pinned = ["package.json", "package-lock.json", "wrangler.jsonc", "wrangler.json", "wrangler.toml", "tsconfig.json", "biome.json"].filter((f) => existsSync(f));
+  if (pinned.length) {
+    const sums = pinned.map((f) => `${createHash("sha256").update(readFileSync(f)).digest("hex")} ${f}`).join(" ");
+    facts.push({ id: "tooling-locked", sentence: "The toolchain and deploy config only change by revision",
+      check: { kind: "command", run: `printf '%s  %s\\n' ${sums} | sha256sum -c --quiet -` }, scope: pinned });
+  }
+  writeFileSync("canon.json", JSON.stringify({ version: 1, facts }, null, 2) + "\n");
+  console.log(`Wrote canon.json with ${facts.length} starter facts: ${facts.map((f) => f.id).join(", ")}.`);
+  console.log("Next: add the few behaviours that must never break silently (money, permissions, data), check them against");
+  console.log("your app running locally, commit, and import the repo. The guide: docs/USING.md");
+}
+
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
@@ -291,7 +317,7 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  console.log(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 14).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  console.log(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 16).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
   process.exit(1);
 }
 
