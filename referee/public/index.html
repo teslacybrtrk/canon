@@ -16,6 +16,7 @@
     document.documentElement.dataset.theme = theme;
   })();
 </script>
+<script src="/sky.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..800&family=Archivo:ital,wdth,wght@0,100..125,400..700;1,100..125,400..600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -70,6 +71,9 @@
   .sun { position: absolute; left: 50%; bottom: -370px; width: 500px; height: 500px; margin-left: -250px; border-radius: 50%;
     background: radial-gradient(circle at 50% 40%, #fdc86d 0%, #fd8a2c 38%, #ed5616 64%, rgb(237 86 22 / 0) 71%);
     animation: rise 1.6s cubic-bezier(.2,.7,.1,1) both, breathe 9s ease-in-out 1.6s infinite; }
+  /* sky.js draws the sun, its forks and the stars on this canvas; the CSS sun stays as the no-script fallback. */
+  .sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+  .hero.sky-live .sun { display: none; }
   .ridge { position: absolute; left: 0; bottom: -1px; display: block; width: 100%; height: 47px; color: var(--bg); }
   .bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 14px; padding-top: 18px; padding-bottom: 18px; }
   .brand { display: flex; align-items: center; gap: 10px; font: 800 24px/1 var(--display); text-transform: uppercase; color: var(--ink); text-decoration: none; letter-spacing: -0.01em; }
@@ -112,7 +116,7 @@
 
 
   /* ---- Why Git breaks with many agents --------------------------------------------------- */
-  .problem { padding: 64px 0 8px; }
+  .problem { padding-top: 64px; padding-bottom: 8px; }
   .vs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 30px; }
   .vs-col { border-radius: 16px; padding: 6px 18px 10px; border: 1px solid var(--line); background: var(--panel); }
   .vs-col h3 { font: 700 24px/1 var(--display); text-transform: uppercase; margin: 14px 0 6px; letter-spacing: .01em; }
@@ -124,7 +128,7 @@
   .vs-row span { color: var(--ink-2); font-size: 14px; }
 
   /* ---- How it works: the four moves -------------------------------------------------- */
-  .how { padding: 56px 0 24px; }
+  .how { padding-top: 56px; padding-bottom: 24px; }
   .moves { list-style: none; margin: 34px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; position: relative; }
   .move { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; backdrop-filter: blur(10px); }
   .move h3 { font: 700 26px/1.05 var(--display); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.01em; }
@@ -135,7 +139,7 @@
   .example .ok { color: var(--held); } .example .bad { color: var(--broke); } .example .dim { color: var(--muted); }
 
   /* ---- Live strip -------------------------------------------------------------------- */
-  .live { padding: 56px 0 0; }
+  .live { padding-top: 56px; padding-bottom: 0; }
   .live-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
   .strip-inner { margin-top: 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr); background: var(--panel); border: 1px solid var(--line-2);
     border-radius: 16px; backdrop-filter: blur(16px); overflow: hidden; }
@@ -213,7 +217,7 @@
   .empty { padding: 28px; text-align: center; color: var(--muted); font: italic 400 15px var(--sans); border: 1px dashed var(--line-2); border-radius: 16px; }
 
   /* ---- What changes: Cloudflare's four problems ------------------------------------- */
-  .changes { padding: 64px 0 72px; border-top: 1px solid var(--line); margin-top: 24px; }
+  .changes { padding-top: 64px; padding-bottom: 72px; border-top: 1px solid var(--line); margin-top: 24px; }
   .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 30px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
   .card .k { font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--brand); }
@@ -224,7 +228,7 @@
 
 
   /* ---- Questions ------------------------------------------------------------------------ */
-  .faq { padding: 64px 0 80px; border-top: 1px solid var(--line); }
+  .faq { padding-top: 64px; padding-bottom: 80px; border-top: 1px solid var(--line); }
   .faq-grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr); gap: 28px; margin-top: 30px; align-items: start; }
   .glossary { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 8px 18px; position: sticky; top: 16px; }
   .glossary dt { font: 700 20px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; color: var(--brand); margin-top: 14px; }
@@ -301,6 +305,7 @@
 </head>
 <body>
 <header class="hero">
+  <canvas class="sky" id="sky" aria-hidden="true"></canvas>
   <div class="sun" aria-hidden="true"></div>
   <svg class="ridge" viewBox="0 0 1440 46" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 46V30l60-6 70 8 90-14 80 10 70-6 110 12 90-16 70 8 120-10 80 12 100-6 90 10 80-14 110 10 70-4 80 8 70-6v34z"/></svg>
   <div class="bar wrap">
