@@ -4,6 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${CANON_URL:?set CANON_URL to the referee origin}"
+: "${CANON_AGENT_KEY:?set CANON_AGENT_KEY to the agents' key (the referee's CANON_AGENT_KEY secret)}"
 export CANON_PROJECT="${CANON_PROJECT:-farmstand}"
 export PATH="$PWD/cli:$PATH"
 ROOT="$PWD"
@@ -20,7 +21,8 @@ for agent in "$@"; do
   [ -n "$dir" ] || { echo "no run directory for $agent"; continue; }
   (
     cd "$dir"
-    CANON_AGENT="$agent" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md")
+    # Agents get the agent key: it can claim but never accept, and the owner's key never reaches them.
+    CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md")
 
 $PROMPT" \
       --model haiku --allowedTools "${TOOLS[@]}" --strict-mcp-config --disable-slash-commands \

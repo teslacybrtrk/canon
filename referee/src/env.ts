@@ -17,4 +17,8 @@ export type Env = CiBindings & {
   // Used when `wrangler preview --json` output cannot be parsed.
   PREVIEW_URL_TEMPLATE: string;
   PRODUCTION_URL: string; // https://{project}.<subdomain>.workers.dev: each project deploys under its own Worker name
+  // Secrets. Reads are public; every write needs one of these as a bearer key. The owner's key can do
+  // anything; an agent's key can only claim, so accepting a fact stays a person's decision.
+  CANON_KEY?: string;
+  CANON_AGENT_KEY?: string;
 };

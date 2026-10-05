@@ -37,8 +37,9 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     let previewUrl: string;
     let deps: CiRunnerResult;
     try {
+      // Pushed code is untrusted, so its dependencies never get to run install scripts.
       deps = await withRetries("install", (a) =>
-        ci.runner({ name: named("install", a), command: "npm ci --no-audit --no-fund", cache: { inputs: ["package-lock.json"] }, config: once }),
+        ci.runner({ name: named("install", a), command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] }, config: once }),
       );
       const preview = await withRetries("preview", (a) =>
         deps.runner({
@@ -85,7 +86,7 @@ export class PromoteWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     const seq = Number(event.instanceId.match(/^promote-(\d+)-/)?.[1] ?? 0);
     let ok = true;
     try {
-      const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund", cache: { inputs: ["package-lock.json"] } });
+      const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
       // Each project deploys under its own Worker name, so projects never share a production app.
       const project = repo.slice(0, repo.lastIndexOf("-"));
       await deps.runner({

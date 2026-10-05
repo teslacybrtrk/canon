@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time setup: create the genesis world and push the demo app (which carries canon.json) into it.
 # The referee builds a Preview of genesis and makes it canon once every fact in its canon.json holds.
-#   CANON_URL=https://canon-referee.<you>.workers.dev ./scripts/genesis.sh
+#   CANON_URL=https://canon-referee.<you>.workers.dev ./scripts/genesis.sh   (with CANON_KEY, the owner key, exported)
 # A different canon.json for this project (e.g. a backlog with autopilot):
 #   CANON_PROJECT=rodeo CANON_FILE=agents/canon.autopilot.json ./scripts/genesis.sh
 # To start from an existing repo instead (it must contain canon.json at its root):
@@ -9,10 +9,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${CANON_URL:?set CANON_URL to the referee origin}"
+: "${CANON_KEY:?set CANON_KEY to the owner key (the referee's CANON_KEY secret)}"
 PROJECT="${CANON_PROJECT:-farmstand}"
 
 body="$(node -e 'process.stdout.write(JSON.stringify(process.env.IMPORT_URL ? { importUrl: process.env.IMPORT_URL } : {}))')"
-resp="$(curl -sf -X POST -H 'content-type: application/json' --data "$body" "$CANON_URL/p/$PROJECT/genesis")"
+# The key goes in on stdin, so it never shows up in the process list.
+if ! resp="$(printf 'authorization: Bearer %s\n' "$CANON_KEY" | curl -sS --fail-with-body -X POST -H @- -H 'content-type: application/json' --data "$body" "$CANON_URL/p/$PROJECT/genesis")"; then
+  echo "genesis failed: $resp" >&2
+  exit 1
+fi
 if [ -n "${IMPORT_URL:-}" ]; then
   echo "Imported $IMPORT_URL as genesis. Watch $CANON_URL/?p=$PROJECT until its facts go green."
   exit 0

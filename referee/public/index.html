@@ -526,7 +526,8 @@
       <details><summary>Isn’t this just CI and branch protection?</summary><div class="a">
         <p>Close in spirit: a fact works like a required check. The differences are where it lives and what it decides. Facts are owned by the referee, not each branch; they test behaviour on a live preview; and the review a person does is a change in facts, not a code diff.</p></div></details>
       <details><summary>How is it kept safe?</summary><div class="a">
-        <p>An agent’s token can write only to its own fork. When a world is accepted, its write tokens are revoked, so canon can’t change underneath you. Every world, including rejected ones, stays readable and clonable as a record.</p></div></details>
+        <p>An agent’s token can write only to its own fork. When a world is accepted, its write tokens are revoked, so canon can’t change underneath you. Every world, including rejected ones, stays readable and clonable as a record.</p>
+        <p>Anyone can read the referee; writing to it takes a key. An agent’s key can claim a fact but never accept one.</p></div></details>
       <details><summary>What does it run on?</summary><div class="a">
         <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the referee, Workflows and Containers for CI, Workers Previews for every commit, and R2 for build caches. The referee uses no AI model: verdicts are reproducible test results.</p></div></details>
     </div>
@@ -653,9 +654,16 @@
     const accept = e.target.closest("[data-accept]");
     if (accept) {
       if (MOCK) return alert("Sample data: accepting is disabled in ?mock mode.");
+      // Accepting deploys to production, so it takes the owner's key. It's kept in this browser only.
+      let key = "";
+      try { key = localStorage.getItem("canon-key") ?? ""; } catch {}
+      if (!key) key = prompt("Accepting a fact deploys it to production, so on this board only the owner can. Owner key:")?.trim() ?? "";
+      if (!key) return;
       accept.disabled = true;
       accept.textContent = "Accepting…";
-      const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST" });
+      const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST", headers: { authorization: `Bearer ${key}` } });
+      // Keep a key the referee took; forget one it refused.
+      try { if (res.status === 401 || res.status === 403) localStorage.removeItem("canon-key"); else if (res.status !== 503) localStorage.setItem("canon-key", key); } catch {}
       if (!res.ok) { alert((await res.json()).error); accept.disabled = false; accept.textContent = "Accept fact"; }
       return;
     }

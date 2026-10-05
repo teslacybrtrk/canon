@@ -63,6 +63,7 @@
     "PREVIEW_URL_TEMPLATE": "https://{name}-farmstand.philipemanuele.workers.dev",
     "PRODUCTION_URL": "https://{project}.philipemanuele.workers.dev"
   },
-  // Secrets (wrangler secret put): CF_TOKEN, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+  // Secrets (wrangler secret put): CF_TOKEN, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
+  // CANON_KEY (owner: genesis and accepting facts), CANON_AGENT_KEY (agents: claim, never accept)
   "observability": { "enabled": true, "logs": { "enabled": true } }
 }

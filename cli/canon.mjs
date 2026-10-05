@@ -10,6 +10,7 @@
 //   canon why <fact-id>                         the fact chain: who made it true, which worlds failed it
 //
 // Env: CANON_URL (referee origin), CANON_PROJECT (e.g. farmstand), CANON_AGENT (e.g. agent-3),
+//      CANON_KEY (the key that lets you claim; agents get the referee's CANON_AGENT_KEY),
 //      CANON_WORKDIR (where worlds are cloned; default ./worlds)
 
 import { execFileSync } from "node:child_process";
@@ -19,6 +20,7 @@ import { dirname, join, resolve } from "node:path";
 const URL_BASE = process.env.CANON_URL?.replace(/\/$/, "");
 const PROJECT = process.env.CANON_PROJECT ?? "farmstand";
 const AGENT = process.env.CANON_AGENT ?? process.env.USER ?? "agent";
+const KEY = process.env.CANON_KEY;
 // Coding agents background shell commands that run past about 2 minutes, then lose the result.
 // One wait stays under that; if no verdict yet, the command says to run it again.
 const WAIT_MS = 100_000;
@@ -206,7 +208,8 @@ async function why(factId) {
 async function api(method, path, body, allowPending = false) {
   const res = await fetch(`${URL_BASE}/p/${PROJECT}${path}`, {
     method,
-    headers: body ? { "content-type": "application/json" } : {},
+    // Reads are public; only writes carry the key.
+    headers: { ...(body ? { "content-type": "application/json" } : {}), ...(KEY && method !== "GET" ? { authorization: `Bearer ${KEY}` } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));

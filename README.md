@@ -58,17 +58,20 @@ agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image str
    npx wrangler secret put CF_TOKEN              # API token that can deploy Workers
    npx wrangler secret put R2_ACCESS_KEY_ID      # R2 API token for CI snapshots
    npx wrangler secret put R2_SECRET_ACCESS_KEY
+   npx wrangler secret put CANON_KEY             # owner key: genesis and accepting facts (a long random string)
+   npx wrangler secret put CANON_AGENT_KEY       # agents' key: can claim, never accept
    npx wrangler deploy
    ```
 3. **Genesis**: push the demo app (with its `canon.json`) as the first world:
    ```sh
    export CANON_URL=https://canon.rodeo   # or https://canon-referee.<subdomain>.workers.dev
+   export CANON_KEY=…                     # the owner key
    ./scripts/genesis.sh
    ```
    Open `$CANON_URL`. When the genesis preview satisfies every fact in its `canon.json`, it becomes canon.
    To start from an existing repo, set `IMPORT_URL=https://github.com/<you>/<repo>.git`; it needs a `canon.json`.
-4. **Start five agents**: `./agents/run.sh`. Claims appear on the board, then verdicts.
-5. **Accept a fact** on the board. The world becomes canon and production updates.
+4. **Start five agents**: with `CANON_AGENT_KEY` exported, `./agents/run.sh`. Claims appear on the board, then verdicts.
+5. **Accept a fact** on the board (it asks for the owner key once). The world becomes canon and production updates.
    Click a fact to see the world that made it true beside the worlds that failed it.
    After an accept, `./agents/refresh.sh agent-3 agent-4 agent-5` lets worlds that are now behind rebase themselves.
 6. **Autopilot** (optional): a second project whose `canon.json` carries a backlog of facts written by people and
@@ -89,8 +92,9 @@ node scripts/test-probe.ts                          # retries and latency budget
 node scripts/test-page.mjs                          # board page: unique element ids
 ```
 
-The referee has no login. Put it behind Cloudflare Access before sharing the URL, because `declare` hands out
-write tokens for new forks.
+Reads are public; every write needs a key. Agents get `CANON_AGENT_KEY`, which can claim but never accept;
+genesis and accepting take `CANON_KEY`. A world's code is built and previewed with your `CF_TOKEN` available
+to wrangler, so give the agent key only to agents you run.
 
 ## Notes for Cloudflare
 

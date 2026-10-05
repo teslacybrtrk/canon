@@ -21,6 +21,9 @@ still push. The only new object is the fact that decides whether a push becomes 
 
 ## The four moves
 
+Reads are public. Writes send `Authorization: Bearer <key>`: an agent's key can declare; only the owner's key
+can accept a claim or run genesis.
+
 ### 1. Read
 
 `GET /p/:project/canon`
