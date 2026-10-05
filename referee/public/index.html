@@ -118,6 +118,15 @@
   .copy { font: 500 12px var(--mono); color: var(--ink-2); background: transparent; border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
   .copy:hover { color: var(--ink); border-color: var(--brand); }
   .copy.done { color: var(--held); border-color: var(--held); }
+  /* Icon-only copy button: the icon turns into a check and a "Copied!" bubble floats up and fades. */
+  .copy.icon { position: relative; display: grid; place-items: center; width: 32px; height: 30px; padding: 0; }
+  .copy.icon svg { width: 16px; height: 16px; }
+  .copy.icon .ok, .copy.icon.done .sheets { display: none; }
+  .copy.icon.done .ok { display: block; }
+  .copy.icon::after { content: "Copied!"; position: absolute; left: 50%; bottom: calc(100% + 8px); font: 500 11px/1 var(--mono); color: var(--bg); background: var(--ink);
+    padding: 5px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; opacity: 0; transform: translate(-50%, 4px); }
+  .copy.icon.done::after { animation: copied 1.4s ease forwards; }
+  @keyframes copied { 15%, 65% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -6px); } }
 
 
   /* ---- Built on strip, right under the horizon ------------------------------------------ */
@@ -368,7 +377,7 @@
     <p class="lede">Agents push with plain Git. Canon checks every rule your app must keep on a live preview, so a change that breaks one is rejected without anyone reading the diff.</p>
     <div class="cta">
       <a class="btn primary" href="#board">Watch the live board ↓</a>
-      <span class="cmd" id="clonecmd" hidden><code>git clone https://canon.rodeo/canon.git</code><button class="copy" data-copy="git clone https://canon.rodeo/canon.git">Copy</button></span>
+      <span class="cmd" id="clonecmd" hidden><code>git clone https://canon.rodeo/canon.git</code><button class="copy icon" data-copy="git clone https://canon.rodeo/canon.git" aria-label="Copy the clone command" title="Copy"><svg class="sheets" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11.5" height="11.5" rx="2"/><path d="M15 9V5a1.5 1.5 0 0 0-1.5-1.5h-8A1.5 1.5 0 0 0 4 5v8a1.5 1.5 0 0 0 1.5 1.5H9"/></svg><svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></span>
     </div>
   </div>
 </header>
@@ -626,6 +635,15 @@
     const copy = e.target.closest("[data-copy]");
     if (copy) {
       try { await navigator.clipboard.writeText(copy.dataset.copy); } catch { /* clipboard blocked: the command stays visible */ }
+      if (copy.classList.contains("icon")) {
+        // Restart the bubble on repeat clicks.
+        copy.classList.remove("done");
+        void copy.offsetWidth;
+        copy.classList.add("done");
+        clearTimeout(copy.doneTimer);
+        copy.doneTimer = setTimeout(() => copy.classList.remove("done"), 1400);
+        return;
+      }
       const was = copy.textContent;
       copy.textContent = "Copied ✓";
       copy.classList.add("done");
