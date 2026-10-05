@@ -46,7 +46,7 @@
   const quad = (a, c, b, t) => ({ x: (1 - t) ** 2 * a.x + 2 * (1 - t) * t * c.x + t * t * b.x, y: (1 - t) ** 2 * a.y + 2 * (1 - t) * t * c.y + t * t * b.y });
 
   let W = 0, H = 0, small = false, horizon = 0, PX = 0, yMin = 0, yMax = 0, base = 1, hudBottom = 100;
-  let mode = null, playing = false, time = 0, clock = 0, last = 0;
+  let mode = null, playing = false, time = 0, clock = 0, last = 0, ready = 0, goAt = -10, lastSecs = "";
   let herd = [], me = null, floaters = [], dust = [], lines = [], stars = [], ridge = [], scroll = 0;
   let press = null, nextSpawn = 0, nextConflict = 0, nextId = 401, pool = [], pairSeq = 0, landedPairs = new Map(), shown = new Set();
   let git = null, canon = null, theme = null, patterns = {}, moonShown = 0, beams = [], flashes = [], autopilot = false, pace = "medium";
@@ -220,6 +220,7 @@
     mode = m;
     time = 0;
     playing = true;
+    ready = 3; // 3, 2, 1, go: the clock starts after it
     autopilot = false;
     herd = herd.filter((a) => a === me?.a);
     if (!me?.a) newMain();
@@ -289,6 +290,13 @@
   function hud() {
     el("round").textContent = mode === "git" ? "Round 1 · Git" : mode === "canon" ? "Round 2 · Canon" : "Canon Stampede";
     el("time").style.width = `${mode ? Math.max(0, 1 - time / ROUND) * 100 : 100}%`;
+    // Seconds left, red for the last five.
+    const secs = mode ? `${Math.ceil(Math.max(0, ROUND - time))}s` : "";
+    if (secs !== lastSecs) {
+      el("secs").textContent = secs;
+      el("secs").classList.toggle("low", playing && ROUND - time <= 5);
+      lastSecs = secs;
+    }
     const html = mode === "git"
       ? `<span>Shipped <b>${git.shipped}</b></span><span>Broke production <b class="bad">${git.broke}</b></span><span>Reviewing <b>${git.review.toFixed(1)} s</b></span>`
       : mode === "canon"
@@ -406,7 +414,10 @@
   function step(dt) {
     clock += dt;
     scroll += SPEED * PACES[pace].x * dt;
-    if (playing) {
+    if (playing && ready > 0) {
+      ready = Math.max(0, ready - dt);
+      if (!ready) goAt = clock;
+    } else if (playing) {
       time += dt;
       nextSpawn -= dt;
       if (nextSpawn <= 0) {
@@ -466,7 +477,7 @@
         if (me.jump.st >= JUMP) land(me.jump.target, me.jump.auto);
       } else if (me.a) {
         if (playing) me.ride += dt;
-        if (playing && autopilot && me.ride > 0.45) {
+        if (playing && ready <= 0 && autopilot && me.ride > 0.45) {
           // Only green ones clearly ahead; with none in reach yet, keep riding.
           const from = riderAt();
           const next = herd.filter((a) => a.state === "green" && !a.past && a !== me.a && a.x > from.x + 20 && !outOfReach(a, from))
@@ -598,7 +609,7 @@
         if (h > 0) ctx.fillRect(x, my - h, 2, h * 2);
       }
       ctx.globalAlpha = 1;
-      label("REFEREE", mx, my + mr + 16, c.muted, moonShown, `600 ${small ? 9.5 : 10.5}px "JetBrains Mono", ui-monospace, monospace`);
+      label("REFEREE", mx, my + mr + 16, c.muted, moonShown, `600 ${small ? 9.5 : 10.5}px "Martian Mono", ui-monospace, monospace`);
       // A beam of moonlight on every change it's checking, widening from the moon onto the animal.
       for (const b of beams) {
         if (b.a.state !== "judging") continue;
@@ -1019,6 +1030,22 @@
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    // 3, 2, 1, Go! before each round, between the scoreboard and the horizon. Each number grows as its second runs out.
+    if (playing && (ready > 0 || clock - goAt < 0.7)) {
+      const k = ready > 0 ? 1 - (ready % 1 || 1) : (clock - goAt) / 0.7;
+      ctx.save();
+      ctx.font = `800 ${Math.round((small ? 76 : 120) * (0.85 + 0.25 * k))}px "Big Shoulders Display", Archivo, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.globalAlpha = ready > 0 ? 1 - 0.5 * k : 1 - k;
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = c.riderEdge;
+      ctx.fillStyle = ready > 0 ? c.ink : c.brand;
+      const text = ready > 0 ? String(Math.ceil(ready)) : "GO!", y = (hudBottom + horizon) / 2;
+      ctx.strokeText(text, W / 2, y);
+      ctx.fillText(text, W / 2, y);
+      ctx.restore();
+    }
     for (const f of floaters) {
       const age = clock - f.born;
       const color = f.tone === "broke" ? c.broke : f.tone === "held" ? c.held : f.tone === "muted" ? c.muted : c.ink;
@@ -1043,7 +1070,7 @@
     return best;
   }
   cv.addEventListener("pointerdown", (e) => {
-    if (!playing || !me) return;
+    if (!playing || ready > 0 || !me) return;
     const a = hit(e);
     if (!a) return;
     if (mode === "canon") return lasso(a);
@@ -1054,7 +1081,7 @@
     if (!press) return;
     const p = press;
     press = null;
-    if (!playing) return;
+    if (!playing || ready > 0) return;
     if (!p.done) {
       if (p.st > TAP) git.review += p.st;
       if (p.st <= TAP) lasso(p.a);
@@ -1062,7 +1089,7 @@
   };
   cv.addEventListener("pointerup", release);
   el("auto").addEventListener("click", () => {
-    if (!playing) return;
+    if (!playing || ready > 0) return;
     if (mode === "git") return tip("In this round nothing checks a change but you, so nothing can land changes for you.\nSomeone has to read every diff.");
     autopilot = !autopilot;
     if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself.\nPeople decide the facts; agents do the rest.");
