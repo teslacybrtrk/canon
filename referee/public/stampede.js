@@ -68,6 +68,7 @@
     stars = Array.from({ length: Math.round((W * horizon) / 7000) }, () => ({ x: rand(0, W), y: rand(0, horizon * 0.85), s: Math.random() < 0.12 ? 2 : 1, ph: rand(0, 6.3) }));
     lines = Array.from({ length: Math.round(W / 40) }, () => ({ x: rand(0, W), y: rand(horizon + 6, H), len: rand(20, 70) }));
     ridge = Array.from({ length: 40 }, (_, i) => ({ x: i / 39, h: rand(6, 22) }));
+    el("tip-low").style.top = `${Math.round(horizon - 30)}px`; // just above the ridge
     theme = null;
   }
 
@@ -158,17 +159,18 @@
     c.querySelector(".btn")?.focus({ preventScroll: true });
   }
 
-  let tipTimer = 0;
-  function tip(text, once) {
+  const tipTimers = {};
+  // `low` shows the tip just above the horizon instead of under the HUD; the two don't replace each other.
+  function tip(text, once, low) {
     if (once) {
       if (shown.has(once)) return;
       shown.add(once);
     }
-    const t = el("tip");
+    const k = low ? "tip-low" : "tip", t = el(k);
     t.textContent = text;
     t.classList.add("on");
-    clearTimeout(tipTimer);
-    tipTimer = setTimeout(() => t.classList.remove("on"), 5200);
+    clearTimeout(tipTimers[k]);
+    tipTimers[k] = setTimeout(() => t.classList.remove("on"), 5200);
   }
 
   function intro() {
@@ -999,9 +1001,9 @@
   cv.addEventListener("pointerup", release);
   el("auto").addEventListener("click", () => {
     if (!playing) return;
-    if (mode === "git") return tip("Git has no referee, so nothing can safely land changes for you. Someone has to read every diff.");
+    if (mode === "git") return tip("Git has no referee, so nothing can safely land changes for you.\nSomeone has to read every diff.", null, true);
     autopilot = !autopilot;
-    if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself. People decide the facts; agents do the rest.");
+    if (autopilot) tip("Autopilot on: with one line in canon.json, the referee lands every green change by itself.\nPeople decide the facts; agents do the rest.", null, true);
     hud();
   });
   cv.addEventListener("pointercancel", () => { press = null; });
