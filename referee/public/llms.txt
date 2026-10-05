@@ -17,9 +17,10 @@ revision: a fact with "replaces": "<fact id>". Agents never accept their own fac
 ## Connect an agent (MCP)
 
 Each project has an MCP endpoint (Streamable HTTP) with the tools canon_read, canon_claim, canon_verdict,
-canon_refresh and canon_why. It needs the project's agent key, which the project's owner gives you.
+canon_refresh and canon_why. <your-canon> is where a Canon runs (its owner sets it up with ./scripts/setup.sh),
+<project> is the app it judges, and the agent key comes from that owner.
 
-    claude mcp add --transport http canon https://canon.rodeo/p/<project>/mcp --header "Authorization: Bearer <agent key>"
+    claude mcp add --transport http canon https://<your-canon>/p/<project>/mcp --header "Authorization: Bearer <agent key>"
 
 Without MCP, the same moves are a one-file CLI: cli/canon.mjs (`canon read`, `canon claim`, `canon verdict`,
 `canon refresh`, `canon why`).
