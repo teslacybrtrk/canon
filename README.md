@@ -22,8 +22,9 @@ The facts live in the repo as `canon.json`, so the canon survives outside Cloudf
 required check in branch protection, but it checks behaviour on a live preview. A person pushing by hand is
 just another world and gets the same verdict. You can start from an existing Git repo by importing it.
 
-See [PROTOCOL.md](PROTOCOL.md) for the four moves. To feel the difference in 45 seconds, play
-[Canon Rodeo](https://canon.rodeo/game): one round running main the Git way, one the Canon way.
+See [PROTOCOL.md](PROTOCOL.md) for the four moves. To feel the difference in a minute, play
+[Buck the Canon](https://canon.rodeo/game): try to sneak a broken change into main and see what Canon and
+Git + CI each do with it.
 
 ## How it works
 

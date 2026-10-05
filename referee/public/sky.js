@@ -2,7 +2,7 @@
 // moon and orbit it while every fact is checked. A world that breaks a fact turns red, drops away
 // and bursts; one that keeps them all flies home and merges into the sun (it glows a little brighter).
 // Drawn in vertical scanlines, like a halftone print. Click the sun to fork a world yourself.
-// A game (rodeo.js, on /game) can take over the sky with window.canonSky.play(scene).
+// A game (buck.js, on /game) can take over the sky with window.canonSky.play(scene).
 (() => {
   const hero = document.querySelector(".hero");
   const canvas = document.getElementById("sky");
