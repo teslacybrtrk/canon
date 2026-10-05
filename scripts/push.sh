@@ -10,6 +10,7 @@ mint() {
 }
 token="$(mint)"
 [ -n "$token" ] || { sleep 3; token="$(mint)"; }   # wrangler occasionally returns nothing; retry once
+[ -n "$token" ] || { echo "push.sh: could not mint an Artifacts push token (try npx wrangler login), nothing pushed" >&2; exit 1; }
 [ -n "$token" ] || { echo "could not mint an Artifacts token"; exit 1; }
 git -c http.extraHeader="Authorization: Bearer $token" push -q "$REMOTE" main && echo "pushed to Artifacts (canon-src/canon)"
 git push -q github main && echo "pushed to GitHub mirror"
