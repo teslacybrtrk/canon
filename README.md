@@ -65,6 +65,8 @@ agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image str
    npx wrangler secret put CANON_AGENT_KEY       # agents' key: can claim, never accept
    npx wrangler deploy
    ```
+   On a Mac, `./scripts/keys.sh` makes both keys, keeps them in your Keychain and sets them on the referee;
+   the scripts below then read them from the Keychain.
 3. **Genesis**: push the demo app (with its `canon.json`) as the first world:
    ```sh
    export CANON_URL=https://canon.rodeo   # or https://canon-referee.<subdomain>.workers.dev
