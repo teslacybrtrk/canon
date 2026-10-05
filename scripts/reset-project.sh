@@ -26,7 +26,10 @@ done
 
 done
 
-(cd demo-app && npx wrangler deploy >/dev/null 2>&1) && echo "production reset to the local demo app"
+# Each project's production is its own Worker (see PRODUCTION_URL); put every one back to the demo app.
+for PROJECT in "$@"; do
+  (cd demo-app && npx wrangler deploy --name "$PROJECT" >/dev/null 2>&1) && echo "production for $PROJECT reset to the local demo app"
+done
 
 epoch="$(node -e 'const s=require("fs").readFileSync("referee/wrangler.jsonc","utf8");console.log(Number(s.match(/"REFEREE_EPOCH": "(\d+)"/)[1])+1)')"
 sed -i '' -E "s/\"REFEREE_EPOCH\": \"[0-9]+\"/\"REFEREE_EPOCH\": \"$epoch\"/" referee/wrangler.jsonc
