@@ -1,6 +1,6 @@
 // The hero sky. The sun is canon; the moon is the referee. Worlds fork from the sun, fly to the
 // moon and orbit it while every fact is checked. A world that breaks a fact turns red, drops away
-// and bursts; one that keeps them all flies home and merges into the sun (it flares).
+// and bursts; one that keeps them all flies home and merges into the sun (it glows a little brighter).
 // Drawn in vertical scanlines, like a halftone print. Click the sun to fork a world yourself.
 (() => {
   const hero = document.querySelector(".hero");
@@ -16,11 +16,11 @@
     light: { fork: "#ed5616", held: "#1e7b4f", broke: "#c0264e", pending: "#b7791f", node: "#ffffff", ember: "#ed5616", glow: 0.3, trail: 0.7,
       moonLit: "#2a3a52", moonDim: "#01132a", moonGlow: "1,19,42", scan: "#fdc86d" },
   };
-  const FLY = 2.6, HOLD = 0.8, BACK = 2.4, FADE = 1.4, DROP = 1.1, POP = 1.0, OMEGA = 1.3, GRAVITY = 110;
+  const FLY = 2.6, HOLD = 0.8, BACK = 2.4, FADE = 1.4, DROP = 1.1, POP = 1.0, OMEGA = 1.3, GRAVITY = 110, SWELL = 2.2;
 
   let W = 0, H = 0, R = 250, VIS = 130, small = false;
   let stars = [], embers = [], worlds = [], rings = [], moonRings = [];
-  let px = 0, pxTarget = 0, flare = 0, nextFork = 2.2, last = 0, clock = 0, raf = 0;
+  let px = 0, pxTarget = 0, flare = 0, swells = [], nextFork = 2.2, last = 0, clock = 0, raf = 0;
 
   const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
   const easeIn = (x) => x * x * x;
@@ -127,7 +127,7 @@
 
   function drawSun(s, c, t) {
     const g = ctx.createRadialGradient(s.x, H, R * 0.3, s.x, H, R * 2.4);
-    const a = c.glow * (1 + 0.1 * Math.sin(t * 0.8) + flare * 0.7);
+    const a = c.glow * (1 + 0.1 * Math.sin(t * 0.8) + flare * 0.5);
     g.addColorStop(0, `rgba(253,111,22,${a})`);
     g.addColorStop(1, "rgba(253,111,22,0)");
     ctx.globalAlpha = 1;
@@ -147,7 +147,7 @@
       const h = Math.sqrt(Math.max(0, R * R - dx * dx));
       const top = s.y - h;
       if (top >= H || h === 0) continue;
-      ctx.globalAlpha = Math.min(1, 0.84 + flare * 0.2 + 0.16 * Math.sin(t * 1.7 + x * 0.045) * Math.sin(t * 0.45 + x * 0.012));
+      ctx.globalAlpha = Math.min(1, 0.84 + flare * 0.15 + 0.16 * Math.sin(t * 1.7 + x * 0.045) * Math.sin(t * 0.45 + x * 0.012));
       ctx.fillRect(x, top, bar, Math.min(H, s.y + h) - top);
     }
     ctx.globalCompositeOperation = "destination-out";
@@ -264,9 +264,9 @@
     }
     for (const r of rings) {
       const u = (clock - r.at) / 1.8;
-      ctx.globalAlpha = 0.6 * (1 - u);
+      ctx.globalAlpha = 0.32 * (1 - u);
       ctx.strokeStyle = c.pending;
-      ctx.lineWidth = 2.2 * (1 - u) + 0.4;
+      ctx.lineWidth = 1.4 * (1 - u) + 0.4;
       ctx.beginPath();
       ctx.arc(s.x, s.y, R + 6 + easeOut(u) * 90, Math.PI, Math.PI * 2);
       ctx.stroke();
@@ -298,7 +298,9 @@
   function step(dt) {
     clock += dt;
     px += (pxTarget - px) * Math.min(1, dt * 3);
-    flare *= Math.exp(-dt * 1.8);
+    // A merge swells the sun's glow in and out over two seconds, never a sudden flash.
+    swells = swells.filter((at) => clock - at < SWELL);
+    flare = Math.min(0.45, swells.reduce((sum, at) => sum + 0.3 * Math.sin((Math.PI * (clock - at)) / SWELL), 0));
     if (clock > nextFork) {
       fork();
       nextFork = clock + rand(1.8, 3.0);
@@ -319,7 +321,7 @@
       }
       if (p.state === "home" && p.u >= 1 && w.merged == null) {
         w.merged = clock;
-        flare = Math.min(1.4, flare + 1);
+        swells.push(clock);
         rings.push({ at: clock });
       }
       for (const f of w.parts ?? []) {
