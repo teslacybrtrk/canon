@@ -1,6 +1,7 @@
 import { CiSandbox } from "@cloudflare/ci/worker";
 import type { Env } from "./env";
 import { errorStatus, type DeclareRequest } from "./protocol";
+import { serveMcp } from "./mcp";
 import { serveGit, serveSource } from "./source";
 import { refereeForProject } from "./stub";
 
@@ -21,6 +22,7 @@ export { VerifyWorld, PromoteWorld } from "./pipelines";
 //   POST /p/:project/facts/:id/check          run a fact's check against production now
 //   GET  /p/:project/ws                       live board
 //   GET  /p/:project/previews                 Preview names used (for reset)
+//   POST /p/:project/mcp                      the moves as MCP tools, for any MCP agent        agent or owner key
 //   git clone https://canon.rodeo/canon.git   Canon's own source, read-only (also /w/<world>.git, /src)
 //   POST /p/:project/genesis                  one-time setup (empty repo, or {"importUrl": "<git url>"})   owner key
 export default {
@@ -37,12 +39,13 @@ export default {
 
     // Every POST is a write and needs a key, except checking a fact against production.
     if (request.method === "POST" && !/^POST \/facts\/[\w-]+\/check$/.test(route)) {
-      const denied = await deny(request, env, route === "POST /claims" ? "agent" : "owner");
+      const denied = await deny(request, env, route === "POST /claims" || route === "POST /mcp" ? "agent" : "owner");
       if (denied) return denied;
     }
 
     try {
       let match: RegExpMatchArray | null;
+      if (rest === "/mcp") return serveMcp(request, env, project);
       if (route === "GET /ws") return referee.fetch(request);
       if (route === "GET /canon") return json(await referee.read());
       if (route === "GET /previews") return json(await referee.previews());

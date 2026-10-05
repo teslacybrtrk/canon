@@ -194,6 +194,29 @@ export class Referee extends DurableObject<Env> {
     return { factId: fact.id, run: fact.check.run, files };
   }
 
+  /**
+   * The canon.json a new world must commit: canon's own file at the fork, plus the claimed fact (a revision drops
+   * the fact it replaces; a backlog fact moves into the facts). This is what `canon claim` writes; MCP agents get it whole.
+   */
+  async worldLedger(worldId: string): Promise<string> {
+    const world = this.world(worldId);
+    const claim = world?.claimId ? this.claim(world.claimId) : null;
+    const fact = claim ? this.fact(claim.factId) : null;
+    if (!world?.baseSha || !fact) throw new ProtocolError(404, `no claimed world "${worldId}"`);
+    using repo = await this.env.ARTIFACTS.get(worldId);
+    const blob = await repo.readFile({ ref: world.baseSha, path: "canon.json" });
+    if (!blob) throw new ProtocolError(404, "the world has no canon.json");
+    const ledger = JSON.parse(await blob.text()) as CanonFile;
+    const def: FactDef = { id: fact.id, sentence: fact.sentence, check: fact.check };
+    if (fact.scope?.length) def.scope = fact.scope;
+    if (fact.replaces) def.replaces = fact.replaces;
+    if (fact.replaces) ledger.facts = ledger.facts.filter((f) => f.id !== fact.replaces);
+    if (Array.isArray(ledger.backlog)) ledger.backlog = ledger.backlog.filter((f) => f.id !== fact.id);
+    if (ledger.backlog?.length === 0) delete ledger.backlog;
+    if (!ledger.facts.some((f) => f.id === fact.id)) ledger.facts.push(def);
+    return JSON.stringify(ledger, null, 2) + "\n";
+  }
+
   /** Command facts the CI pipeline must run for this commit (lint, types, tests...), already filtered by scope. */
   async commandsFor(repo: string, sha: string): Promise<Array<{ factId: string; run: string }>> {
     const world = this.world(repo);
