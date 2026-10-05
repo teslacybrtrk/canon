@@ -13,16 +13,14 @@ for PROJECT in "$@"; do
 
 # Every Preview the referee judged (one per pushed commit), before the board is reset.
 previews="$(curl -sf "$CANON_URL/p/$PROJECT/previews" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{for(const n of JSON.parse(s))console.log(n)}catch{}})')"
-for name in $previews; do
-  (cd demo-app && npx wrangler preview delete --name "$name" >/dev/null 2>&1) && echo "deleted preview $name" || true
-done
+# Deletions run 8 at a time: each one is a separate wrangler call that takes a few seconds.
+printf '%s\n' $previews | xargs -P 8 -I{} sh -c 'cd demo-app && npx wrangler preview delete --name "$1" >/dev/null 2>&1 && echo "deleted preview $1" || true' _ {}
 
 repos="$(cd referee && npx wrangler artifacts repos list --namespace "$NAMESPACE" --json 2>/dev/null \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s.slice(s.indexOf("[")));for(const x of j)if(x.name.startsWith(process.argv[1]+"-"))console.log(x.name)})' "$PROJECT")"
-for repo in $repos; do
-  (cd referee && npx wrangler artifacts repos delete "$repo" --namespace "$NAMESPACE" --force >/dev/null 2>&1) && echo "deleted repo $repo"
-  (cd demo-app && npx wrangler preview delete --name "$repo" >/dev/null 2>&1) && echo "deleted preview $repo" || true
-done
+printf '%s\n' $repos | xargs -P 8 -I{} sh -c '
+  (cd referee && npx wrangler artifacts repos delete "$1" --namespace "$2" --force >/dev/null 2>&1) && echo "deleted repo $1"
+  (cd demo-app && npx wrangler preview delete --name "$1" >/dev/null 2>&1) && echo "deleted preview $1" || true' _ {} "$NAMESPACE"
 
 done
 

@@ -61,6 +61,18 @@ Found while building, Oct 4–13, 2026.
     and report "could not run (platform error)" rather than blaming the code.
     *Would help:* a typed error (`exitCode` on the thrown runner failure) so callers can tell the two apart.
 
+12. **Setting a secret restarts Durable Objects mid-request.** `wrangler secret put` deploys a new version, and an
+    in-flight request to the referee's Durable Object failed with "Durable Object reset because its code was updated"
+    after it had already created an Artifacts repo, leaving a repo with no record of it.
+    *We did:* deleted the orphaned repo and retried.
+    *Would help:* secret changes that let in-flight requests finish, or a note in the `secret put` docs that it
+    restarts Durable Objects like a deploy.
+
+13. **Previews are capped per Worker and the oldest are deleted without notice** (100 Free, 500 Paid). With a
+    Preview per pushed commit, a few busy agent runs reach the cap, and a judged attempt's Preview can disappear.
+    *We did:* keep every world in Artifacts so its Preview can be rebuilt from the commit, and delete Previews on reset.
+    *Would help:* an event or warning before eviction, or a way to pin Previews that matter.
+
 ## Things that worked especially well
 
 - `fork()` returns in about a second, and a fork's `source` field records lineage (`artifacts:canon/<parent>`),
