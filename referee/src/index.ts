@@ -17,6 +17,7 @@ export { VerifyWorld, PromoteWorld } from "./pipelines";
 //   GET  /p/:project/worlds/:id/verdict       move 4: verdict
 //   POST /p/:project/claims/:id/accept        review: a human accepts a fact
 //   GET  /p/:project/facts/:id/why            the fact chain
+//   POST /p/:project/facts/:id/check          run a fact's check against production now
 //   GET  /p/:project/ws                       live board
 //   GET  /p/:project/previews                 Preview names used (for reset)
 //   git clone https://canon.rodeo/canon.git   Canon's own source, read-only (also /w/<world>.git, /src)
@@ -49,6 +50,7 @@ export default {
       }
       if ((match = route.match(/^POST \/claims\/([\w-]+)\/accept$/))) return json(await referee.accept(match[1]));
       if ((match = route.match(/^GET \/facts\/([\w-]+)\/why$/))) return json(await referee.why(match[1]));
+      if ((match = route.match(/^POST \/facts\/([\w-]+)\/check$/))) return json(await referee.checkProduction(match[1]));
       return json({ error: "not found" }, 404);
     } catch (err) {
       const { status, message } = errorStatus(err);

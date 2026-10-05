@@ -248,27 +248,50 @@
   .qa .a p { margin: 0 0 8px; }
 
   /* ---- Why dialog --------------------------------------------------------------------- */
-  dialog { width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--line-2); border-radius: 20px; padding: 0; color: var(--ink);
+  dialog { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--line-2); border-radius: 20px; padding: 0; color: var(--ink);
     background: var(--panel-solid); box-shadow: 0 40px 120px -20px rgb(0 0 0 / 0.7); }
   dialog::backdrop { background: rgb(1 14 32 / 0.6); backdrop-filter: blur(6px); }
   dialog[open] { animation: lift .35s cubic-bezier(.2,.7,.1,1); }
-  .why-head { position: relative; padding: 28px 28px 22px; border-bottom: 1px solid var(--line); overflow: hidden; }
+  .why-head { position: relative; padding: 26px 28px 20px; border-bottom: 1px solid var(--line); overflow: hidden; }
   .why-head::before { content: ""; position: absolute; inset: 0; background: var(--sky); opacity: 0.25; }
   .why-head > * { position: relative; }
-  .why-head h3 { font: 800 44px/0.98 var(--display); text-transform: uppercase; letter-spacing: 0.005em; margin: 6px 0 12px; }
-  .why-head p { margin: 0; color: var(--ink-2); }
-  .why-head p b { color: var(--ink); }
-  .worlds { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 22px 28px; }
-  .window { border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; background: var(--bg-2); }
-  .window.accepted { box-shadow: 0 0 0 2px var(--held); }
-  .window.failed { box-shadow: 0 0 0 2px var(--broke); }
-  .window-bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); font: 400 11px var(--mono); color: var(--muted); }
-  .window-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); }
-  .window-bar a { margin-left: auto; }
-  .window-label { padding: 10px 12px 0; font-size: 13px; font-weight: 600; }
-  .window-label.held { color: var(--held); } .window-label.broke { color: var(--broke); }
-  .window-detail { padding: 2px 12px 10px; font: 400 11px var(--mono); color: var(--muted); }
-  .window iframe { display: block; width: 100%; height: 420px; border: 0; background: #fff; }
+  .why-head h3 { font: 800 clamp(30px, 4.4vw, 42px)/0.98 var(--display); text-transform: uppercase; letter-spacing: 0.005em; margin: 6px 0 10px; }
+  .why-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font: 400 12px var(--mono); color: var(--muted); }
+  .why-chip { font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+  .why-chip.canon { color: var(--held); background: var(--held-bg); }
+  .why-chip.proposed { color: var(--pending); background: var(--pending-bg); }
+  .why-chip.retired { color: var(--muted); border: 1px solid var(--line-2); }
+  .why-body { display: grid; gap: 24px; padding: 22px 28px 6px; }
+  .why-sec h4 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 700 20px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0 0 6px; }
+  .why-sec h4 .run { margin-left: auto; }
+  .why-sec > p { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
+  .run { font: 600 13px var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--brand); border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+  .run:hover:not(:disabled) { background: var(--brand); color: #1a0b02; }
+  .run:disabled { opacity: .55; cursor: default; }
+  .steps { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; background: var(--bg-2); }
+  .steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); font: 400 12.5px/1.55 var(--mono); }
+  .steps li:first-child { border-top: 0; }
+  .steps .n { color: var(--muted); }
+  .steps .req { display: block; color: var(--ink); overflow-wrap: anywhere; }
+  .steps .exp { display: block; color: var(--held); overflow-wrap: anywhere; }
+  .live { display: none; margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 14px; }
+  .live.on { display: block; }
+  .live.wait { color: var(--muted); border: 1px dashed var(--line-2); }
+  .live.ok { color: var(--held); background: var(--held-bg); }
+  .live.no { color: var(--broke); background: var(--broke-bg); }
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li { position: relative; padding: 0 0 16px 26px; color: var(--ink-2); font-size: 14px; }
+  .timeline li::before { content: ""; position: absolute; left: 5px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .timeline li::after { content: ""; position: absolute; left: 9px; top: 19px; bottom: 2px; width: 1px; background: var(--line-2); }
+  .timeline li:last-child::after { display: none; }
+  .timeline li.held::before { background: var(--held); }
+  .timeline li.broke::before { background: var(--broke); }
+  .timeline li.note::before { background: var(--gold); }
+  .timeline b { color: var(--ink); font-weight: 600; }
+  .timeline .world { font: 400 12px var(--mono); color: var(--muted); }
+  .timeline .detail { display: block; margin-top: 3px; font: 400 12px/1.5 var(--mono); color: var(--broke); overflow-wrap: anywhere; }
+  .timeline .links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 6px; font-size: 13px; }
+  .timeline .links .copy { font-size: 11px; padding: 4px 9px; }
   .why-foot { display: flex; align-items: center; gap: 12px; padding: 0 28px 24px; color: var(--muted); font-size: 13px; }
   .why-foot form { margin-left: auto; }
   .why-foot .copy { font-size: 13px; padding: 8px 14px; }
@@ -602,40 +625,122 @@
       if (!res.ok) { alert((await res.json()).error); accept.disabled = false; accept.textContent = "Accept fact"; }
       return;
     }
+    const run = e.target.closest("[data-run]");
+    if (run) return runLive(run.dataset.run, run);
     const fact = e.target.closest("[data-fact]");
     if (fact) showWhy(fact.dataset.fact);
   });
 
+  const ago = (ms) => {
+    const sec = Math.max(1, Math.round((Date.now() - ms) / 1000));
+    return sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
+  };
+  // One probe step in plain words: the request, then what has to come back.
+  function describeStep(step) {
+    const req = `${step.method ?? "GET"} ${step.path}${step.body === undefined ? "" : ` ${JSON.stringify(step.body)}`}`;
+    const e = step.expect ?? {};
+    const want = [];
+    if (step.repeat) want.push(`${step.repeat} requests, p95 under ${e.p95Ms} ms`);
+    if (e.status !== undefined) want.push(`status ${[e.status].flat().join(" or ")}`);
+    if (e.bodyIncludes) want.push(`page includes “${e.bodyIncludes}”`);
+    for (const [path, v] of Object.entries(e.json ?? {})) {
+      want.push(v && typeof v === "object" && "$exists" in v ? `${path} is ${v.$exists ? "present" : "absent"}` : `${path} = ${JSON.stringify(v)}`);
+    }
+    for (const [name, path] of Object.entries(step.save ?? {})) want.push(`remember ${path} as {{${name}}}`);
+    return { req, want: want.join(" · ") || "any answer" };
+  }
+
+  // "Why is this true?": the fact, the exact check that decides it (runnable against production),
+  // and its history: who made it true, how many worlds were judged on it, and every world that broke it.
   async function showWhy(id) {
     const w = MOCK ? window.CANON_MOCK.why[id] ?? { fact: state.facts.find((f) => f.id === id), madeTrueBy: null, rejected: [], held: [] }
                    : await (await fetch(`/p/${project}/facts/${id}/why`)).json();
-    const host = (u) => { try { return new URL(u).host; } catch { return u; } };
-    const frame = (url, cls, label, labelCls, detail) => url ? `
-      <div class="window ${cls}">
-        <div class="window-bar"><i></i><i></i><i></i><span>${esc(host(url))}</span><a href="${esc(url)}" target="_blank" rel="noopener">open ↗</a></div>
-        <div class="window-label ${labelCls}">${label}</div><div class="window-detail">${esc(detail)}</div>
-        <iframe src="${esc(url)}" loading="lazy" title="${esc(label)}"></iframe>
-      </div>` : "";
-    // Latest failure per world. Previews only for real failures; worlds built before the fact existed are listed.
+    const f = w.fact;
+    const status = f.status === "canon" ? "canon" : f.status === "retired" ? "retired" : "proposed";
+    const c = f.check;
+    // Latest result per world (rows arrive newest first).
     const latest = [...new Map([...w.rejected].reverse().map((r) => [r.world_id, r])).values()];
     const failed = latest.filter((r) => r.kind !== "behind" && r.kind !== "revision");
     const behind = latest.filter((r) => r.kind === "behind");
-    const kindLabel = (r) => r.kind === "attempt" ? "Tried and failed" : r.kind === "revision" ? "Replaced it on purpose" : "Broke it after it became canon";
+    const judged = new Set([...w.rejected, ...w.held].map((r) => r.world_id));
+    const kept = [...judged].filter((wid) => !latest.some((r) => r.world_id === wid)).length;
+    const links = (worldId, url) => `<div class="links">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">Preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(worldId))}" title="${esc(cloneCmd(worldId))}">Clone world</button></div>`;
+    const kindLabel = { attempt: "Tried and failed", contradiction: "Broke it after it became canon" };
+    const groups = [...failed.reduce((map, r) => {
+      const key = `${r.agent}|${r.kind}|${r.detail}`;
+      const g = map.get(key) ?? { agent: r.agent, kind: r.kind, detail: r.detail, worlds: [], last: r };
+      g.worlds.push(r.world_id);
+      g.last = r;
+      return map.set(key, g);
+    }, new Map()).values()];
     const m = w.madeTrueBy;
+
+    const steps = c.kind === "command"
+      ? `<ol class="steps"><li><span class="n">$</span><span><span class="req">${esc(c.run)}</span><span class="exp">→ must exit 0</span></span></li></ol>`
+      : `<ol class="steps">${c.steps.map((st, i) => { const d = describeStep(st); return `<li><span class="n">${i + 1}</span><span><span class="req">${esc(d.req)}</span><span class="exp">→ ${esc(d.want)}</span></span></li>`; }).join("")}</ol>`;
+    const story = [
+      f.origin === "seed" ? `<li class="held"><b>A seed fact</b>, written into canon.json at genesis. True since the first canon${f.acceptedAt ? ` (${ago(f.acceptedAt)})` : ""}.</li>`
+        : f.origin === "backlog" ? `<li class="note"><b>Written by people</b> in the backlog, for an agent to make true.</li>`
+        : `<li class="note"><b>${esc(w.proposer?.agent ?? m?.claim?.agent ?? "An agent")}</b> proposed it${(w.proposer ?? m?.claim)?.why ? `: “${esc((w.proposer ?? m.claim).why)}”` : "."}</li>`,
+      w.replaces ? `<li class="note">A revision of “${esc(w.replaces.sentence)}”. The old rule was retired when this one was accepted.</li>` : "",
+      m ? `<li class="held"><b>Made true</b> in <span class="world">${esc(m.world?.id)}</span>${f.acceptedAt ? ` and accepted ${ago(f.acceptedAt)}` : ""}.${links(m.world?.id, m.world?.previewUrl)}</li>` : "",
+      w.retiredBy ? `<li class="note"><b>Retired</b> by ${esc(w.retiredBy.claim?.agent)}'s revision, replaced by “${esc(w.retiredBy.replacement?.sentence ?? "")}”: “${esc(w.retiredBy.claim?.why)}”</li>` : "",
+      judged.size ? `<li class="${failed.length ? "broke" : "held"}">${status === "proposed" ? "Tried" : "Judged"} on <b>${judged.size} world${judged.size === 1 ? "" : "s"}</b> so far: ${[status === "proposed" ? `${kept} made it true` : `${kept} kept it`, failed.length ? `${failed.length} broke it` : "", behind.length ? `${behind.length} were built before it existed` : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")}.${status === "proposed" && kept ? " Waiting for a person to accept it." : ""}</li>` : "",
+      // Repeats of the same failure by the same agent collapse into one entry; links go to the latest world.
+      ...groups.slice(0, 6).map((g) => `<li class="broke"><b>${kindLabel[g.kind] ?? "Failed it"}</b> · ${esc(g.agent ?? "")} ${g.worlds.length > 1 ? `<span class="world">${g.worlds.length} worlds</span>` : `<span class="world">${esc(g.last.world_id)}</span>`}<span class="detail">${esc(g.detail)}</span>${links(g.last.world_id, g.last.preview_url)}</li>`),
+      groups.length > 6 ? `<li class="broke">…and ${groups.length - 6} more.</li>` : "",
+      behind.length ? `<li class="note">Built before this fact existed: ${behind.map((r) => esc(r.agent ?? r.world_id)).join(", ")}. They refresh onto the new canon.</li>` : "",
+    ].join("");
+
     $("whybody").innerHTML = `
       <div class="why-head">
-        <p class="kicker">Why is this true?</p>
-        <h3>${esc(w.fact.sentence)}</h3>
-        <p>${w.fact.status === "retired" && w.retiredBy ? `<b>Retired</b> by <b>${esc(w.retiredBy.claim?.agent)}</b>, replaced by “${esc(w.retiredBy.replacement?.sentence ?? "")}” — “${esc(w.retiredBy.claim?.why)}”<br>` : ""}${w.replaces ? `Revises “${esc(w.replaces.sentence)}”.<br>` : ""}${m ? `Made true by <b>${esc(m.claim?.agent)}</b> in <code>${esc(m.world?.id)}</code> — “${esc(m.claim?.why)}”` : `A seed fact: true since the first canon.`}
-           ${failed.length ? ` · ${failed.length} world${failed.length > 1 ? "s" : ""} failed it.` : ""}</p>
+        <p class="kicker">${status === "proposed" ? "What would make this true?" : status === "retired" ? "Why was this true?" : "Why is this true?"}</p>
+        <h3>${esc(f.sentence)}</h3>
+        <div class="why-meta"><span class="why-chip ${status}">${status === "canon" ? "Canon" : status === "retired" ? "Retired" : "Proposed"}</span><span>${esc(f.id)}</span><span>${c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
       </div>
-      <div class="worlds">
-        ${m ? frame(m.world?.previewUrl, "accepted", "Accepted world", "held", `${m.claim?.agent ?? ""} · ${m.world?.id ?? ""}`) : ""}
-        ${failed.map((r) => frame(r.preview_url, "failed", `${kindLabel(r)} · ${esc(r.agent ?? r.world_id)}`, "broke", r.detail)).join("")}
-        ${!m && !failed.length ? `<div class="empty">No world has failed this fact yet.</div>` : ""}
-      </div>
-      ${behind.length ? `<p class="why-foot" style="padding-top:0">Built before this fact existed: ${behind.map((r) => esc(r.agent ?? r.world_id)).join(", ")}</p>` : ""}`;
+      <div class="why-body">
+        <section class="why-sec">
+          <h4>The check${c.kind === "probe" && status !== "retired" ? `<button class="run" type="button" data-run="${esc(f.id)}">Check production now</button>` : ""}</h4>
+          <p>${c.kind === "command"
+            ? "A fact is a sentence plus a check. The referee runs this command on every world's code in CI. The command lives in canon, so a world can't change what judges it."
+            : "A fact is a sentence plus a check. The referee runs these requests against every world's live preview, and the world can't edit them."}</p>
+          ${steps}
+          <p class="live" id="live" role="status"></p>
+        </section>
+        <section class="why-sec">
+          <h4>Its history</h4>
+          <ol class="timeline">${story}</ol>
+        </section>
+      </div>`;
     $("why").showModal();
+  }
+
+  // Runs the fact's check against production right now.
+  async function runLive(id, btn) {
+    const out = $("live");
+    const f = state.facts.find((x) => x.id === id);
+    out.className = "live on wait";
+    if (MOCK) {
+      out.textContent = "Sample data: on the live board this button runs the check against production.";
+      return;
+    }
+    btn.disabled = true;
+    out.textContent = "Running the check against production…";
+    try {
+      const res = await fetch(`/p/${project}/facts/${id}/check`, { method: "POST" });
+      const r = await res.json();
+      if (!res.ok) throw new Error(r.error);
+      out.className = `live on ${r.held ? "ok" : "no"}`;
+      out.innerHTML = r.held
+        ? `✓ <b>True on production right now.</b> Checked against ${esc(new URL(r.url).host)} in ${r.ms} ms.`
+        : f?.status === "proposed"
+          ? `✗ <b>Not true on production yet.</b> That's what the agent is working on. ${esc(r.detail)}`
+          : `✗ <b>Not true on production:</b> ${esc(r.detail)}`;
+    } catch (err) {
+      out.className = "live on no";
+      out.textContent = `Couldn't run the check: ${err.message}`;
+    }
+    btn.disabled = false;
   }
 
   function connect() {

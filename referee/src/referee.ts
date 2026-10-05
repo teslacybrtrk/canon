@@ -31,10 +31,13 @@ const LIVE: ClaimStatus[] = ["checking", "contradicts", "unproven", "behind", "r
 type Row = Record<string, SqlStorageValue>;
 type AutoAccept = "off" | "backlog";
 
+const LIVE_CHECK_TTL_MS = 30_000;
+
 /** One referee per project. The only writer of facts, claims and the canon pointer. */
 export class Referee extends DurableObject<Env> {
   private sql: SqlStorage;
   private changedCache = new Map<string, string[] | null>();
+  private liveChecks = new Map<string, CheckResult & { url: string; at: number }>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -348,14 +351,34 @@ export class Referee extends DurableObject<Env> {
     const madeTrueBy = fact.madeTrueBy ? { world: this.world(fact.madeTrueBy), claim: claimFor(fact.madeTrueBy) } : null;
     const replacement = this.rows(`SELECT * FROM facts WHERE replaces = ? AND status = 'canon'`, factId).map(toFact)[0] ?? null;
     const retiredBy = fact.retiredBy ? { world: this.world(fact.retiredBy), claim: claimFor(fact.retiredBy), replacement } : null;
+    // proposedBy holds the id of the claim that first proposed the fact.
+    const proposer = fact.proposedBy ? (this.rows(`SELECT * FROM claims WHERE id = ?`, fact.proposedBy).map(toClaim)[0] ?? null) : null;
     return {
       fact,
+      proposer,
       madeTrueBy,
       retiredBy,
       replaces: fact.replaces ? this.fact(fact.replaces) : null,
       rejected: trials.filter((t) => !t.held).map((t) => ({ ...t, kind: kindOf(t) })),
       held: trials.filter((t) => t.held),
     };
+  }
+
+  /**
+   * Runs a fact's check against production right now, so anyone can watch it hold (or, for a proposed
+   * fact, see that it doesn't yet). Probes carry their own run id, so production data is untouched.
+   * Command facts need a checkout and run in CI. Results are cached briefly per fact.
+   */
+  async checkProduction(factId: string) {
+    const fact = this.fact(factId);
+    if (!fact) throw new ProtocolError(404, "no such fact");
+    if (fact.check.kind !== "probe") throw new ProtocolError(400, "command facts run in CI on every push, not against production");
+    const cached = this.liveChecks.get(factId);
+    if (cached && Date.now() - cached.at < LIVE_CHECK_TTL_MS) return cached;
+    const url = this.env.PRODUCTION_URL.replace("{project}", this.requireProject());
+    const result = { ...(await runCheck(fact.check, url)), url, at: Date.now() };
+    this.liveChecks.set(factId, result);
+    return result;
   }
 
   // ---- Board -------------------------------------------------------------------------

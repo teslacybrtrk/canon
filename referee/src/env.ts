@@ -16,5 +16,5 @@ export type Env = CiBindings & {
   // Preview origin for a world, e.g. "https://{name}-farmstand.<subdomain>.workers.dev".
   // Used when `wrangler preview --json` output cannot be parsed.
   PREVIEW_URL_TEMPLATE: string;
-  PRODUCTION_URL: string;
+  PRODUCTION_URL: string; // https://{project}.<subdomain>.workers.dev: each project deploys under its own Worker name
 };
