@@ -169,9 +169,11 @@
   .pr { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 10px; padding: 12px 16px; border-top: 1px solid var(--border-muted); }
   .pr:first-child { border-top: 0; }
   .pr:hover { background: var(--hover); }
-  .pr .st-icon { margin-top: 3px; }
+  .pr .st-icon { display: flex; width: 16px; height: 16px; margin-top: 3px; }
+  .pr .st-icon svg { display: block; }
   .s-open .st-icon, .s-checking .st-icon, .s-unproven .st-icon, .s-behind .st-icon, .s-error .st-icon { color: var(--pending); }
-  .s-checking .st-icon { animation: spin 1.6s linear infinite; }
+  /* Spin the 16px icon itself: the grid cell is as tall as the row, so rotating it would orbit. */
+  .s-checking .st-icon svg { transform-origin: 50% 50%; animation: spin 1.6s linear infinite; }
   .s-ready .st-icon { color: var(--held); }
   .s-contradicts .st-icon { color: var(--broke); }
   .s-accepted .st-icon { color: var(--merged); }
