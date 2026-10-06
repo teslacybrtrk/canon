@@ -55,7 +55,7 @@ const TOOLS = [
   },
   {
     name: "canon_refresh",
-    description: "Your attempt is BEHIND (canon moved after you forked). Makes you a fresh attempt from the current canon for the same fact, and returns the commands that replay your changes onto it.",
+    description: "Only when canon_verdict says to: your attempt is BEHIND and the judge couldn't re-apply it (a text conflict), or you need to change the attempt the judge re-applied for you. Makes you a fresh attempt from the current canon for the same fact, and returns the commands that replay your changes onto it.",
     inputSchema: {
       type: "object",
       required: ["attempt", "agent"],
@@ -128,9 +128,14 @@ async function call(name: string, args: Args, referee: Referee, project: string)
     const state = (await referee.read()) as CanonState;
     const old = state.claims.find((c) => c.attemptId === need("attempt"));
     if (!old) fail(`no claim for attempt "${args.attempt}"`);
-    if (old!.status === "superseded") fail(`attempt ${old!.attemptId} was already refreshed or replaced; call canon_verdict on it to find the newer attempt`);
-    if (old!.verdict?.outcome !== "behind") fail(`refresh is only for an attempt that is BEHIND; this one is ${old!.verdict?.outcome ?? old!.status}`);
-    const declared = await referee.declare({ agent: need("agent"), why: `${old!.why} (refreshed onto canon ${state.canon?.seq})`, join: old!.factId, replaces: old!.id });
+    // The judge may already have re-applied it: then this gives the agent its own copy, replacing the judge's attempt.
+    let latest = old!;
+    for (let next; latest.status === "superseded" && (next = state.claims.find((c) => c.refreshedFrom === latest.id)); ) latest = next;
+    if (latest.status === "superseded") fail(`attempt ${old!.attemptId} was already refreshed or replaced; call canon_verdict on it to find the newer attempt`);
+    if (latest !== old && ["ready", "accepted", "open", "checking"].includes(latest.status)) fail(`the judge re-applied this attempt as ${latest.attemptId}, which is ${latest.status}: nothing to refresh. Call canon_verdict.`);
+    if (latest === old && old!.verdict?.outcome !== "behind") fail(`refresh is only for an attempt that is BEHIND; this one is ${old!.verdict?.outcome ?? old!.status}`);
+    const why = `${old!.why.replace(/ \(refreshed onto canon \d+\)$/, "")} (refreshed onto canon ${state.canon?.seq})`;
+    const declared = await referee.declare({ agent: need("agent"), why, join: old!.factId, replaces: latest.id });
     return start(referee, project, declared.claim, declared.attempt, need("agent"), old!.attemptId);
   }
   return fail(`unknown tool ${name}`);
@@ -194,11 +199,14 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
   let v: Verdict | null;
   for (;;) {
     v = (await referee.verdict(attempt)) as Verdict | null;
-    if ((v && (!sha || v.sha.startsWith(sha) || sha.startsWith(v.sha))) || Date.now() >= deadline) break;
+    if ((v && (v.refreshedAs || !sha || v.sha.startsWith(sha) || sha.startsWith(v.sha))) || Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, 5_000));
   }
   // Canon moved and the judge re-applied this attempt on the current canon: report the newer attempt instead.
   const moved: string[] = [];
+  if (v?.refreshedAs && sha && !v.sha.startsWith(sha) && !sha.startsWith(v.sha)) {
+    return `The judge re-applied attempt ${attempt} on the current canon as ${v.refreshedAs} before your commit ${sha.slice(0, 8)}, so that commit isn't judged. Call canon_refresh with attempt "${attempt}": it carries your work over to an attempt of your own.`;
+  }
   for (let hops = 0; v?.refreshedAs && hops < 5; hops++) {
     moved.push(`Canon moved after ${v.attemptId} forked; the judge re-applied your change on the current canon as attempt ${v.refreshedAs}.`);
     const next = (await referee.verdict(v.refreshedAs)) as Verdict | null;
@@ -220,16 +228,19 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
   for (const c of v.clashes ?? []) {
     out.push(c.breaks === "mine" ? `  CLASH    ${c.with.agent}'s attempt ${c.with.attemptId} breaks your fact: ${c.detail}` : `  CLASH    your attempt breaks ${c.with.agent}'s fact ${c.factId}: ${c.detail}`);
   }
-  const conflict = v.outcome === "behind" && ((await referee.read()) as CanonState).claims.find((c) => c.attemptId === v.attemptId)?.refresh?.startsWith("conflict");
+  // The judge's refresh of a behind attempt: running, or (any other note) handed back to the agent.
+  const refresh = v.outcome === "behind" ? ((await referee.read()) as CanonState).claims.find((c) => c.attemptId === v.attemptId)?.refresh : null;
+  const conflict = !!refresh && refresh !== "started";
   const next = {
     ready: `Ready. Stop here: a person decides whether "${v.claimed.factId}" becomes canon.`,
     contradicts: "This attempt contradicts canon. Make the lost facts hold again and push. To change one of them on purpose, claim a revision instead (a fact with \"replaces\").",
     unproven: "Canon held, but your fact doesn't hold yet. Fix it and push again.",
     behind: conflict
-      ? "Canon moved after this attempt forked, and your change conflicts with the new canon's code. Call canon_refresh, then resolve the conflict."
+      ? "Canon moved after this attempt forked, and the judge couldn't re-apply your change (usually a conflict with the new canon's code). Call canon_refresh, then resolve any conflict."
       : "Canon moved after this attempt forked. The judge re-applies your change on the current canon by itself; call canon_verdict again in a minute.",
   }[v.outcome as string];
   if (next) out.push("", next);
+  if (moved.length && ["unproven", "contradicts"].includes(v.outcome)) out.push(`To change the code, call canon_refresh with your old attempt "${attempt}": it gives you your own copy of ${v.attemptId}.`);
   return out.join("\n");
 }
 

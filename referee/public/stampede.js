@@ -1,6 +1,6 @@
 // Canon Stampede: two 40-second rounds riding a stampede of agents' changes.
 // The herd streams past you; you make your way forward by lassoing the changes ahead.
-// Round 1 is Git: every change looks the same. Review one first (press and hold) or jump blind.
+// Round 1 is reviewing every diff: every change looks the same. Review one first (press and hold) or jump blind.
 // Round 2 is Canon: the moon (the judge) checks every change against every fact; only green can land,
 // and the autopilot button hands the lasso to the judge.
 (() => {
@@ -197,7 +197,7 @@
     mode = null;
     hud();
     card(`<p class="kicker">Two rounds · 40 seconds each</p>
-      <h3>Round 1: <em>Git</em></h3>
+      <h3>Round 1: <em>Review every diff</em></h3>
       <p>You're riding main, and you're the only check. Each animal is an agent's change: jump on one to ship it.</p>
       <div class="legend">
         <span><kbd>Tap</kbd><span>Jump on and ship it.</span></span>
@@ -258,7 +258,7 @@
     press = null;
     autopilot = false;
     if (mode === "git") {
-      card(`<p class="kicker">Round 1 · Git</p>
+      card(`<p class="kicker">Round 1 · Review every diff</p>
         <h3>${git.shipped} shipped. <em>${git.broke} broke production.</em></h3>
         <p>You spent <b>${git.review.toFixed(1)} s reviewing</b>, and still couldn't be fast and safe at the same time.
         ${git.stale ? ` ${git.stale === 1 ? "One break was a change you'd reviewed" : `${git.stale} breaks were changes you'd reviewed`}: fine on its own, broken after another merge.` : " And a review can't tell you when two changes that each pass break together."}</p>`,
@@ -268,7 +268,7 @@
       card(`<p class="kicker">Canon Stampede · results · ${PACES[pace].label}</p>
         <h3>Same herd. <em>Two ways to run main.</em></h3>
         <table class="vs">
-          <tr><th></th><th>Git</th><th>Canon</th></tr>
+          <tr><th></th><th>Every diff</th><th>Canon</th></tr>
           <tr><td>Changes shipped</td><td>${git.shipped}</td><td>${total}${canon.auto ? ` <small>(${canon.auto} by autopilot)</small>` : ""}</td></tr>
           <tr><td>Broke production</td><td class="${git.broke ? "bad" : ""}">${git.broke}</td><td class="good">0</td></tr>
           <tr><td>Seconds spent reviewing</td><td>${git.review.toFixed(1)}</td><td class="good">0</td></tr>
@@ -298,7 +298,7 @@
 
   let lastStats = "", measured = -1;
   function hud() {
-    el("round").textContent = mode === "git" ? "Round 1 · Git" : mode === "canon" ? "Round 2 · Canon" : "Canon Stampede";
+    el("round").textContent = mode === "git" ? "Round 1 · Every diff" : mode === "canon" ? "Round 2 · Canon" : "Canon Stampede";
     el("time").style.width = `${mode ? Math.max(0, 1 - time / ROUND) * 100 : 100}%`;
     // Seconds left, red for the last five.
     const secs = mode ? `${Math.ceil(Math.max(0, ROUND - time))}s` : "";

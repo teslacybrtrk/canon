@@ -54,7 +54,12 @@ export async function serveSource(request: Request, env: Env): Promise<Response 
   const url = new URL(request.url);
   if (url.pathname !== "/src" && !url.pathname.startsWith("/src/")) return null;
   if (env.SOURCE_PUBLIC !== "true") return page("Canon source", "<p>The source will be published here on submission day.</p>", 404);
-  const path = decodeURIComponent(url.pathname.slice("/src".length)).replace(/^\/+|\/+$/g, "");
+  let path: string;
+  try {
+    path = decodeURIComponent(url.pathname.slice("/src".length)).replace(/^\/+|\/+$/g, "");
+  } catch {
+    return new Response("bad path", { status: 400 });
+  }
 
   using repo = await env.SOURCE.get(SOURCE_REPO);
   const [head] = await repo.log({ ref: "main", limit: 1 });

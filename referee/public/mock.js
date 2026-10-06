@@ -1,4 +1,4 @@
-// Sample board state for design work: open https://canon.rodeo/?mock
+// Sample board state for design work: open https://canon.rodeo/board?mock
 // Covers every claim status and both kinds of "why" (seed fact, accepted fact).
 // Every preview link points at the production app, which always exists (rehearsal Previews get deleted on reset).
 (() => {
@@ -71,7 +71,7 @@
         claim("c-4", "agent-5", "search-by-name", "Shoppers can search products by name", "behind", "Shoppers want to find eggs fast", "farmstand-9tw8ex",
           verdict("farmstand-9tw8ex", GENESIS, "behind", { factId: "search-by-name", held: true, detail: "ok" })),
         claim("c-5", "agent-6", "stall-hours", "Every stall shows its opening hours", "checking", "People show up before the stalls open", "farmstand-h7k2qq", null),
-        claim("c-6", "human:philip", "stall-hours", "Every stall shows its opening hours", "open", "Trying it by hand", "farmstand-q1w2e3", null),
+        claim("c-6", "human:maintainer", "stall-hours", "Every stall shows its opening hours", "open", "Trying it by hand", "farmstand-q1w2e3", null),
         claim("c-7", "agent-4", "sold-out-refused", "A sold-out product cannot be added to the basket", "accepted", "Honey keeps getting oversold", "farmstand-yplv6l",
           verdict("farmstand-yplv6l", SOLD_OUT, "ready", { factId: "sold-out-refused", held: true, detail: "ok" })),
         claim("c-8", "agent-7", "sold-out-refused", "A sold-out product cannot be added to the basket", "superseded", "Also fixing oversold honey", "farmstand-z9y8xx",

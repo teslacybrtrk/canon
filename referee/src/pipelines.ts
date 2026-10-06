@@ -49,7 +49,7 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
           config: once,
         }),
       );
-      previewUrl = previewUrlFrom(preview.logs) ?? this.env.PREVIEW_URL_TEMPLATE.replace("{name}", previewName);
+      previewUrl = previewUrlFrom(preview.logs, previewName) ?? this.env.PREVIEW_URL_TEMPLATE.replace("{name}", previewName);
     } catch (err) {
       const detail = isCiRunnerFailure(err) ? err.message : String(err);
       if (exitedNonZero(err)) await step.do("build failed", () => referee.buildFailed(repo, sha, detail));
@@ -81,9 +81,14 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       }
     }
 
-    await step.do("judge", { retries: { limit: 4, delay: 10_000, backoff: "linear" }, timeout: 5 * 60_000 }, async () => {
-      await referee.judge(repo, sha, previewUrl, results, notNew);
-    });
+    try {
+      await step.do("judge", { retries: { limit: 4, delay: 10_000, backoff: "linear" }, timeout: 5 * 60_000 }, async () => {
+        await referee.judge(repo, sha, previewUrl, results, notNew);
+      });
+    } catch (err) {
+      // Out of retries (the Preview never served, or Artifacts kept failing): say so, rather than leave it judging.
+      await step.do("could not judge", () => referee.couldNotJudge(repo, sha, String(err)));
+    }
   }
 }
 
@@ -92,6 +97,9 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
     const { repo } = event.payload;
     const seq = Number(event.instanceId.match(/^promote-(\d+)-/)?.[1] ?? 0);
+    const referee = refereeForRepo(this.env, repo);
+    // A later accept already moved canon on: its own deploy wins, and this older one must not land after it.
+    if ((await step.do("still the latest canon", () => referee.canonSeq())) > seq) return;
     let ok = true;
     try {
       const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
@@ -105,7 +113,7 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     } catch {
       ok = false;
     }
-    await step.do("record promotion", () => refereeForRepo(this.env, repo).promoted(seq, ok));
+    await step.do("record promotion", () => referee.promoted(seq, ok));
   }
 }
 
@@ -116,10 +124,16 @@ export class RefreshAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
     const { repo } = event.payload;
     const referee = refereeForRepo(this.env, repo);
-    const env = await step.do("refresh job", async () => {
-      const job = await referee.refreshJob(repo);
-      return job ? (Object.fromEntries(Object.entries(job)) as Record<string, string>) : null;
-    });
+    let env: Record<string, string> | null;
+    try {
+      env = await step.do("refresh job", async () => {
+        const job = await referee.refreshJob(repo);
+        return job ? (Object.fromEntries(Object.entries(job)) as Record<string, string>) : null;
+      });
+    } catch (err) {
+      await step.do("record refresh", () => referee.refreshed(repo, "failed", String(err)));
+      return;
+    }
     if (!env) return;
     let outcome: "pushed" | "conflict" | "failed" = "failed";
     let detail = "";
@@ -148,19 +162,31 @@ const REFRESH_SCRIPT = [
   `git diff --binary "$OLD_BASE" "$OLD_HEAD" -- . ':(exclude)canon.json' > /tmp/canon-refresh.patch`,
   `git fetch -q "$NEW_URL" main && git checkout -q -B main FETCH_HEAD`,
   `printf %s "$CANON_JSON" | base64 -d > canon.json`,
-  `T="--trailer Canon-Fact:$FACT --trailer Canon-Claim:$CLAIM --trailer Canon-Agent:$AGENT"`,
-  `git commit -q -a -m "canon: claim \"$FACT\"" $T`,
+  `commit() { git commit -q -m "$1" --trailer "Canon-Fact: $FACT" --trailer "Canon-Claim: $CLAIM" --trailer "Canon-Agent: $AGENT"; }`,
+  `git add canon.json && commit "canon: claim \"$FACT\""`,
   `if [ -s /tmp/canon-refresh.patch ]; then`,
   `  if ! git apply --3way /tmp/canon-refresh.patch >/dev/null 2>&1; then echo CANON_REFRESH_CONFLICT $(git diff --name-only --diff-filter=U); exit 0; fi`,
-  `  git add -A && git commit -q -m "Re-apply $OLD_ID on canon $CANON_SEQ" $T`,
+  `  git add -A && commit "Re-apply $OLD_ID on canon $CANON_SEQ"`,
   `fi`,
   `git push -q "$NEW_URL" HEAD:main 2>&1 | sed 's#//x:[^@]*@#//x:***@#g'`,
   `git ls-remote "$NEW_URL" refs/heads/main | grep -q "$(git rev-parse HEAD)" && echo CANON_REFRESH_PUSHED`,
 ].join("\n");
 
 // `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. The Preview is
-// already per commit, so its stable URL is the one to keep.
-function previewUrlFrom(logs: CiRunnerResult["logs"]): string | null {
+// already per commit, so its stable URL is the one to keep. That output comes from the attempt's own checkout, so
+// only a workers.dev address for this Preview is believed; anything else falls back to the template.
+function previewUrlFrom(logs: CiRunnerResult["logs"], previewName: string): string | null {
+  const url = previewUrlIn(logs);
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname;
+    return host.startsWith(`${previewName}-`) && host.endsWith(".workers.dev") ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function previewUrlIn(logs: CiRunnerResult["logs"]): string | null {
   if (typeof logs.stdout !== "string") return null;
   const out = logs.stdout;
   try {

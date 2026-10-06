@@ -6,7 +6,7 @@
 //   canon claim --join <fact-id>   --why "..."     ...or race for a fact someone already proposed
 //   git push                                    3. push the attempt (plain Git, from inside the attempt)
 //   canon verdict [--wait]                      4. which facts held, which broke, accepted or not
-//   canon refresh                               a BEHIND attempt: new attempt from current canon + your changes
+//   canon refresh                               a BEHIND attempt the judge couldn't re-apply: new attempt from current canon + your changes
 //   canon why <fact-id>                         the fact chain: who made it true, which attempts failed it
 //   canon init                                  a starter canon.json for the app in this folder
 //
@@ -113,16 +113,22 @@ async function setupAttempt(dir, claim, attempt, fact) {
   git(["-C", dir, "commit", "--quiet", "-am", `canon: claim "${fact.sentence}"`]);
 }
 
-// An attempt that is BEHIND was built on an older canon. Make a fresh attempt from the current
-// canon for the same fact, and re-apply this attempt's own changes on top of it. The agent
-// (not the judge) resolves any conflict; nothing is merged on the server.
+// An attempt that is BEHIND was built on an older canon. The judge usually re-applies it on the current canon itself;
+// this does the same on the agent's machine, for a text conflict the agent must resolve, or to get a copy of the
+// judge's re-applied attempt that the agent can push to.
 async function refresh() {
   const old = attemptContext();
   // Only an attempt that is behind needs a fresh copy of canon; refreshing anything else just makes noise.
   const last = await api("GET", `/attempts/${old.attemptId}/verdict`, undefined, true);
-  const mine = (await api("GET", "/canon")).claims.find((c) => c.id === old.claimId);
-  if (mine?.status === "superseded") fail(`this attempt was already refreshed or replaced; work in your newest attempt (canon verdict shows it)`);
-  if (last.outcome !== "behind") fail(`refresh is only for attempts that are BEHIND canon; this one is ${String(last.outcome).toUpperCase()}. Read its verdict instead.`);
+  const claims = (await api("GET", "/canon")).claims;
+  // The judge may already have re-applied this attempt on the current canon. Then this refresh gives you your own
+  // copy of that work (the judge's copy has no token you can push with), replacing the judge's attempt.
+  let latest = claims.find((c) => c.id === old.claimId);
+  for (let next; latest?.status === "superseded" && (next = claims.find((c) => c.refreshedFrom === latest.id)); ) latest = next;
+  if (latest?.status === "superseded") fail(`this attempt was already refreshed or replaced; work in your newest attempt (canon verdict shows it)`);
+  if (latest && latest.id !== old.claimId) {
+    if (["ready", "accepted", "open", "checking"].includes(latest.status)) fail(`the judge re-applied this attempt as ${latest.attemptId}, which is ${latest.status.toUpperCase()}: nothing to refresh. Run canon verdict --wait.`);
+  } else if (last.outcome !== "behind") fail(`refresh is only for attempts that are BEHIND canon; this one is ${String(last.outcome).toUpperCase()}. Read its verdict instead.`);
   const head = git(["-C", old.root, "rev-parse", "HEAD"]).trim();
   const claimCommit = git(["-C", old.root, "log", "--format=%H", "--grep=^canon: claim", "-n", "1"]).trim();
   if (!claimCommit) fail("cannot find this attempt's claim commit");
@@ -130,12 +136,12 @@ async function refresh() {
 
   // The agent's original reason carries over: the why belongs to the change, not to the refresh.
   const state = await api("GET", "/canon");
-  const original = state.claims.find((c) => c.id === old.claimId)?.why ?? "";
+  const original = (state.claims.find((c) => c.id === old.claimId)?.why ?? "").replace(/ \(refreshed onto canon \d+\)$/, "");
   const { claim, attempt } = await api("POST", "/claims", {
     agent: AGENT,
     why: `${original} (refreshed onto canon ${state.canon.seq})`.trim(),
     join: old.factId,
-    replaces: old.claimId,
+    replaces: latest?.id ?? old.claimId,
   });
   const dir = resolve(dirname(old.root), attempt.id);
   await setupAttempt(dir, claim, attempt, state.facts.find((f) => f.id === claim.factId));
@@ -162,8 +168,12 @@ async function verdict() {
   for (;;) {
     v = await api("GET", `/attempts/${ctx.attemptId}/verdict`, undefined, true);
     const current = v.sha === head && v.outcome !== "pending";
-    if (current || Date.now() >= deadline) break;
+    if (current || v.refreshedAs || Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, 5_000));
+  }
+  if (v.refreshedAs && v.sha !== head) {
+    console.log(`The judge re-applied this attempt on the current canon as ${v.refreshedAs} before your latest commit, so that commit isn't judged here. Run: canon refresh (it carries your work over to an attempt of your own).`);
+    process.exit(2);
   }
   if (v.sha !== head) {
     const pushed = git(["-C", ctx.root, "ls-remote", "origin", "refs/heads/main"]).startsWith(head);
@@ -173,6 +183,7 @@ async function verdict() {
     process.exit(3);
   }
   // Canon moved and the judge re-applied this attempt on the current canon: follow it to the new attempt.
+  const followed = !!v.refreshedAs;
   for (let hops = 0; v.refreshedAs && hops < 5; hops++) {
     console.log(`Canon moved after ${v.attemptId} forked; the judge re-applied your change on the current canon as attempt ${v.refreshedAs}.`);
     const id = v.refreshedAs;
@@ -212,11 +223,14 @@ async function verdict() {
   }
   if (v.outcome === "unproven") console.log(`\nCanon held, but your fact does not hold yet. Fix and push again.`);
   if (v.outcome === "behind") {
-    const conflict = (await api("GET", "/canon")).claims.find((c) => c.attemptId === v.attemptId)?.refresh?.startsWith("conflict");
-    console.log(conflict
+    const refresh = (await api("GET", "/canon")).claims.find((c) => c.attemptId === v.attemptId)?.refresh;
+    console.log(refresh?.startsWith("conflict")
       ? `\nCanon moved after this attempt forked, and your change conflicts with the new canon's code. Run: canon refresh (then resolve the conflict)`
-      : `\nCanon moved after this attempt forked. The judge is re-applying your change on the current canon; run \`canon verdict --wait\` again in a minute.`);
+      : refresh && refresh !== "started"
+        ? `\nCanon moved after this attempt forked, and the judge couldn't re-apply your change. Run: canon refresh`
+        : `\nCanon moved after this attempt forked. The judge is re-applying your change on the current canon; run \`canon verdict --wait\` again in a minute.`);
   }
+  if (followed && ["unproven", "contradicts"].includes(v.outcome)) console.log(`To change the code, run canon refresh in your attempt: it gives you your own copy of ${v.attemptId}.`);
   process.exit(v.outcome === "ready" ? 0 : 2);
 }
 

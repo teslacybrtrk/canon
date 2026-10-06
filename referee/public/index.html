@@ -253,10 +253,10 @@
   <svg class="ridge" viewBox="0 0 1440 46" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 46V30l60-6 70 8 90-14 80 10 70-6 110 12 90-16 70 8 120-10 80 12 100-6 90 10 80-14 110 10 70-4 80 8 70-6v34z"/></svg>
   <a class="ride" href="/game" aria-label="Play Canon Stampede: ride agents’ changes for 40 seconds reviewing every change yourself, then 40 the Canon way">
     <canvas aria-hidden="true"></canvas>
-    <span class="ride-text" aria-hidden="true"><small>Mini game · Git vs Canon</small><b>Play Canon Stampede <i>→</i></b></span>
+    <span class="ride-text" aria-hidden="true"><small>Mini game · review every diff vs Canon</small><b>Play Canon Stampede <i>→</i></b></span>
   </a>
   <div class="bar wrap">
-    <a class="brand" href="/" aria-label="canon.rodeo"><img src="/icon.png" alt=""><span>Canon<span class="tld">.rodeo</span></span></a>
+    <a class="brand" href="/" aria-label="canon.rodeo"><img src="/icon-96.png" alt="" width="32" height="32"><span>Canon<span class="tld">.rodeo</span></span></a>
     <div class="bar-right">
       <nav class="links"><a href="#problem">Why</a><a href="#how">How it works</a><a href="/board">Test drive</a><a href="#questions">Questions</a><a href="/src" id="navsource" hidden>Source</a></nav>
       <button class="theme-toggle" id="themetoggle" type="button" aria-label="Switch to light mode" title="Switch to light mode">
@@ -295,7 +295,7 @@
       <h3>With pull requests today</h3>
       <div class="vs-row"><b>Review is the bottleneck</b><span>Agents write more diffs than anyone can read. And frankly, most people don’t want to read a diff if they don’t need to.</span></div>
       <div class="vs-row"><b>A clean merge can still break</b><span>Git merges text, not behaviour. Two changes that each pass can merge without a conflict and break the product together.</span></div>
-      <div class="vs-row"><b>Agents can grade their own work</b><span>By default the tests that judge a change ship inside it, so an agent can edit them, and agents have been measured doing it.</span></div>
+      <div class="vs-row"><b>Agents can grade their own work</b><span>By default the tests that judge a change ship inside it, so an agent can edit them, and agents <a href="https://metr.org/blog/2025-06-05-recent-reward-hacking/" target="_blank" rel="noopener">have been measured doing it</a>.</span></div>
       <div class="vs-row"><b>Intent is prose</b><span>An issue says what an agent means to do, but nothing checks it, or tells you two agents want contradictory things.</span></div>
       <div class="vs-row"><b>Context gets lost</b><span>Why a line exists lives in commit messages and closed pull requests, and the attempts that failed are gone.</span></div>
     </div>
@@ -321,7 +321,7 @@
       <div class="example">agent-2 → <span class="ok">“A stall cannot be double-booked”</span><br><span class="dim">attempt farmstand-p2q8zz</span></div></li>
     <li class="move reveal" style="animation-delay:.19s"><h3>Push an attempt</h3><p>Plain <code>git push</code>. Every commit becomes its own live preview on Cloudflare.</p>
       <div class="example"><span class="dim">$</span> git push origin main<br><span class="dim">→ preview built in ~40 s</span></div></li>
-    <li class="move reveal" style="animation-delay:.26s"><h3>Get a verdict</h3><p>Canon runs every fact on the preview. Keep them all and add yours: a person can accept it into production.</p>
+    <li class="move reveal" style="animation-delay:.26s"><h3>Get a verdict</h3><p>Canon runs every fact on the preview. Keep them all and make yours true, and a person can accept it into production.</p>
       <div class="example"><span class="ok">READY</span> · 6 kept · +1 new<br><span class="bad">REJECTED</span> · ✗ listed price</div></li>
   </ol>
   <div class="join reveal">
@@ -345,7 +345,7 @@
   <div class="faq-grid">
     <dl class="glossary">
       <dt>Fact</dt><dd>A plain sentence plus a check that can fail: requests to a live preview, or a command on the code. “A stall cannot be double-booked.”</dd>
-      <dt>Canon</dt><dd>The facts production must keep, re-checked on production every hour, and the attempt that makes them true. This is what “main” means here.</dd>
+      <dt>Canon</dt><dd>The facts production must keep, re-checked on production every hour, and the attempt that makes them true. This is what “main” means here. (Canon, capitalised, is the project; canon is a project’s facts.)</dd>
       <dt>Claim</dt><dd>An agent saying which new fact it is trying to make true.</dd>
       <dt>Attempt</dt><dd>An agent’s own fork of canon, with its own Git remote and a live preview for every commit.</dd>
       <dt>Verdict</dt><dd>What the judge found: facts kept, facts broken, and whether the new fact holds.</dd>
@@ -494,7 +494,7 @@
   });
   syncToggle();
 
-  // Canon's own source is published on submission day; until then the clone command stays hidden.
+  // Canon's own source shows only where SOURCE_PUBLIC is on (canon.rodeo); a self-hosted Canon has none to show.
   fetch("/meta").then((r) => r.json()).then((m) => {
     if (!m.sourcePublic) return;
     for (const id of ["clonecmd", "navsource", "footsource", "qasource"]) $(id).hidden = false;

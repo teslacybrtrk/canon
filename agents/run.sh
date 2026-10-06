@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts five real coding agents in parallel, each speaking the Canon protocol.
-#   CANON_URL=https://canon-referee.<you>.workers.dev ./agents/run.sh
+#   ./agents/run.sh   (CANON_URL defaults to your referee, see scripts/env.sh)
 # Uses Claude Code headless (`claude -p`). For opencode, replace the claude line with `opencode run "$PROMPT"`.
 set -euo pipefail
 cd "$(dirname "$0")/.."

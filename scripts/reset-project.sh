@@ -30,6 +30,6 @@ for PROJECT in "$@"; do
 done
 
 epoch="$(node -e 'const s=require("fs").readFileSync("referee/wrangler.jsonc","utf8");console.log(Number(s.match(/"REFEREE_EPOCH": "(\d+)"/)[1])+1)')"
-sed -i '' -E "s/\"REFEREE_EPOCH\": \"[0-9]+\"/\"REFEREE_EPOCH\": \"$epoch\"/" referee/wrangler.jsonc
+node -e 'const f="referee/wrangler.jsonc",fs=require("fs");fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/"REFEREE_EPOCH": "\d+"/,`"REFEREE_EPOCH": "${process.argv[1]}"`))' "$epoch"
 (cd referee && npx wrangler deploy >/dev/null 2>&1) && echo "referee redeployed with REFEREE_EPOCH=$epoch (empty board)"
-echo "Next: CANON_URL=https://canon.rodeo ./scripts/genesis.sh"
+echo "Next: ./scripts/genesis.sh"

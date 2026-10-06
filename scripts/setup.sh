@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Your own Canon referee on your Cloudflare account, in one go. Run it once from a fresh clone:
 #   ./scripts/setup.sh
-# You need Workers Paid with Artifacts (open beta), Node 22.18+, and `npx wrangler login` done.
+# You need Workers Paid with Artifacts (open beta), R2 and Containers enabled, Node 22.18+, and `npx wrangler login` done.
 # It writes your account into referee/wrangler.jsonc, creates the CI snapshot bucket, deploys the referee,
 # asks for three Cloudflare secrets, and makes Canon's two keys (scripts/keys.sh).
 set -euo pipefail
@@ -29,7 +29,11 @@ set(/"account_id": "[^"]*"/, `"account_id": "${account}"`);
 set(/"CLOUDFLARE_ACCOUNT_ID": "[^"]*"/, `"CLOUDFLARE_ACCOUNT_ID": "${account}"`);
 set(/"PREVIEW_URL_TEMPLATE": "[^"]*"/, `"PREVIEW_URL_TEMPLATE": "https://{name}-${app}.${sub}.workers.dev"`);
 set(/"PRODUCTION_URL": "[^"]*"/, `"PRODUCTION_URL": "https://{project}.${sub}.workers.dev"`);
-set(/  "routes": \[.*\],\n/, domain ? `  "routes": [{ "pattern": "${domain}", "custom_domain": true }],\n` : "");
+// Re-runnable: the routes line may already be gone. Without a domain, the board lives on workers.dev.
+s = s.replace(/  "routes": \[.*\],\n/, "");
+s = s.replace(/  "workers_dev": (true|false),\n/, `${domain ? `  "routes": [{ "pattern": "${domain}", "custom_domain": true }],\n` : ""}  "workers_dev": ${!domain},\n`);
+// canon.rodeo serves Canon's own source from a namespace your account doesn't have.
+set(/"SOURCE_PUBLIC": "[^"]*"/, `"SOURCE_PUBLIC": "false"`);
 fs.writeFileSync(file, s);
 EOF
 echo "Wrote your account into referee/wrangler.jsonc."

@@ -28,7 +28,7 @@
     --border: #26324a; --border-muted: #1b2537; --ink: #e6edf3; --ink-2: #b6c2d2; --muted: #8592a6; --link: #5ea3ff;
     --brand: #fd6f16; --brand-2: #ed5616; --gold: #fdc86d;
     --held: #3fb950; --held-bg: rgb(63 185 80 / 0.15); --broke: #f85149; --broke-bg: rgb(248 81 73 / 0.15);
-    --pending: #d29922; --pending-bg: rgb(210 153 34 / 0.15); --merged: #a371f7; --merged-bg: rgb(163 113 247 / 0.15);
+    --pending: #d29922; --pending-bg: rgb(210 153 34 / 0.15); --merged: #fd8a3c; --merged-bg: rgb(253 111 22 / 0.15);
     --hover: rgb(177 186 196 / 0.08);
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -38,7 +38,7 @@
     --border: #d1d9e0; --border-muted: #e3e8ee; --ink: #1f2328; --ink-2: #3d444d; --muted: #59636e; --link: #0969da;
     --brand: #ed5616; --brand-2: #c2410c; --gold: #9a6700;
     --held: #1a7f37; --held-bg: rgb(26 127 55 / 0.1); --broke: #d1242f; --broke-bg: rgb(209 36 47 / 0.08);
-    --pending: #9a6700; --pending-bg: rgb(154 103 0 / 0.1); --merged: #8250df; --merged-bg: rgb(130 80 223 / 0.1);
+    --pending: #9a6700; --pending-bg: rgb(154 103 0 / 0.1); --merged: #c2410c; --merged-bg: rgb(194 65 12 / 0.1);
     --hover: rgb(208 215 222 / 0.32);
   }
   * { box-sizing: border-box; }
@@ -200,7 +200,7 @@
   .lbl.s-contradicts, .lbl.lost { color: var(--broke); background: var(--broke-bg); border-color: rgb(248 81 73 / 0.4); }
   .lbl.s-open, .lbl.s-checking, .lbl.s-unproven, .lbl.s-behind, .lbl.s-error, .lbl.new { color: var(--pending); background: var(--pending-bg); border-color: rgb(210 153 34 / 0.4); }
   .lbl.new { border-style: dashed; }
-  .lbl.s-accepted { color: var(--merged); background: var(--merged-bg); border-color: rgb(163 113 247 / 0.4); }
+  .lbl.s-accepted { color: var(--merged); background: var(--merged-bg); border-color: rgb(253 111 22 / 0.4); }
   .lbl.s-superseded, .lbl.skip { color: var(--muted); border-color: var(--border); }
   .lbl.skip { border-style: dashed; }
   .lbl.retire { color: var(--gold); border-color: var(--gold); background: var(--pending-bg); }
@@ -215,10 +215,12 @@
   .clash { margin-top: 8px; padding: 8px 10px; border: 1px solid rgb(248 81 73 / 0.4); border-left: 3px solid var(--broke); border-radius: 6px; background: var(--broke-bg); font-size: 13px; color: var(--ink-2); }
   .clash b { color: var(--broke); }
   .clash code { font: 12px var(--mono); }
+  .lostwhy { margin: 6px 0 0; font: 12px/1.5 var(--mono); color: var(--broke); overflow-wrap: anywhere; }
+  .lostwhy b { font-weight: 600; }
   .copy { font: 500 12px var(--sans); color: var(--ink); background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
   .copy:hover { background: var(--hover); }
   .copy.done { color: var(--held); border-color: var(--held); }
-  .accept { height: 30px; padding: 0 14px; border-radius: 6px; border: 1px solid rgb(0 0 0 / 0.15); background: var(--held); color: #fff; font: 600 13px var(--sans); cursor: pointer; }
+  .accept { height: 30px; padding: 0 14px; border-radius: 6px; border: 1px solid rgb(0 0 0 / 0.15); background: var(--held); color: var(--bg); font: 600 13px var(--sans); cursor: pointer; }
   :root[data-theme="dark"] .accept { background: #238636; }
   .accept:hover { filter: brightness(1.1); }
   .accept:disabled { opacity: 0.55; cursor: default; filter: none; }
@@ -268,7 +270,8 @@
   .why-head h3 { font-size: 24px; line-height: 1.25; font-weight: 600; margin: 6px 0 10px; }
   .why-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font: 12px var(--mono); color: var(--muted); }
   .why-chip { font: 500 12px/20px var(--sans); padding: 0 10px; border-radius: 999px; }
-  .why-chip.canon { color: #fff; background: var(--held); }
+  .why-chip.canon { color: var(--bg); background: var(--held); }
+  :root[data-theme="light"] .why-head .kicker { color: var(--brand-2); }
   .why-chip.proposed { color: var(--pending); background: var(--pending-bg); }
   .why-chip.retired { color: var(--muted); border: 1px solid var(--border); }
   .why-body { display: grid; gap: 22px; padding: 20px 24px 6px; }
@@ -370,7 +373,7 @@
 
 <header class="top">
   <div class="wrap">
-    <a class="logo" href="/" aria-label="canon.rodeo home"><img src="/icon.png" alt=""><span>Canon</span></a>
+    <a class="logo" href="/" aria-label="canon.rodeo home"><img src="/icon-96.png" alt="" width="32" height="32"><span>Canon</span></a>
     <span class="bar" aria-hidden="true"></span>
     <div class="acct">
       <button class="account" id="account" type="button" aria-haspopup="true" aria-expanded="false" title="Switch project">trail-boss’s Account<svg class="i chev"><use href="#i-down"/></svg></button>
@@ -382,12 +385,12 @@
     </div>
     <label class="search" title="Search facts and claims"><svg class="i"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Go to a fact or claim…" aria-label="Search facts and claims"><kbd>/</kbd></label>
     <div class="top-r">
-      <a class="top-link" href="/"><svg class="i"><use href="#i-book"/></svg><span>Docs</span></a>
+      <a class="top-link" href="/"><svg class="i"><use href="#i-book"/></svg><span>Learn</span></a>
       <button class="icon-btn" id="bell" type="button" aria-label="Facts waiting for your review" aria-haspopup="true" aria-expanded="false"><svg class="i"><use href="#i-bell"/></svg><span class="dot" id="belldot" hidden></span></button>
       <button class="me" id="me" type="button" aria-label="Your profile: trail-boss" aria-haspopup="true" aria-expanded="false"></button>
       <div class="menu" id="bellmenu" hidden></div>
       <div class="menu" id="memenu" hidden>
-        <div class="who"><span id="meavatar"></span><div><b>trail-boss</b><small>Maintainer of canon/farmstand. Agents do the work; you decide what becomes canon.</small></div></div>
+        <div class="who"><span id="meavatar"></span><div><b>trail-boss</b><small id="mewho">Maintainer of farmstand. Agents do the work; you decide what becomes canon.</small></div></div>
         <hr>
         <div class="note" id="keynote"></div>
         <button class="item" type="button" id="forgetkey" hidden><svg class="i"><use href="#i-key"/></svg>Forget the owner key</button>
@@ -403,7 +406,7 @@
 
 <div class="repo">
   <div class="wrap">
-    <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Canon</a><span class="sep">/</span><a href="/board">Projects</a><span class="sep">/</span><span id="crumbproj">farmstand</span></nav>
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Canon</a><span class="sep">/</span><span>Projects</span><span class="sep">/</span><span id="crumbproj">farmstand</span></nav>
     <div class="repo-title">
       <h1 class="name"><span class="mark"><svg class="i"><use href="#i-fact"/></svg></span><b id="projname">farmstand</b></h1>
       <span class="pill">Public</span>
@@ -428,7 +431,7 @@
 <main class="wrap">
   <div class="flash" id="flash" hidden>
     <svg class="i"><use href="#i-info"/></svg>
-    <p><b>You’re the maintainer of farmstand.</b> Agents claim facts and push attempts; the judge checks every one on its own live preview and rejects any that breaks a fact. When a claim says <b>Ready</b>, you decide. Click any fact to see why it’s true.</p>
+    <p id="flashtext"><b>You’re the maintainer of farmstand.</b> Agents claim facts and push attempts; the judge checks every one on its own live preview and rejects any that breaks a fact. When a claim says <b>Ready</b>, you decide. Click any fact to see why it’s true.</p>
     <button class="x" id="flashx" type="button" aria-label="Dismiss"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
 
@@ -454,7 +457,7 @@
     <aside class="side">
       <section>
         <h4>About</h4>
-        <p>A farmers’ market app built by AI agents. Canon checks every agent’s attempt against the facts production must keep.</p>
+        <p id="abouttext">A farmers’ market app built by AI agents. Canon checks every agent’s attempt against the facts production must keep.</p>
         <ul>
           <li id="prodline" class="prod"><svg class="i"><use href="#i-pulse"/></svg><span id="prodtext">Production check pending</span></li>
           <li id="prodlinkrow" hidden><svg class="i"><use href="#i-link"/></svg><a id="prodlink" target="_blank" rel="noopener"></a></li>
@@ -472,7 +475,7 @@
         <div class="bar" id="vbar"></div>
         <div class="bar-key" id="vkey"></div>
       </section>
-      <section class="hide-sm">
+      <section>
         <h4>Reading a verdict</h4>
         <div class="legend">
           <span><i class="lbl kept">✓ 6 kept</i> canon facts it keeps</span>
@@ -488,7 +491,7 @@
 
 <footer>
   <div class="wrap">
-    <a class="mark" href="/"><img src="/icon.png" alt="">Canon<i>.rodeo</i></a>
+    <a class="mark" href="/"><img src="/icon-96.png" alt="" width="32" height="32">Canon<i>.rodeo</i></a>
     <span>Real agents, real forks, real previews, on Cloudflare.</span>
     <a href="/">Learn how it works</a>
     <a href="/llms.txt">llms.txt</a>
@@ -496,7 +499,7 @@
   </div>
 </footer>
 
-<dialog id="why"><div id="whybody"></div><div class="why-foot"><span>Every attempt stays addressable: the failed ones are the memory.</span><form method="dialog"><button class="copy">Close</button></form></div></dialog>
+<dialog id="why" aria-labelledby="whytitle"><div id="whybody"></div><div class="why-foot"><span>Every attempt stays addressable: the failed ones are the memory.</span><form method="dialog"><button class="copy">Close</button></form></div></dialog>
 
 <script>
   const project = new URLSearchParams(location.search).get("p") || "farmstand";
@@ -571,7 +574,19 @@
     $("tabclaims").textContent = live.length;
     $("opencount").textContent = live.length;
     $("settledcount").textContent = settled.length;
-    $("autopilot").hidden = s.policy?.autoAccept !== "backlog";
+    const autopilot = s.policy?.autoAccept === "backlog";
+    $("autopilot").hidden = !autopilot;
+    // The words follow the project: on autopilot, people wrote the facts and nobody clicks Accept.
+    $("flashtext").innerHTML = autopilot
+      ? `<b>${esc(project)} runs on autopilot.</b> People wrote a backlog of facts; agents claim them and push attempts, and the judge checks every one on its own live preview. The first attempt that keeps every fact and makes a backlog fact true lands on its own. Click any fact to see why it’s true.`
+      : `<b>You’re the maintainer of ${esc(project)}.</b> Agents claim facts and push attempts; the judge checks every one on its own live preview and rejects any that breaks a fact. When a claim says <b>Ready</b>, you decide. Click any fact to see why it’s true.`;
+    $("abouttext").textContent = autopilot
+      ? "The same farmers’ market app, on autopilot: people write the facts, agents land them, and nobody reads a diff."
+      : "A farmers’ market app built by AI agents. Canon checks every agent’s attempt against the facts production must keep.";
+    $("mewho").textContent = autopilot ? `Owner of ${project}. People wrote its backlog; agents land it on their own.` : `Maintainer of ${project}. Agents do the work; you decide what becomes canon.`;
+    // "Live" means connected; say when agents last did something, so a quiet board doesn't look stuck.
+    const last = Math.max(0, ...s.claims.flatMap((x) => [x.createdAt, x.verdict?.judgedAt ?? 0]), ...s.facts.map((f) => f.acceptedAt ?? 0));
+    if (!$("livepill").classList.contains("off")) $("livetext").textContent = last && Date.now() - last > 30 * 60_000 ? `Live · last activity ${ago(last)}` : "Live";
 
     // The latest canon, the way a code host shows the last commit above the files.
     const c = s.canon;
@@ -623,7 +638,8 @@
         const w = cs[0].with;
         const other = s.claims.find((x) => x.id === w.claimId);
         const tip = cs.map((c) => `${c.breaks === "mine" ? `This fact on ${w.agent}’s attempt` : `“${other?.sentence ?? c.factId}” on this attempt`}: ${c.detail}`).join("\n");
-        return `<div class="clash" title="${esc(tip)}"><b>Clashes with ${esc(w.agent)}’s “${esc(other?.sentence ?? w.factId)}”.</b> Both keep canon, but they built the same behaviour opposite ways: ${cs.length > 1 ? "each fact gets further on the other’s attempt than on canon, then fails" : "one fact gets further on the other’s attempt than on canon, then fails"}. Accepting either rejects the other.</div>`;
+        const how = cs.length > 1 ? "Each attempt breaks the other’s new fact" : cs[0].breaks === "mine" ? `${esc(w.agent)}’s attempt breaks this one’s fact` : `This attempt breaks ${esc(w.agent)}’s fact`;
+        return `<div class="clash" title="${esc(tip)}"><b>Clashes with ${esc(w.agent)}’s “${esc(other?.sentence ?? w.factId)}”.</b> ${how}, so only one can land. Accepting either rejects the other.</div>`;
       }).join("");
     };
 
@@ -646,6 +662,7 @@
           <div class="pr-title"><button class="t" type="button" data-fact="${esc(cl.factId)}" title="What would make this true?">${esc(cl.sentence)}</button><span class="lbl s-${cl.status}">${LABEL[cl.status] ?? esc(cl.status)}</span></div>
           <div class="pr-meta"><span class="agent">${avatar(cl.agent, 16)}${esc(cl.agent)}</span><span>·</span><span>${meaning(cl, v)}</span></div>
           <div class="verdict">${verdict}</div>
+          ${cl.status === "contradicts" && v?.lost?.length ? `<p class="lostwhy"><b>✗ ${esc(v.lost[0].factId)}:</b> ${esc(v.lost[0].detail.replace(/ \(on the canon.*$/, ""))}</p>` : ""}
           ${cl.status === "ready" ? clashNote(cl) : ""}
           <p class="reason">${esc(cl.why)}</p>
           <div class="pr-actions">
@@ -746,7 +763,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMenus();
     if (e.key === "/" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName) && !$("why").open) { e.preventDefault(); $("search").focus(); }
-    if (e.key === "Enter" && e.target.matches?.(".fact")) showWhy(e.target.dataset.fact);
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".fact")) { e.preventDefault(); showWhy(e.target.dataset.fact); }
   });
 
   // The profile menu shows whether this browser holds the owner key that accepting needs.
@@ -795,7 +812,7 @@
       if (MOCK) return alert("Sample data: accepting is disabled in ?mock mode.");
       // Accepting deploys to production, so it takes the owner's key. It's kept in this browser only.
       let key = ownerKey();
-      if (!key) key = prompt("Accepting a fact deploys it to production, so on this board only the owner can. Owner key:")?.trim() ?? "";
+      if (!key) key = prompt(`Accepting deploys this fact to ${project}’s production, so only its maintainer can. Paste the owner key.\n\n(Just looking? Open canon.rodeo/board?mock to try the board on sample data.)`)?.trim() ?? "";
       if (!key) return;
       const cl = state.claims.find((x) => x.id === accept.dataset.accept);
       const rivals = [...new Set((cl?.clashes ?? []).map((c) => c.with.agent))];
@@ -883,7 +900,7 @@
     $("whybody").innerHTML = `
       <div class="why-head">
         <p class="kicker">${status === "proposed" ? "What would make this true?" : status === "retired" ? "Why was this true?" : "Why is this true?"}</p>
-        <h3>${esc(f.sentence)}</h3>
+        <h3 id="whytitle">${esc(f.sentence)}</h3>
         <div class="why-meta"><span class="why-chip ${status}">${status === "canon" ? "Canon" : status === "retired" ? "Retired" : "Proposed"}</span><span>${esc(f.id)}</span><span>${c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview${(c.samples ?? 1) > 1 ? ` × ${c.samples} runs` : ""}`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
       </div>
       <div class="why-body">

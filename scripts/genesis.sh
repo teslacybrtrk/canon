@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time setup: create the genesis attempt and push the demo app (which carries canon.json) into it.
 # The referee builds a Preview of genesis and makes it canon once every fact in its canon.json holds.
-#   CANON_URL=https://canon-referee.<you>.workers.dev ./scripts/genesis.sh   (with CANON_KEY, the owner key, exported)
+#   ./scripts/genesis.sh   (CANON_URL and the owner key come from scripts/env.sh and scripts/keys.sh)
 # A different canon.json for this project (e.g. a backlog with autopilot):
 #   CANON_PROJECT=rodeo CANON_FILE=agents/canon.autopilot.json ./scripts/genesis.sh
 # To start from an existing repo instead (it must contain canon.json at its root):

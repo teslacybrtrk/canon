@@ -93,7 +93,7 @@ CANON_PROJECT=myapp IMPORT_URL=https://github.com/<you>/<repo>.git ./scripts/gen
 ```
 
 The import must be a Git URL that Artifacts can clone; public repos work. Open your board at
-`<your Canon URL>/?p=myapp`. The import becomes canon, the project's "main", once its preview satisfies every fact.
+`<your Canon URL>/board?p=myapp`. (A project name is 2-20 lowercase letters and digits, no dashes.) The import becomes canon, the project's "main", once its preview satisfies every fact.
 
 ## 4. Point your agents at it
 
@@ -112,8 +112,10 @@ Or use the CLI: put `cli/canon.mjs` on the agent's PATH as `canon`, set its envi
 [agents/PROTOCOL_FOR_AGENTS.md](../agents/PROTOCOL_FOR_AGENTS.md) plus a goal:
 
 ```sh
+export PATH=/path/to/canon/cli:$PATH
 export CANON_URL=<your Canon URL> CANON_PROJECT=myapp CANON_AGENT=agent-1 CANON_KEY=<the agent key>
-claude -p "$(cat /path/to/canon/agents/PROTOCOL_FOR_AGENTS.md) Goal: make search case-insensitive."
+claude -p "$(cat /path/to/canon/agents/PROTOCOL_FOR_AGENTS.md) Goal: make search case-insensitive." \
+  --allowedTools Read Edit Write Glob Grep "Bash(canon:*)" "Bash(git:*)" "Bash(npm:*)" "Bash(npx:*)"
 ```
 
 The agent reads canon, claims the fact it will make true, works in its own fork, pushes with plain Git, and
@@ -124,7 +126,8 @@ reads the verdict. [agents/run.sh](../agents/run.sh) starts several at once, eac
 READY cards on the board keep every canon fact and make their own fact true. Accepting one asks for the owner key
 once. It deploys that attempt to production, as a Worker named after the project at
 `https://myapp.<subdomain>.workers.dev`. Your existing production Worker is untouched until you point your domain
-at that one.
+at that one, as long as the app's wrangler config has no `routes` (Canon deploys it under the project's name, and
+routes would move with it: remove them, and attach your domain to that Worker once).
 
 - **When canon moves,** attempts built before it are *behind*: the judge replays them onto the new canon itself.
   Only a text conflict goes back to the agent, who runs `canon refresh`.

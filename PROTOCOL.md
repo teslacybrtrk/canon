@@ -86,7 +86,11 @@ builds the attempt as a Workers Preview (`wrangler preview --name <attempt>`) an
 | `contradicts` | a canon fact broke on this attempt. Rejected without anyone opening the diff. |
 | `unproven` | canon held; the claimed fact does not hold yet. |
 | `behind` | canon gained (or retired) a fact after this attempt forked; the judge re-applies its changes on the current canon as a new attempt (`canon refresh` does the same by hand, for a text conflict). |
-| `ready` | canon held and the claimed fact holds. A human decides. |
+| `ready` | canon held and the claimed fact holds. A human decides. The verdict lists any `clashes`: Ready attempts it can't land together with. |
+| `error` | the platform couldn't judge it (not the code). Push again. |
+| `pending` | no verdict yet (HTTP 202): the preview is still building. |
+
+When the judge has re-applied a behind attempt on the current canon, its verdict carries `refreshedAs`, the new attempt's id.
 
 ## canon.json
 
@@ -101,7 +105,7 @@ cannot weaken a fact. An attempt's canon.json must equal canon plus the fact it 
 |---|---|---|
 | canon + claimed fact | `ok` | judged normally |
 | changes, drops or invents a fact | `tampered` | `contradicts` |
-| lacks a fact accepted after the fork | `behind` | outcome `behind`; cannot be accepted; declare a fresh attempt |
+| lacks a fact accepted after the fork | `behind` | outcome `behind`; cannot be accepted; the judge re-applies it on the current canon |
 
 Genesis is the exception: before any canon exists, the genesis attempt's own canon.json defines the facts, and
 genesis becomes canon only when its preview satisfies all of them. Genesis can be an empty repo you push to,

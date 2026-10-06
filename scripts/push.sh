@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Push main to both remotes: Cloudflare Artifacts (canon-src/canon, the main remote) and the GitHub mirror.
+# Maintainer only: push Canon's own source to both of its remotes, Cloudflare Artifacts (canon-src/canon, the main
+# remote) and the GitHub mirror. You don't need this to run Canon.
 # The Artifacts write token is minted for 10 minutes, used once, and never stored or printed.
 set -euo pipefail
 cd "$(dirname "$0")/.."

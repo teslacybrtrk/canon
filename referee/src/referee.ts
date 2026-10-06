@@ -80,7 +80,8 @@ export class Referee extends DurableObject<Env> {
       const [head] = await repo.log({ limit: 1 });
       if (head) {
         this.sql.exec(`UPDATE attempts SET head_sha = ? WHERE id = ?`, head.hash, id);
-        await this.env.CI_WORKFLOW.create({ id: `genesis-${head.hash.slice(0, 12)}`, params: this.ciParams(id, head.hash) });
+        // The epoch is in the id: after a reset, importing the same repo again must start a new instance.
+        await this.env.CI_WORKFLOW.create({ id: `genesis-${this.env.REFEREE_EPOCH}-${head.hash.slice(0, 12)}`, params: this.ciParams(id, head.hash) });
       }
     }
     this.broadcast();
@@ -113,7 +114,8 @@ export class Referee extends DurableObject<Env> {
     const project = this.requireProject();
     const canon = this.currentCanon();
     if (!canon) throw new ProtocolError(409, "no canon yet: genesis attempt has not passed its seed facts");
-    if (!req.agent || !req.why) throw new ProtocolError(400, "agent and why are required");
+    if (typeof req.agent !== "string" || !/^[\w.:@-]{1,40}$/.test(req.agent)) throw new ProtocolError(400, 'agent must be a name of 1-40 letters, digits or ". _ : @ -", e.g. "agent-3"');
+    if (typeof req.why !== "string" || !req.why.trim()) throw new ProtocolError(400, "why is required: the reason for this change, in plain words");
 
     let factId: string;
     if ("join" in req) {
@@ -138,7 +140,6 @@ export class Referee extends DurableObject<Env> {
         const onCanon = await runCheck(def.check, canonPreview, `${canon.sha}:${def.id}`);
         if (onCanon.held) throw new ProtocolError(422, `"${def.sentence}" already holds on canon; it cannot fail, so it is not a new fact`);
       }
-      this.insertFact(def, "proposed", "agent", Date.now());
       factId = def.id;
     }
 
@@ -146,6 +147,12 @@ export class Referee extends DurableObject<Env> {
     const attemptId = `${project}-${shortId()}`;
     const { remote, token, expiresAt } = await this.forkAttempt(canon.attempt_id as string, attemptId, `${req.agent}: ${factId}`);
     const now = Date.now();
+    // A new fact is written only once its attempt exists, and checked again here: another agent may have proposed
+    // the same id while this one was forking.
+    if (!("join" in req)) {
+      if (this.fact(req.fact.id)) throw new ProtocolError(409, `fact "${req.fact.id}" exists; join it instead`);
+      this.insertFact(req.fact, "proposed", "agent", now);
+    }
     this.sql.exec(
       `INSERT INTO attempts (id, claim_id, remote, base_attempt, base_sha, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
       attemptId, claimId, remote, canon.attempt_id, canon.sha, now,
@@ -156,7 +163,7 @@ export class Referee extends DurableObject<Env> {
     );
     if (!("join" in req)) this.sql.exec(`UPDATE facts SET proposed_by = ? WHERE id = ?`, claimId, factId);
     const replaced = req.replaces ? this.claim(req.replaces) : null;
-    if (replaced && replaced.factId === factId && LIVE.includes(replaced.status)) this.setClaimStatus(replaced.id, "superseded");
+    if (replaced && replaced.factId === factId && replaced.agent === req.agent && LIVE.includes(replaced.status)) this.setClaimStatus(replaced.id, "superseded");
     this.broadcast();
     return { claim: this.claim(claimId)!, attempt: { id: attemptId, remote, token, expiresAt, branch: "main" } };
   }
@@ -167,6 +174,9 @@ export class Referee extends DurableObject<Env> {
   pushed(repo: string, sha: string): string | null {
     const attempt = this.attempt(repo);
     if (!attempt || (attempt.frozen && attempt.claimId)) return null;
+    // A settled claim's attempt (accepted, or replaced by a newer attempt) gets no more verdicts.
+    const claim = attempt.claimId ? this.claim(attempt.claimId) : null;
+    if (claim && claim.status !== "open" && !LIVE.includes(claim.status)) return null;
     this.sql.exec(`UPDATE attempts SET head_sha = ? WHERE id = ?`, sha, repo);
     if (attempt.claimId) this.setClaimStatus(attempt.claimId, "checking");
     this.broadcast();
@@ -363,8 +373,8 @@ export class Referee extends DurableObject<Env> {
       throw new ProtocolError(409, "canon moved since this verdict; re-judged, check the board");
     }
 
-    // Freeze first: an accepted attempt can no longer change under the canon pointer.
-    await this.revokeWriteTokens(attempt.id);
+    // Every write happens before the first await, so a second accept can't slip in between: the attempt is frozen
+    // (its pushes are ignored from here on), the fact is canon and the canon pointer has moved.
     const now = Date.now();
     const fact = this.fact(claim.factId)!;
     this.sql.exec(`UPDATE attempts SET frozen = 1 WHERE id = ?`, attempt.id);
@@ -381,13 +391,23 @@ export class Referee extends DurableObject<Env> {
     );
 
     const seq = this.currentCanon()!.seq as number;
-    await this.env.PROMOTE_WORKFLOW.create({ id: `promote-${seq}-${verdict.sha.slice(0, 12)}`, params: this.ciParams(attempt.id, verdict.sha) });
     // Every other live attempt is now judged against the new canon. An attempt built before the fact is behind;
     // refreshed onto the new canon, an attempt that still loses it contradicts it: that is the conflict.
     this.setMeta("rejudge", "1");
     await this.ctx.storage.setAlarm(Date.now() + 1_000);
     this.broadcast();
+    try {
+      await this.env.PROMOTE_WORKFLOW.create({ id: `promote-${seq}-${verdict.sha.slice(0, 12)}`, params: this.ciParams(attempt.id, verdict.sha) });
+    } catch {
+      await this.promoted(seq, false);
+    }
+    await this.revokeWriteTokens(attempt.id);
     return { canonSeq: seq, attemptId: attempt.id, sha: verdict.sha };
+  }
+
+  /** The current canon's number: a deploy of an older one is skipped. */
+  canonSeq(): number {
+    return (this.currentCanon()?.seq as number | undefined) ?? 0;
   }
 
   async promoted(seq: number, ok: boolean) {
@@ -399,31 +419,47 @@ export class Referee extends DurableObject<Env> {
 
   // One alarm, two jobs: re-judging live attempts after canon moves, and checking canon's facts on production hourly.
   async alarm() {
-    // An alarm set before the production check existed was a re-judge.
-    if (this.meta("rejudge") === "1" || this.meta("prodCheckAt") === null) {
-      this.setMeta("rejudge", "0");
-      const live = this.rows(`SELECT * FROM claims WHERE status IN (${LIVE.map(() => "?").join(",")})`, ...LIVE).map(toClaim);
-      const judged: Array<[string, Verdict]> = [];
-      for (const claim of live) {
-        const attempt = this.attempt(claim.attemptId);
-        if (attempt?.headSha && attempt.previewUrl) judged.push([claim.id, await this.evaluate(attempt, attempt.headSha, attempt.previewUrl)]);
+    try {
+      // An alarm set before the production check existed was a re-judge.
+      if (this.meta("rejudge") === "1" || this.meta("prodCheckAt") === null) {
+        this.setMeta("rejudge", "0");
+        const live = this.rows(`SELECT * FROM claims WHERE status IN (${LIVE.map(() => "?").join(",")})`, ...LIVE).map(toClaim);
+        const judged: Array<[string, Verdict]> = [];
+        for (const claim of live) {
+          const attempt = this.attempt(claim.attemptId);
+          const judgedOn = attempt ? this.judgedPreview(attempt) : null;
+          // A newer push that is still building gets its own verdict against the new canon.
+          if (!attempt || !judgedOn) continue;
+          try {
+            judged.push([claim.id, await this.evaluate(attempt, judgedOn.sha, judgedOn.previewUrl)]);
+          } catch {
+            // One attempt that can't be re-judged right now must not stop the rest.
+          }
+        }
+        this.broadcast();
+        for (const [claimId, verdict] of judged) await this.followUp(claimId, verdict);
+      }
+      const canon = this.currentCanon();
+      if (canon && Date.now() >= Number(this.meta("prodCheckAt") ?? 0)) {
+        // While an accepted attempt is still deploying, production runs the old canon: wait for promoted().
+        const deploying = canon.accepted_fact !== null && canon.deployed === 0;
+        this.setMeta("prodCheckAt", String(Date.now() + (deploying ? 5 * 60_000 : PRODUCTION_CHECK_EVERY_MS)));
+        if (!deploying) await this.checkCanonOnProduction().catch(() => {});
+        // Previews don't change, but the set of Ready claims does: recheck their clashes on the same schedule.
+        for (const r of this.rows(`SELECT id FROM claims WHERE status = 'ready'`)) await this.findClashes(r.id as string).catch(() => {});
       }
       this.broadcast();
-      for (const [claimId, verdict] of judged) await this.followUp(claimId, verdict);
+    } finally {
+      // A fact accepted while this alarm ran needs its re-judge now, not at the next production check.
+      const next = this.meta("rejudge") === "1" ? Date.now() + 1_000 : Number(this.meta("prodCheckAt") ?? 0);
+      if (next) await this.ctx.storage.setAlarm(next);
     }
-    const canon = this.currentCanon();
-    if (canon && Date.now() >= Number(this.meta("prodCheckAt") ?? 0)) {
-      // While an accepted attempt is still deploying, production runs the old canon: wait for promoted().
-      const deploying = canon.accepted_fact !== null && canon.deployed === 0;
-      if (!deploying) await this.checkCanonOnProduction();
-      // Previews don't change, but the set of Ready claims does: recheck their clashes on the same schedule.
-      for (const r of this.rows(`SELECT id FROM claims WHERE status = 'ready'`)) await this.findClashes(r.id as string).catch(() => {});
-      this.setMeta("prodCheckAt", String(Date.now() + (deploying ? 5 * 60_000 : PRODUCTION_CHECK_EVERY_MS)));
-    }
-    this.broadcast();
-    // A fact accepted while this alarm ran needs its re-judge now, not at the next production check.
-    const next = this.meta("rejudge") === "1" ? Date.now() + 1_000 : Number(this.meta("prodCheckAt") ?? 0);
-    if (next) await this.ctx.storage.setAlarm(next);
+  }
+
+  /** The commit an attempt's last verdict judged and that commit's own Preview, if that commit is still its head. */
+  private judgedPreview(attempt: Attempt): { sha: string; previewUrl: string } | null {
+    const last = this.latestVerdict(attempt.id);
+    return last?.previewUrl && last.sha === attempt.headSha ? { sha: last.sha, previewUrl: last.previewUrl } : null;
   }
 
   /** Runs every canon probe fact against production, one at a time so latency budgets don't skew each other. */
@@ -578,9 +614,10 @@ export class Referee extends DurableObject<Env> {
     const probe = async (owner: Claim, on: Attempt | null, otherId: string) => {
       const fact = this.fact(owner.factId);
       const forkedFrom = on?.baseAttempt ? this.attempt(on.baseAttempt)?.previewUrl : null;
-      if (fact?.check.kind !== "probe" || !on?.previewUrl || !forkedFrom) return;
-      const seed = `${on.headSha}:${fact.id}`;
-      const detail = await this.interferes(fact, await runCheck(fact.check, on.previewUrl, seed), forkedFrom, seed);
+      const judgedOn = on ? this.judgedPreview(on) : null;
+      if (fact?.check.kind !== "probe" || !judgedOn || !forkedFrom) return;
+      const seed = `${judgedOn.sha}:${fact.id}`;
+      const detail = await this.interferes(fact, await runCheck(fact.check, judgedOn.previewUrl, seed), forkedFrom, seed);
       if (detail) found.push({ claimId: owner.id, otherId, factId: fact.id, detail });
     };
     await Promise.all(others.flatMap((other) => [probe(claim, this.attempt(other.attemptId), other.id), probe(other, mine, claim.id)]));
@@ -634,7 +671,8 @@ export class Referee extends DurableObject<Env> {
     if (!attempt || !claim || attempt.headSha || !old?.headSha || !old.baseSha) return null;
     const url = async (a: Attempt, scope: "read" | "write") => {
       using repo = await this.env.ARTIFACTS.get(a.id);
-      const token = await repo.createToken(scope, 15 * 60);
+      // An hour: the Workflow may wait for a container, and a retried step reuses these.
+      const token = await repo.createToken(scope, 60 * 60);
       const u = new URL(a.remote);
       u.username = "x";
       u.password = token.plaintext;

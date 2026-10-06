@@ -3,7 +3,7 @@
 Canon runs on Workers, Durable Objects, Workflows, Containers, R2, Workers Previews and Artifacts
 (binding, Git protocol, event subscriptions). Building it surfaced a few places where the platform could
 make agent-scale Git workflows easier. Each note says what we hit, what we did, and what would help.
-Found while building, Oct 4–13, 2026.
+Found while building, October 2026.
 
 ## Highest impact for agent workflows
 

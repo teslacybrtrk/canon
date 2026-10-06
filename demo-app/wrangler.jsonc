@@ -1,12 +1,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "farmstand",
-  "account_id": "2d9aba350caa70abf3ce6c910950ffd0",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
-  // Production is served on a custom domain attached to the Worker once (farmstand.canon.rodeo), so there are
-  // no routes here. Previews stay on workers.dev, where the judge's Worker can fetch them.
-  "workers_dev": false,
+  // No account here: CI and the scripts pass CLOUDFLARE_ACCOUNT_ID. No routes either: production is
+  // <project>.<subdomain>.workers.dev, or a custom domain attached to the Worker once (farmstand.canon.rodeo).
+  // Previews stay on workers.dev, where the judge's Worker can fetch them.
+  "workers_dev": true,
   "preview_urls": true,
   "durable_objects": { "bindings": [{ "name": "MARKET", "class_name": "Market" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Market"] }],

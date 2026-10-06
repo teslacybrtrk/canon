@@ -41,7 +41,7 @@ export function compareLedger(
       missing.length ? `canon gained ${missing.map((f) => f.id).join(", ")}` : "",
       lingering.length ? `canon retired ${lingering.join(", ")}` : "",
     ].filter(Boolean);
-    return { status: "behind", detail: `${parts.join(" and ")} after this attempt forked; declare a fresh attempt` };
+    return { status: "behind", detail: `${parts.join(" and ")} after this attempt forked; the judge re-applies it on the current canon` };
   }
   return { status: "ok", detail: "ok" };
 }

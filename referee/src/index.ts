@@ -46,7 +46,7 @@ export default {
 
     try {
       let match: RegExpMatchArray | null;
-      if (rest === "/mcp") return serveMcp(request, env, project);
+      if (rest === "/mcp") return await serveMcp(request, env, project);
       if (route === "GET /ws") return referee.fetch(request);
       if (route === "GET /canon") return json(await referee.read());
       if (route === "GET /previews") return json(await referee.previews());

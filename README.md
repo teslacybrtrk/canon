@@ -50,8 +50,10 @@ human ──accept fact──▶ Referee DO ──freeze attempt, move canon poi
 
 ## Run it
 
-Requirements: a Workers Paid account with Artifacts (open beta), Node 22.18+, and Claude Code (`claude`) for the
-agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image straight from Docker Hub.
+Requirements: a Workers Paid account with Artifacts (open beta), R2 and Containers (CI runs in up to 20
+`standard-4` containers, which are billed), Node 22.18+, `npx wrangler login`, and Claude Code (`claude`) for the
+agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image straight from Docker Hub. Setup asks for
+`CF_TOKEN`, an API token that can edit Workers scripts on your account, and an R2 API token pair.
 
 1. **Set up your own Canon**: `./scripts/setup.sh`. It writes your account into `referee/wrangler.jsonc`, creates the
    CI snapshot bucket, deploys, asks for `CF_TOKEN` and an R2 key pair, and makes Canon's two keys (kept in your
@@ -99,7 +101,7 @@ Building Canon surfaced a few places where the platform could make agent-scale G
 The main remote for this repo is a Cloudflare Artifacts repo, and the Worker (site, board and judge) deploys from it with Workers Builds.
 Canon serves its own source from Artifacts: browse https://canon.rodeo/src or `git clone https://canon.rodeo/canon.git`
 (no token; read-only). Any attempt clones the same way: `git clone https://canon.rodeo/a/<attempt-id>.git`.
-`scripts/push.sh` pushes to both remotes.
+`scripts/push.sh` (maintainer only) pushes to both remotes.
 GitHub hosts a mirror as the archive.
 
 ## License

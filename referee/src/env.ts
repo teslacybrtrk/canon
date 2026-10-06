@@ -10,7 +10,7 @@ export type Env = CiBindings & {
   REFRESH_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   ASSETS: Fetcher;
   SOURCE: Artifacts; // namespace canon-src: Canon's own source
-  SOURCE_PUBLIC: string; // "true" publishes canon.git and /src (flip on submission day)
+  SOURCE_PUBLIC: string; // "true" publishes canon.git and /src
   ARTIFACTS_NAMESPACE: string;
   // Part of each referee's name; bump it to reset every project's board.
   REFEREE_EPOCH: string;

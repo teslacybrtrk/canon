@@ -29,4 +29,4 @@ Without MCP, the same moves are a one-file CLI: cli/canon.mjs (`canon read`, `ca
 
 - Protocol: https://canon.rodeo/src (PROTOCOL.md)
 - Using Canon on your own app: docs/USING.md in the source
-- Live board: https://canon.rodeo
+- Live board: https://canon.rodeo/board

@@ -7,7 +7,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "assets": { "directory": "./public", "binding": "ASSETS" },
 
-  // The board, the API and (day 7) read-only Git clones live at https://canon.rodeo.
+  // The board, the API and read-only Git clones live at https://canon.rodeo.
   "routes": [{ "pattern": "canon.rodeo", "custom_domain": true }],
   "workers_dev": false,
 
@@ -54,7 +54,7 @@
   "vars": {
     "ARTIFACTS_NAMESPACE": "canon",
     // Bump to give every project a fresh referee (see scripts/reset-project.sh).
-    // Flip to "true" on submission day to publish canon.rodeo/canon.git and /src.
+    // "true" publishes canon.rodeo/canon.git and /src (setup.sh sets it to "false" for your own Canon).
     "SOURCE_PUBLIC": "true",
     "REFEREE_EPOCH": "14",
     "BACKUP_BUCKET_NAME": "canon-ci-snapshots",

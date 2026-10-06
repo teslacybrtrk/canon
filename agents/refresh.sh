@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# After a fact is accepted, tell agents whose attempts are now behind canon to refresh them.
-#   CANON_URL=https://canon.rodeo ./agents/refresh.sh agent-3 agent-4 agent-5
+# The judge re-applies attempts left behind by an accept on its own. This is for the ones it hands back: a text conflict
+# with the new canon, which the agent resolves.
+#   ./agents/refresh.sh agent-3   (CANON_URL defaults to your referee, see scripts/env.sh)
 # MODEL=sonnet for an agent that haiku keeps answering with a summary instead of refreshing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -12,8 +13,8 @@ export CANON_PROJECT="${CANON_PROJECT:-farmstand}"
 export PATH="$PWD/cli:$PATH"
 ROOT="$PWD"
 TOOLS=(Read Edit Write Glob Grep "Bash(canon:*)" "Bash(git:*)" "Bash(npm:*)" "Bash(npx:*)" "Bash(node:*)" "Bash(cd:*)" "Bash(ls:*)" "Bash(cat:*)" "Bash(pwd)" "Bash(sleep:*)")
-PROMPT="Canon has moved since you finished: another fact was accepted. Your attempt in ./attempts is now behind canon.
-cd into your attempt, run \`canon refresh\`, then cd into the new attempt it prints, resolve any conflict,
+PROMPT="Canon has moved since you finished: another fact was accepted, and your change conflicts with the new canon's code.
+cd into your attempt in ./attempts, run \`canon refresh\`, then cd into the new attempt it prints, resolve the conflict,
 push, and run \`canon verdict --wait\`. When resolving conflicts, keep both canon's code and your own change
 working together. Before pushing, run \`npm ci\`, then \`npx tsc --noEmit -p tsconfig.json\` and \`npx biome lint src\` in the attempt
 and fix what they report. Refresh at most once: push, read the verdict once, and stop. If it contradicts canon,
