@@ -18,6 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..800&family=Archivo:ital,wdth,wght@0,100..125,400..700;1,100..125,400..600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="/music.js" defer></script>
 <script src="/stampede.js" defer></script>
 <style>
   /* The same tokens as the main page (index.html). */
@@ -98,6 +99,7 @@
   .pace button { font: 600 13.5px var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--line-2); border-radius: 10px; padding: 7px 13px; cursor: pointer; }
   .pace button:hover { color: var(--ink); border-color: var(--muted); }
   .pace button[aria-checked="true"] { color: var(--brand); border-color: var(--brand); background: rgb(253 111 22 / .12); }
+  .pace + .pace { margin-top: 8px; }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
   .btn { display: inline-flex; align-items: center; gap: 8px; font: 600 14.5px var(--sans); text-decoration: none; padding: 11px 18px; border-radius: 12px; border: 0; cursor: pointer; }
   .btn.primary { color: #1a0b02; background: linear-gradient(180deg, #fdac5c, var(--brand) 55%, var(--brand-2)); box-shadow: 0 12px 28px -12px rgb(253 111 22 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.35); }

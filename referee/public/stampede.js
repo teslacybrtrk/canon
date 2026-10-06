@@ -205,8 +205,10 @@
       </div>
       <p><b>In this herd, 1 in 3 is broken, and they all look the same.</b> Land on one and production breaks.</p>
       <div class="pace" role="radiogroup" aria-label="Speed"><span>Speed</span>${Object.entries(PACES).map(([k, p]) =>
-        `<button type="button" role="radio" data-pace="${k}" aria-checked="${k === pace}">${p.label}</button>`).join("")}</div>`,
-    [{ label: "Start round 1", primary: true, run: () => begin("git") }]);
+        `<button type="button" role="radio" data-pace="${k}" aria-checked="${k === pace}">${p.label}</button>`).join("")}</div>
+      <div class="pace"><span>Music</span><button type="button" role="switch" data-music aria-checked="${music.on}" title="M turns it on or off">${music.on ? "On" : "Off"}</button></div>`,
+    [{ label: "Start round 1", primary: true, run: () => { music.start(); begin("git"); } }]);
+    el("card").querySelector("[data-music]").addEventListener("click", () => toggleMusic());
     for (const b of el("card").querySelectorAll("[data-pace]")) {
       b.addEventListener("click", () => {
         pace = b.dataset.pace;
@@ -214,6 +216,14 @@
         for (const o of el("card").querySelectorAll("[data-pace]")) o.setAttribute("aria-checked", String(o === b));
       });
     }
+  }
+
+  // Music is on by default; browsers only allow sound after a click, so it starts with round 1.
+  const music = window.stampedeMusic ?? { on: false, start() {}, set() {} };
+  function toggleMusic() {
+    music.set(!music.on);
+    const b = el("card").querySelector("[data-music]");
+    if (b) { b.setAttribute("aria-checked", String(music.on)); b.textContent = music.on ? "On" : "Off"; }
   }
 
   function begin(m) {
@@ -1113,7 +1123,10 @@
     requestAnimationFrame(frame);
   }
   addEventListener("resize", resize);
-  addEventListener("keydown", (e) => { if (e.key === "Escape") location.href = "/"; });
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape") location.href = "/";
+    if ((e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey && !e.altKey) toggleMusic();
+  });
   resize();
   pool = shuffle(CLAIMS);
   newMain();
