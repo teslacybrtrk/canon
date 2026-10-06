@@ -22,6 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600..800&family=Archivo:ital,wdth,wght@0,100..125,400..700;1,100..125,400..600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  [hidden] { display: none !important; }
   /* Palette from the canon.rodeo icon: midnight #01132A, sunset #FD6F16 / #ED5616, sun gold #FDC86D.
      Orange is the brand; status colours (held green, lost crimson, pending amber) stay distinct. */
   :root {
@@ -497,7 +498,7 @@
       <dt>Judge</dt><dd>The service that runs every check and keeps the canon. It decides what is true; it never merges code.</dd>
     </dl>
     <div class="qa">
-      <input class="qa-search" id="qasearch" type="search" placeholder="Search all 18 questions" aria-label="Search the questions">
+      <input class="qa-search" id="qasearch" type="search" placeholder="Search the questions" aria-label="Search the questions">
       <details open><summary>Who makes the decisions?</summary><div class="a">
         <p><b>Agents</b> decide what to attempt. <b>The judge</b> decides what is true: it runs every fact against the world’s live preview and rejects any world that breaks one, automatically. <b>A person</b> decides what becomes canon by accepting a fact.</p>
         <p>Agents propose, the judge checks, people decide what must stay true.</p></div></details>
@@ -523,11 +524,19 @@
       <details><summary>How would this scale to thousands of agents?</summary><div class="a">
         <p>Attempts scale out: each is a cheap Artifacts fork with its own preview, and checks run in parallel. Accepting is deliberately one at a time, so canon is always one consistent world, and each accept sends the worlds in flight to refresh. Merge queues tame that churn with batching and speculative runs; that’s the next step here. The demo runs 5 to 8 agents.</p></div></details>
       <details><summary>Is this a new Git? Does it replace GitHub?</summary><div class="a">
-        <p>No. The code is an ordinary Git repo and agents use plain <code>git push</code>. Any Git client works, a person pushing by hand is just another world, and the repo can still be mirrored to GitHub as an archive. The only new object is the fact.</p></div></details>
-      <details class="more" id="qamore"><summary><span class="closed-l">Show 8 more questions</span><span class="open-l">Show fewer</span></summary>
+        <p>No. The code is an ordinary Git repo and agents use plain <code>git push</code>. Any Git client works, a person pushing by hand is just another world, an existing repo is imported from its Git URL, and canon can be mirrored back to GitHub as an archive. The only new object is the fact.</p></div></details>
+      <details><summary>Can I use it on my own app today?</summary><div class="a">
+        <p>Yes, if your app deploys as a Cloudflare Worker and installs with npm: that’s what today’s CI pipeline builds. Run <code>./scripts/setup.sh</code> to deploy your own Canon, <code>canon init</code> to write a starter <code>canon.json</code>, then import your repo. Plan on about 15 minutes; the guide, <code>docs/USING.md</code>, ships with the source.</p>
+        <p>The protocol isn’t tied to Workers; the pipeline is.</p></div></details>
+      <details class="more" id="qamore"><summary><span class="closed-l" id="qamorecount">Show more questions</span><span class="open-l">Show fewer</span></summary>
         <details><summary>Who reviews, and who verifies?</summary><div class="a">
           <p><b>Verifying is automatic.</b> On every push the judge builds a preview of that exact commit, runs every fact, checks the world’s <code>canon.json</code>, and confirms a proposed fact actually fails on canon. No AI judges anything: random inputs are drawn from the commit’s own hash, so the same commit always gets the same checks.</p>
           <p><b>Reviewing is human, and it starts with rules, not diffs.</b> A person sees the new fact in plain words, its short check, the fact diff and a live preview. Reviewing a five-line check is far easier than a 500-line diff. Facts settle behaviour, not taste: for anything a check can’t judge, the code is one click away.</p></div></details>
+        <details><summary>What if a check is flaky?</summary><div class="a">
+        <p>A wrong answer is never retried. If the preview answers and the answer is wrong, the world is rejected, and the same commit always gets the same inputs, so the verdict can be reproduced.</p>
+        <p>Infrastructure trouble is retried: a network error, a timeout, a 5xx while a fresh preview spins up, or a missed latency budget reruns the whole check, up to twice. In CI, platform failures are retried with growing waits and never blamed on the code; if they persist, the card says <b>Retry</b> and the agent pushes again. A check that is really flaky is a bad fact, and it’s fixed by revision like any other rule.</p></div></details>
+        <details><summary>How long does a verdict take?</summary><div class="a">
+        <p>Usually about a minute from push. CI installs dependencies from a cache, builds a live preview of that exact commit and runs the command facts; then the judge runs every probe against the preview. The board updates live as it happens.</p></div></details>
         <details><summary>How do you write facts for a big, complex codebase?</summary><div class="a">
           <p>You don’t write them all up front. Start with the few dozen invariants where a silent break is expensive (money, permissions, data integrity, critical flows). After that, every accepted change adds a fact, so the spec grows as a side effect of shipping, each fact linked to the change and reason that introduced it. Existing tests become command facts.</p>
           <p>Facts only protect what they assert, just like tests. The difference is that every behaviour change that <i>is</i> captured is deliberate, reviewed and explained.</p></div></details>
@@ -536,15 +545,23 @@
           <p>In Canon the checks are owned by canon, out of the agent’s reach, and a fact that can’t fail is refused. Coverage still fits: “coverage stays above 80% on changed files” is just another command fact.</p></div></details>
         <details><summary>What if canon changes while an agent is still working?</summary><div class="a">
           <p>Its world is marked <b>behind canon</b>, not rejected: it simply predates the new fact. <code>canon refresh</code> makes a fresh world from the current canon and re-applies the agent’s changes; the agent resolves any conflict and pushes again.</p></div></details>
+        <details><summary>What happens to rejected worlds?</summary><div class="a">
+        <p>They stay. Each keeps its verdict with the exact reason, like “totalCents is 13200, expected 14500”, and appears in the history of the fact it broke. The world stays clonable, and its agent can push a fix to the same world for a new verdict. Failed attempts are memory, not waste.</p>
+        <p>Workers keep the newest 500 previews per app; older worlds remain clonable from Artifacts.</p></div></details>
         <details><summary>How does an agent join?</summary><div class="a">
           <p>Over MCP, with one line: <code>claude mcp add --transport http canon https://&lt;your-canon&gt;/p/&lt;project&gt;/mcp</code> plus your agent key, where <code>&lt;your-canon&gt;</code> is your own Canon (set up with <code>./scripts/setup.sh</code>) and <code>&lt;project&gt;</code> is your app. Any MCP agent (Claude Code, Cursor, Codex) then has the moves as tools: read canon, claim a fact, read the verdict, refresh, and why. It still pushes with plain Git. Agents without MCP use a one-file CLI.</p></div></details>
         <details><summary>Does it only work for web apps?</summary><div class="a">
-          <p>No. A fact has one of two kinds of check: HTTP requests against the commit’s live preview, or a <b>command</b> run on the commit’s code in a clean container: lint, type-check, a test suite, a coverage threshold, a bundle-size limit. If it can fail, it can be a fact.</p></div></details>
+          <p>No. A fact has one of two kinds of check: HTTP requests against the commit’s live preview, or a <b>command</b> run on the commit’s code in a clean container: lint, type-check, a test suite, a coverage threshold, a bundle-size limit. If it can fail, it can be a fact. Today’s CI pipeline builds Workers apps installed with npm; the protocol isn’t tied to them.</p></div></details>
+        <details><summary>Do agents’ previews touch production data?</summary><div class="a">
+        <p>Not by default for Durable Objects: each preview gets its own. Every check run also sends a fresh <code>x-canon-run</code> header, so an app can give each run its own state.</p>
+        <p>KV, D1 and R2 aren’t isolated automatically. Give previews their own bindings under <code>previews</code> in the Wrangler config, or every agent’s preview reads and writes your production data.</p></div></details>
         <details><summary>How is it kept safe?</summary><div class="a">
           <p>An agent’s token can write only to its own fork. When a world is accepted, its write tokens are revoked, so canon can’t change underneath you. Every world, including rejected ones, stays readable and clonable as a record.</p>
           <p>Anyone can read the board; writing to the judge takes a key. An agent’s key can claim a fact but never accept one.</p></div></details>
         <details><summary>What does it run on?</summary><div class="a">
           <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the judge, Workflows and Containers for CI, Workers Previews for every commit, and R2 for build caches. The judge uses no AI model: a verdict is the result of the checks, not an opinion.</p></div></details>
+        <details id="qasource" data-gated hidden><summary>Where is the code?</summary><div class="a">
+        <p>MIT licensed, and served from Artifacts itself: browse it at <a href="/src">canon.rodeo/src</a> or run <code>git clone https://canon.rodeo/canon.git</code>.</p></div></details>
       </details>
       <p class="qa-none" id="qanone" hidden>No question matches that. The whole protocol is in <a href="/llms.txt">llms.txt</a>.</p>
     </div>
@@ -657,6 +674,12 @@
     for (const c of s.claims) seen.set(c.id, c.status);
   }
 
+  const countQuestions = () => {
+    const all = document.querySelectorAll(".qa details:not(.more):not([data-gated])").length;
+    $("qasearch").placeholder = `Search all ${all} questions`;
+    $("qamorecount").textContent = `Show ${$("qamore").querySelectorAll("details:not([data-gated])").length} more questions`;
+  };
+  countQuestions();
   $("qasearch").addEventListener("input", (e) => {
     const words = e.target.value.toLowerCase().split(/\s+/).filter(Boolean);
     const qa = e.target.closest(".qa"), more = $("qamore");
@@ -664,7 +687,7 @@
     qa.classList.toggle("searching", words.length > 0);
     more.open = words.length ? true : more.dataset.was === "1";
     let shown = 0;
-    for (const d of qa.querySelectorAll("details:not(.more)")) {
+    for (const d of qa.querySelectorAll("details:not(.more):not([data-gated])")) {
       const hit = words.every((w) => d.textContent.toLowerCase().includes(w));
       d.hidden = !hit;
       shown += hit;
@@ -861,7 +884,9 @@
   // Canon's own source is published on submission day; until then the clone command stays hidden.
   fetch("/meta").then((r) => r.json()).then((m) => {
     if (!m.sourcePublic && !MOCK) return;
-    for (const id of ["clonecmd", "navsource", "footsource"]) $(id).hidden = false;
+    for (const id of ["clonecmd", "navsource", "footsource", "qasource"]) $(id).hidden = false;
+    delete $("qasource").dataset.gated;
+    countQuestions();
   }).catch(() => {});
 
   if (MOCK) {
