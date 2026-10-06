@@ -78,6 +78,14 @@ Found while building, Oct 4–13, 2026.
     after seven minutes; the Workflow retried it from scratch.
     *We did:* treat it as a platform error (retry, never blame the code) and avoid deploying while agents push.
     *Would help:* let running container sessions finish on the old version, like in-flight requests.
+15. **A push to an Artifacts repo can go by without a `cf.artifacts.repo.pushed` event.** Once in a five-agent run, a
+    push landed (the remote's `main` was the new commit) but no Workflow instance started, so the attempt waited
+    forever. *We did:* when an agent asks for a verdict, the judge compares the repo's head with the last push it
+    heard about (at most once a minute) and starts the pipeline itself for a commit over 90 seconds old.
+    *Would help:* at-least-once delivery for push events, or a way to list recent pushes.
+16. **Workers can't fetch Preview URLs served on a custom domain** (error 1053, even from another zone), while the
+    same deployment answers on `workers.dev` and production custom domains work. *We did:* keep Previews on
+    `workers.dev`. *Would help:* custom-domain Previews reachable from Workers, as production custom domains are.
 
 ## Things that worked especially well
 

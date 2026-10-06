@@ -40,6 +40,7 @@ const NOVELTY_MAX_B64 = 48_000;
 /** One referee per project. The only writer of facts, claims and the canon pointer. */
 export class Referee extends DurableObject<Env> {
   private sql: SqlStorage;
+  private caughtUpAt = new Map<string, number>(); // attempt id -> last head check (see catchUp)
   private changedCache = new Map<string, string[] | null>();
   private liveChecks = new Map<string, CheckResult & { url: string; at: number }>();
 
@@ -307,8 +308,31 @@ export class Referee extends DurableObject<Env> {
     return urls.filter((u) => u.startsWith(head) && u.endsWith(tail)).map((u) => u.slice(head.length, u.length - tail.length));
   }
 
-  verdict(attemptId: string): Verdict | null {
+  async verdict(attemptId: string): Promise<Verdict | null> {
+    await this.catchUp(attemptId);
     return this.latestVerdict(attemptId);
+  }
+
+  /**
+   * The push event is the only way the judge hears about a push, and very rarely one never arrives: the attempt
+   * then waits forever. So when an agent asks for a verdict, look at the attempt's head (at most once a minute):
+   * a commit pushed over 90 seconds ago that the judge never registered starts the same pipeline directly.
+   */
+  private async catchUp(attemptId: string) {
+    const attempt = this.attempt(attemptId);
+    if (!attempt || attempt.frozen || !attempt.claimId) return;
+    const last = this.caughtUpAt.get(attemptId) ?? 0;
+    if (Date.now() - last < 60_000) return;
+    this.caughtUpAt.set(attemptId, Date.now());
+    try {
+      using repo = await this.env.ARTIFACTS.get(attemptId);
+      const [head] = await repo.log({ limit: 1 });
+      if (!head || head.hash === attempt.headSha || head.hash === attempt.baseSha) return;
+      if (Date.now() / 1000 - head.committedAt < 90) return; // its push event may still be on the way
+      await this.env.CI_WORKFLOW.create({ id: `catchup-${attemptId}-${head.hash.slice(0, 12)}`, params: this.ciParams(attemptId, head.hash) });
+    } catch {
+      // Best effort: an instance with this id already exists, or the repo can't be read right now.
+    }
   }
 
   // ---- Review and promotion ---------------------------------------------------------
