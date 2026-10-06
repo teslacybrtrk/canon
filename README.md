@@ -103,3 +103,7 @@ GitHub hosts a mirror as the archive.
 ## License
 
 MIT
+
+## Contact
+
+contact@canon.rodeo
