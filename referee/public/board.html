@@ -215,6 +215,10 @@
   .fact:hover { background: var(--hover); }
   .fact:hover .text { color: var(--link); text-decoration: underline; }
   .glyph { width: 12px; height: 12px; border-radius: 50%; align-self: center; background: radial-gradient(circle at 50% 35%, var(--gold), var(--brand) 70%); box-shadow: 0 0 8px -1px rgb(253 111 22 / 0.7); }
+  .fact.fade1 { opacity: .55; }
+  .fact.fade2 { opacity: .22; }
+  .morebtn { display: block; width: 100%; padding: 9px 16px; border: 0; border-top: 1px solid var(--border-muted); background: var(--bg-subtle); color: var(--link); font: 500 13px var(--sans); text-align: left; cursor: pointer; }
+  .morebtn:hover { background: var(--hover); }
   .fact.landed { animation: landed 2.2s ease-out; }
   .fact.landed .glyph { animation: sunrise 1.2s cubic-bezier(.3,1.5,.5,1); }
   @keyframes landed { 0%, 30% { background: rgb(253 111 22 / 0.16); } 100% { background: transparent; } }
@@ -687,6 +691,7 @@
   const SETTLED = ["accepted", "superseded", "declined"];
   let foldOpen = false; // the folded Rejected group, kept open across renders once someone opens it
   const openCards = new Set(); // cards whose Details someone opened, kept open across renders
+  const factView = {}; // facts column: how far each section is expanded (0: a few, 1: double, 2: all)
   const seen = new Map(); // claim id -> last status, to animate arrivals and changes
   let state = null;
   let filter = "open";
@@ -793,18 +798,31 @@
     $("prodlinkrow").hidden = $("prodbtn").hidden = !prodUrl;
     if (prodUrl) { $("prodlink").href = $("prodbtn").href = prodUrl; $("prodlink").textContent = new URL(prodUrl).host; }
 
-    const fact = (f) => `
-      <div class="fact ${f.status}${f.acceptedAt && Date.now() - f.acceptedAt < 2500 ? " landed" : ""}" data-fact="${esc(f.id)}" title="Why is this true?" role="button" tabindex="0">
+    const fact = (f, fade = "") => `
+      <div class="fact ${f.status} ${fade}${f.acceptedAt && Date.now() - f.acceptedAt < 2500 ? " landed" : ""}" data-fact="${esc(f.id)}" title="Why is this true?" role="button" tabindex="0">
         <span class="glyph"></span>
         <span class="text">${esc(f.sentence)}</span>
         <small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : ""}${f.replaces ? `<span>revises ${esc(f.replaces)}</span>` : ""}${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs in CI</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small>
         <span class="st ${f.status === "canon" && !offProd(f) ? "holds" : ""}">${f.status === "canon" ? (offProd(f) ? "failing" : "✓ holds") : f.status === "retired" ? "retired" : f.status === "declined" ? "declined" : "proposed"}</span>
       </div>`;
-    $("facts").innerHTML = (canonFacts.map(fact).join("") || `<div class="empty">No canon yet.</div>`)
-      + (backlog.length ? `<div class="divider">Backlog · written by people</div>` + backlog.map(fact).join("") : "")
-      + (byAgents.length ? `<div class="divider">Proposed by agents</div>` + byAgents.map(fact).join("") : "")
-      + (retired.length ? `<div class="divider">Retired by revision</div>` + retired.map(fact).join("") : "")
-      + (declined.length ? `<div class="divider">Declined</div>` + declined.map(fact).join("") : "");
+    // Each section shows its newest few, the last two fading; "Show more" doubles it, then everything.
+    // A search shows every match.
+    const newest = (key) => (a, b) => (b[key] ?? 0) - (a[key] ?? 0);
+    const section = (key, title, list, all) => {
+      if (!list.length) return "";
+      const level = $("search").value ? 2 : factView[key] ?? 0;
+      const shown = list.slice(0, [5, 10, Infinity][level]);
+      const more = shown.length < list.length;
+      const rows = shown.map((f, i) => fact(f, more ? (i === shown.length - 1 ? "fade2" : i === shown.length - 2 ? "fade1" : "") : "")).join("");
+      const label = more ? (level === 0 ? `Show more` : all(list.length)) : "Show less";
+      const btn = list.length > 5 && !$("search").value ? `<button class="morebtn" type="button" data-more="${key}" data-next="${more ? level + 1 : 0}">${label}</button>` : "";
+      return (title ? `<div class="divider">${title}</div>` : "") + rows + btn;
+    };
+    $("facts").innerHTML = (section("canon", "", [...canonFacts].sort(newest("acceptedAt")), (n) => `See the full canon (${n} facts)`) || `<div class="empty">No canon yet.</div>`)
+      + section("backlog", "Backlog · written by people", [...backlog].sort(newest("createdAt")), (n) => `See all ${n}`)
+      + section("proposed", "Proposed by agents", [...byAgents].sort(newest("createdAt")), (n) => `See all ${n}`)
+      + section("retired", "Retired by revision", [...retired].sort(newest("retiredAt")), (n) => `See all ${n}`)
+      + section("declined", "Declined", [...declined].sort(newest("declinedAt")), (n) => `See all ${n}`);
 
     const refreshedBy = new Map(s.claims.filter((x) => x.refreshedFrom).map((x) => [x.refreshedFrom, x]));
     // Why the row is in its state, in one sentence.
@@ -1046,7 +1064,8 @@
       if (rows && !shown) $(list).insertAdjacentHTML("beforeend", `<div class="nomatch">Nothing matches “${esc($("search").value)}”.</div>`);
     }
   }
-  $("search").addEventListener("input", applySearch);
+  // A search redraws, so collapsed sections show every match.
+  $("search").addEventListener("input", () => (state ? render() : applySearch()));
   document.addEventListener("toggle", (e) => {
     if (e.target.matches?.("details.gfold")) foldOpen = e.target.open;
     if (e.target.matches?.("details.more")) e.target.open ? openCards.add(e.target.dataset.card) : openCards.delete(e.target.dataset.card);
@@ -1155,6 +1174,8 @@
       if (!res.ok) { alert((await res.json()).error); accept.disabled = false; accept.textContent = "Accept fact"; }
       return;
     }
+    const more = e.target.closest("[data-more]");
+    if (more) { factView[more.dataset.more] = Number(more.dataset.next); return render(); }
     const decline = e.target.closest("[data-decline]");
     if (decline) {
       const ids = decline.dataset.decline.split(",");
