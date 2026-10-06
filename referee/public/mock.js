@@ -34,6 +34,7 @@
   });
 
   window.CANON_MOCK = {
+    checks: CHECKS,
     state: {
       project: "farmstand",
       canon: { attemptId: "farmstand-yplv6l", sha: "14c534b25cd601f7187aed13e6ba50fd923d4634", seq: 2, previewUrl: SOLD_OUT },

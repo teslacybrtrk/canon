@@ -143,6 +143,13 @@
   .flash svg { color: var(--brand); margin-top: 2px; }
   .flash p { margin: 0; flex: 1; color: var(--ink-2); }
   .flash .demo-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 600; cursor: pointer; user-select: none; }
+  .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .switch i { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--border); transition: background .25s; }
+  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); transition: transform .3s cubic-bezier(.3,1.4,.5,1); }
+  .switch input:checked + i { background: var(--brand); }
+  .switch input:checked + i::after { transform: translateX(14px); background: #1a0b02; }
+  .switch input:focus-visible + i { outline: 2px solid var(--brand); outline-offset: 2px; }
   .demolog { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
   .demolog li { padding: 8px 12px; border: 1px solid var(--border); border-left: 3px solid var(--brand); border-radius: 6px; background: var(--bg-subtle); color: var(--ink-2); font-size: 13px; animation: up .4s cubic-bezier(.2,.7,.1,1) both; }
   .demolog li + li { opacity: 0.65; }
@@ -171,6 +178,10 @@
   .fact:hover { background: var(--hover); }
   .fact:hover .text { color: var(--link); text-decoration: underline; }
   .glyph { width: 12px; height: 12px; border-radius: 50%; align-self: center; background: radial-gradient(circle at 50% 35%, var(--gold), var(--brand) 70%); box-shadow: 0 0 8px -1px rgb(253 111 22 / 0.7); }
+  .fact.landed { animation: landed 2.2s ease-out; }
+  .fact.landed .glyph { animation: sunrise 1.2s cubic-bezier(.3,1.5,.5,1); }
+  @keyframes landed { 0%, 30% { background: rgb(253 111 22 / 0.16); } 100% { background: transparent; } }
+  @keyframes sunrise { from { transform: scale(.2); opacity: 0; } to { transform: none; opacity: 1; } }
   .fact.proposed .glyph { background: transparent; box-shadow: none; border: 1.5px dashed var(--muted); }
   .fact.retired .glyph { background: transparent; box-shadow: none; border: 1.5px solid var(--border); }
   .fact .text { color: var(--ink); }
@@ -481,7 +492,7 @@
           <div id="facts"></div>
         </div>
         <div class="box">
-          <div class="box-head"><h3><svg class="i"><use href="#i-claim"/></svg>In the arena</h3><span class="right"><span id="autopilot" hidden>Autopilot: backlog facts land on their own</span><a href="#claims" id="allclaims">All claims</a></span></div>
+          <div class="box-head"><h3><svg class="i"><use href="#i-claim"/></svg>In the arena</h3><span class="right"><span id="autopilot" hidden>Autopilot: backlog facts land on their own</span><label class="switch" id="autoswitch" hidden title="People write the facts; agents land them. A Ready attempt on a backlog fact lands with no click."><input type="checkbox" id="autotoggle"><i aria-hidden="true"></i>Autopilot</label><a href="#claims" id="allclaims">All claims</a></span></div>
           <div id="claims"></div>
         </div>
       </section>
@@ -596,7 +607,23 @@
     return sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
   };
 
+  // Smooth moves: remember where each card and fact was, render, then glide each one from there (FLIP).
   function render() {
+    const before = new Map();
+    for (const el of document.querySelectorAll("#claims .pr, #facts .fact")) before.set(el.id || `f-${el.dataset.fact}`, el.getBoundingClientRect().top);
+    draw();
+    if (!before.size || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (const el of document.querySelectorAll("#claims .pr, #facts .fact")) {
+      const was = before.get(el.id || `f-${el.dataset.fact}`);
+      if (was === undefined) {
+        if (el.matches(".fact")) el.animate([{ opacity: 0, transform: "translateX(-10px)", background: "rgb(253 111 22 / 0.18)" }, { opacity: 1, transform: "none", background: "transparent" }], { duration: 700, easing: "cubic-bezier(.2,.7,.1,1)" });
+        continue;
+      }
+      const dy = was - el.getBoundingClientRect().top;
+      if (Math.abs(dy) > 1) el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 560, easing: "cubic-bezier(.2,.7,.1,1)" });
+    }
+  }
+  function draw() {
     const s = state;
     const canonFacts = s.facts.filter((f) => f.status === "canon");
     const proposed = s.facts.filter((f) => f.status === "proposed");
@@ -615,7 +642,9 @@
     $("opencount").textContent = live.length;
     $("settledcount").textContent = settled.length;
     const autopilot = s.policy?.autoAccept === "backlog";
-    $("autopilot").hidden = !autopilot;
+    $("autopilot").hidden = !autopilot || MOCK;
+    $("autoswitch").hidden = !MOCK;
+    $("autotoggle").checked = autopilot;
     // The words follow the project: on autopilot, people wrote the facts and nobody clicks Accept.
     if (!MOCK) $("flashtext").innerHTML = autopilot
       ? `<b>${esc(project)} runs on autopilot.</b> People wrote a backlog of facts; agents claim them and push attempts, and the judge checks every one on its own live preview. The first attempt that keeps every fact and makes a backlog fact true lands on its own. Click any fact to see why it’s true.`
@@ -651,7 +680,7 @@
     if (prodUrl) { $("prodlink").href = $("prodbtn").href = prodUrl; $("prodlink").textContent = new URL(prodUrl).host; }
 
     const fact = (f) => `
-      <div class="fact ${f.status}" data-fact="${esc(f.id)}" title="Why is this true?" role="button" tabindex="0">
+      <div class="fact ${f.status}${f.acceptedAt && Date.now() - f.acceptedAt < 2500 ? " landed" : ""}" data-fact="${esc(f.id)}" title="Why is this true?" role="button" tabindex="0">
         <span class="glyph"></span>
         <span class="text">${esc(f.sentence)}</span>
         <small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : ""}${f.replaces ? `<span>revises ${esc(f.replaces)}</span>` : ""}${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs in CI</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small>
@@ -867,8 +896,9 @@
   $("flash").hidden = dismissed && !MOCK;
   if (MOCK) {
     $("flashx").hidden = true;
-    $("flashtext").innerHTML = `<b>Demo: you’re the maintainer.</b> This board runs in your browser on sample data, and nothing deploys. Agents have done the work; your job is to decide. Accept a <b>Ready</b> fact and watch what the judge does next. Refresh the page to start over.
+    $("flashtext").innerHTML = `<b>Demo: you’re the maintainer.</b> This board runs in your browser on sample data, and nothing deploys. Agents have done the work; your job is to decide. Accept a <b>Ready</b> fact and watch what the judge does next, or switch on <b>Autopilot</b> and watch agents land the backlog people wrote on their own. Refresh the page to start over.
       <span class="demo-actions"><button class="btn" type="button" onclick="location.reload()">Start over</button><a class="btn" href="/board">See the live board →</a></span>`;
+    $("autotoggle").addEventListener("change", (e) => setAutopilot(e.target.checked));
     $("modelink").href = "/board";
     $("modelink").querySelector("span").textContent = "Live board";
     $("modelink").querySelector("use").setAttribute("href", "#i-pulse");
@@ -1036,7 +1066,7 @@
   }
 
   // ---- Demo: the judge's moves, played in this browser. Nothing is sent anywhere; a refresh starts over. ----------
-  const demo = { deploying: false, log: [] };
+  const demo = { deploying: false, log: [], auto: false, landed: 0 };
   const soon = (ms, fn) => setTimeout(() => { fn(); render(); }, ms);
   const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
   const names = (list) => list.join(" and ").replace(/ and (?=.* and )/g, ", ");
@@ -1054,7 +1084,8 @@
       if (x?.status !== "checking" || !template) return;
       x.status = "ready";
       x.verdict = { ...template, attemptId: x.attemptId, outcome: "ready", claimed: { factId: x.factId, held: true, detail: "ok" }, offers: [], lost: [], stale: [], retires: [], judgedAt: Date.now() };
-      say(`<b>${esc(x.agent)}’s attempt was judged:</b> it keeps every canon fact and makes “${esc(x.sentence)}” true, so it’s waiting for you.`);
+      if (demo.auto) autoLand(x);
+      else say(`<b>${esc(x.agent)}’s attempt was judged:</b> it keeps every canon fact and makes “${esc(x.sentence)}” true, so it’s waiting for you.`);
     });
     soon(4000, () => { const x = find("c-6"); if (x?.status === "open") x.status = "checking"; });
     soon(14000, () => {
@@ -1066,11 +1097,134 @@
   }
   // What the judge does when a person accepts: canon moves and deploys; an attempt that clashed is rejected; the
   // rest were built before the new fact, so the judge re-applies each one on the new canon and judges it again.
-  function demoAccept(id) {
+  // The judge re-applies attempts that fell behind on the current canon as new attempts, then judges them again.
+  function reapply(behind) {
+    const s = state;
+    soon(2600, () => {
+      const seq = s.canon.seq;
+      let left = behind.length;
+      for (const old of behind) {
+        if (old.status !== "behind") { left--; continue; }
+        old.status = "superseded";
+        const fresh = {
+          ...old, id: `${old.id}-r${seq}`, attemptId: `farmstand-${hex(3)}`, status: "checking", verdict: null, refreshedFrom: old.id, baseSeq: seq,
+          clashes: (old.clashes ?? []).map((k) => ({ ...k, with: { ...k.with } })),
+          why: `${old.why.replace(/ \(refreshed onto canon \d+\)$/, "")} (refreshed onto canon ${seq})`, createdAt: Date.now(),
+        };
+        s.claims.unshift(fresh);
+        // The same change clashes the same way: point the other side's clash at the new attempt.
+        for (const x of s.claims) for (const k of x.clashes ?? []) if (k.with.claimId === old.id) k.with = { ...k.with, claimId: fresh.id, attemptId: fresh.attemptId };
+        soon(3000 + Math.random() * 3000, () => {
+          if (fresh.status !== "checking") return;
+          // Canon moved again while it was re-applied: once more.
+          if (s.canon.seq !== seq) {
+            fresh.was = old.was;
+            fresh.status = "behind";
+            fresh.verdict = { ...old.verdict, attemptId: fresh.attemptId, outcome: "behind", judgedAt: Date.now() };
+            return reapply([fresh]);
+          }
+          fresh.status = old.was === "ready" ? "ready" : "unproven";
+          fresh.verdict = { ...demoVerdict(fresh), retires: old.verdict?.retires ?? [], claimed: old.verdict?.claimed ?? { factId: fresh.factId, held: true, detail: "ok" }, outcome: fresh.status };
+          fresh.verdict.kept = fresh.verdict.kept.filter((id) => !fresh.verdict.retires.includes(id));
+          if (fresh.status === "ready") autoLand(fresh);
+          if (--left === 0 && !demo.auto) say(`<b>Re-applied and judged again</b> on canon #${seq}, with no work from the agents: they’re back where they were${behind.some((x) => x.was === "ready") ? ", and the Ready ones wait for you" : ""}. Try accepting another, or turn on Autopilot.`);
+        });
+      }
+    });
+  }
+  // A verdict on the current canon: every canon fact kept (scoped tooling not run), its own fact true.
+  function demoVerdict(x) {
+    const kept = state.facts.filter((f) => f.status === "canon" && f.id !== "tooling-locked").map((f) => f.id);
+    return { attemptId: x.attemptId, sha: hex(20), previewUrl: "https://farmstand.canon.rodeo", canonSeq: state.canon.seq, outcome: "ready", kept, lost: [], stale: [], retires: [], skipped: ["tooling-locked"], offers: [], claimed: { factId: x.factId, held: true, detail: "ok" }, ledger: { status: "ok", detail: "ok" }, judgedAt: Date.now() };
+  }
+
+  // ---- Demo autopilot: people wrote the backlog; agents land it, and nobody clicks. ----------------------------
+  const BACKLOG = [
+    ["line-limit", "A single basket line can't exceed 99 units", "Typos like 1,000 eggs keep reaching the stalls"],
+    ["remove-from-basket", "Shoppers can remove an item from the basket", "Shoppers can only empty the whole basket today"],
+    ["product-page", "Each product has its own API page with its price", "Vendors want to link straight to one product", { factId: "code-lints", detail: "src/index.ts:88:5 lint/suspicious/noConsole: a console.log was left in" }],
+    ["stall-products", "Each stall lists its own products", "Shoppers want to browse one stall at a time"],
+  ];
+  let agentNo = 9;
+  function setAutopilot(on) {
+    demo.auto = on;
+    state.policy = { autoAccept: on ? "backlog" : "off" };
+    clearTimeout(demo.ticker);
+    if (on && !demo.seeded) {
+      demo.seeded = true;
+      for (const [id, sentence] of BACKLOG) {
+        if (!state.facts.some((f) => f.id === id)) state.facts.push({ id, sentence, status: "proposed", origin: "backlog", check: window.CANON_MOCK.checks?.[id] ?? { kind: "probe", steps: [] }, scope: null, replaces: null, proposedBy: null, madeTrueBy: null, retiredBy: null, retiredAt: null, createdAt: Date.now(), acceptedAt: null });
+      }
+      say(`<b>Autopilot on.</b> People wrote a backlog of facts (it’s in the canon column). Agents pick them up, and an attempt that keeps every fact and makes a backlog fact true lands on its own, with no click. Facts agents proposed themselves, like “A stall cannot be double-booked”, still wait for you.`);
+    } else say(on ? "<b>Autopilot back on.</b> Ready backlog attempts land on their own." : "<b>Autopilot off.</b> Ready attempts wait for you again.");
+    if (on) for (const x of state.claims) if (x.status === "ready") autoLand(x);
+    render();
+    if (on) tick();
+  }
+  // Every couple of seconds: an idle agent picks up a backlog fact nobody is working on (two at a time).
+  function tick() {
+    if (!demo.auto) return;
+    // A rejected agent is fixing its attempt, so its fact is still taken.
+    const working = (id) => state.claims.some((x) => x.factId === id && !["superseded", "accepted"].includes(x.status) && (x.auto || x.status !== "contradicts"));
+    const todo = state.facts.filter((f) => f.status === "proposed" && f.origin === "backlog" && !working(f.id));
+    const busy = state.claims.filter((x) => x.auto && ["open", "checking", "behind", "contradicts"].includes(x.status)).length;
+    if (todo.length && busy < 2) spawn(todo[0]);
+    const left = state.facts.some((f) => f.status === "proposed" && f.origin === "backlog");
+    if (!left && !demo.doneSaid) {
+      demo.doneSaid = true;
+      return say(`<b>Backlog done.</b> ${demo.landed} fact${demo.landed === 1 ? "" : "s"} landed on autopilot: agents wrote the code, the judge checked it, and nobody read a diff or clicked Accept.`);
+    }
+    demo.ticker = setTimeout(tick, 2400);
+  }
+  function spawn(fact) {
+    const plan = BACKLOG.find((b) => b[0] === fact.id);
+    const x = { id: `a-${agentNo}`, agent: `agent-${agentNo++}`, factId: fact.id, sentence: fact.sentence, status: "open", why: plan?.[2] ?? "Picked from the backlog",
+      attemptId: `farmstand-${hex(3)}`, createdAt: Date.now(), verdict: null, clashes: [], auto: true, baseSeq: state.canon.seq, failOnce: plan?.[3] ?? null };
+    state.claims.unshift(x);
+    render();
+    soon(1800, () => { if (x.status === "open") x.status = "checking"; });
+    soon(4400 + Math.random() * 1500, () => judgeDemo(x));
+  }
+  function judgeDemo(x) {
+    if (x.status !== "checking") return;
+    const v = demoVerdict(x);
+    if (x.failOnce) {
+      const lost = x.failOnce;
+      x.failOnce = null;
+      x.status = "contradicts";
+      x.verdict = { ...v, outcome: "contradicts", lost: [lost], kept: v.kept.filter((id) => id !== lost.factId) };
+      say(`<b>${esc(x.agent)}’s attempt rejected:</b> the linter fact broke (${esc(lost.detail.split(": ").pop())}). Autopilot never lands a broken attempt; the agent fixes it and pushes again.`);
+      soon(2800, () => { if (x.status === "contradicts") { x.status = "checking"; soon(3200, () => judgeDemo(x)); } });
+      return;
+    }
+    if (x.baseSeq !== state.canon.seq) {
+      x.was = "ready";
+      x.status = "behind";
+      x.verdict = { ...v, outcome: "behind", stale: [{ factId: state.canon.fact ?? "", detail: "built before it existed" }] };
+      return reapply([x]);
+    }
+    x.status = "ready";
+    x.verdict = v;
+    autoLand(x);
+  }
+  // Autopilot lands a Ready attempt on a backlog fact, one at a time. Facts agents invented wait for a person.
+  function autoLand(x) {
+    const fact = state.facts.find((f) => f.id === x.factId);
+    if (!demo.auto || x.status !== "ready" || fact?.origin !== "backlog" || fact.status !== "proposed") return;
+    if (demo.landing) return void soon(1500, () => autoLand(x));
+    demo.landing = true;
+    soon(1100, () => {
+      demo.landing = false;
+      if (demo.auto && x.status === "ready") { demo.landed++; demoAccept(x.id, true); }
+    });
+  }
+
+  function demoAccept(id, auto = false) {
     const s = state;
     const cl = s.claims.find((x) => x.id === id);
     if (!cl || cl.status !== "ready") return;
     const fact = s.facts.find((f) => f.id === cl.factId);
+    if (fact?.status !== "proposed") { cl.status = "superseded"; return render(); }
     const now = Date.now();
     // On a rival's attempt, the accepted fact got further than on canon and then failed: that's the clash.
     const rivals = new Map((cl.clashes ?? []).filter((c) => c.breaks === "mine").map((c) => [c.with.claimId, c.detail]));
@@ -1082,12 +1236,16 @@
     const same = s.claims.filter((x) => x !== cl && x.factId === cl.factId && !SETTLED.includes(x.status));
     for (const x of same) x.status = "superseded";
     demo.deploying = true;
-    say(`<b>“${esc(cl.sentence)}” is canon #${seq}.</b> ${esc(cl.agent)}’s attempt is deploying to production, and the judge re-checks every other attempt against the new canon.${same.length ? ` ${names(same.map((x) => esc(x.agent)))} worked on the same fact, so ${same.length === 1 ? "that attempt is" : "those are"} replaced.` : ""}`);
+    s.canon.fact = cl.factId;
+    say(auto
+      ? `<b>Autopilot landed “${esc(cl.sentence)}” as canon #${seq}.</b> ${esc(cl.agent)}’s attempt kept every fact and made a backlog fact true, so nobody had to click. It’s deploying, and the judge re-checks the rest.`
+      : `<b>“${esc(cl.sentence)}” is canon #${seq}.</b> ${esc(cl.agent)}’s attempt is deploying to production, and the judge re-checks every other attempt against the new canon.${same.length ? ` ${names(same.map((x) => esc(x.agent)))} worked on the same fact, so ${same.length === 1 ? "that attempt is" : "those are"} replaced.` : ""}`);
     render();
     soon(1800, () => {
       const rejected = [], behind = [];
       for (const x of s.claims) {
-        if (SETTLED.includes(x.status) || !x.verdict || ["open", "checking", "contradicts"].includes(x.status)) continue;
+        // Open and checking attempts get their verdict on the new canon anyway; behind ones are already being re-applied.
+        if (SETTLED.includes(x.status) || !x.verdict || ["open", "checking", "contradicts", "behind"].includes(x.status)) continue;
         x.verdict = { ...x.verdict, canonSeq: seq, judgedAt: Date.now() };
         if (rivals.has(x.id)) {
           x.status = x.verdict.outcome = "contradicts";
@@ -1100,28 +1258,12 @@
           behind.push(x);
         }
       }
-      say([
+      const note = [
         rejected.length ? `<b>${names(rejected.map((x) => `${esc(x.agent)}’s attempt`))} rejected:</b> it breaks the fact you just accepted, as the clash warned. Nobody had to read its code.` : "",
-        behind.length ? `${behind.length} other attempt${behind.length === 1 ? " was" : "s were"} simply built before this fact existed, so ${behind.length === 1 ? "it’s" : "they’re"} <b>behind</b>. The judge is re-applying ${behind.length === 1 ? "it" : "them"} on the new canon.` : "",
-      ].filter(Boolean).join(" "));
-      soon(2600, () => {
-        let left = behind.length;
-        for (const old of behind) {
-          old.status = "superseded";
-          const fresh = {
-            ...old, id: `${old.id}-r${seq}`, attemptId: `farmstand-${hex(3)}`, status: "checking", verdict: null, clashes: [], refreshedFrom: old.id,
-            why: `${old.why.replace(/ \(refreshed onto canon \d+\)$/, "")} (refreshed onto canon ${seq})`, createdAt: Date.now(),
-          };
-          s.claims.unshift(fresh);
-          soon(3000 + Math.random() * 3000, () => {
-            fresh.status = old.was === "ready" ? "ready" : "unproven";
-            const retires = old.verdict.retires ?? [];
-            const kept = s.facts.filter((f) => f.status === "canon" && !retires.includes(f.id) && !(old.verdict.skipped ?? []).includes(f.id)).map((f) => f.id);
-            fresh.verdict = { ...old.verdict, attemptId: fresh.attemptId, outcome: fresh.status, stale: [], lost: [], kept, judgedAt: Date.now() };
-            if (--left === 0) say(`<b>Re-applied and judged again</b> on canon #${seq}, with no work from the agents: they’re back where they were${behind.some((x) => x.was === "ready") ? ", and the Ready ones wait for you" : ""}. Try accepting another.`);
-          });
-        }
-      });
+        behind.length && !auto ? `${behind.length} other attempt${behind.length === 1 ? " was" : "s were"} simply built before this fact existed, so ${behind.length === 1 ? "it’s" : "they’re"} <b>behind</b>. The judge is re-applying ${behind.length === 1 ? "it" : "them"} on the new canon.` : "",
+      ].filter(Boolean).join(" ");
+      if (note) say(note);
+      reapply(behind);
     });
     soon(5200, () => {
       demo.deploying = false;
