@@ -26,7 +26,9 @@ of code. Probes draw random inputs seeded by each commit, and canon's facts are 
 hour. A person pushing by hand is just another attempt and gets the same verdict. You can start from an existing
 Git repo by importing it.
 
-See [PROTOCOL.md](PROTOCOL.md) for the four moves. To feel the difference, play
+See [PROTOCOL.md](PROTOCOL.md) for the four moves. To be the maintainer yourself, open the
+[demo](https://canon.rodeo/demo): accept a Ready fact and watch the judge reject the attempt that clashes with it and
+re-apply the rest (it runs in your browser; the [live board](https://canon.rodeo/board) is the real project). To feel the difference, play
 [Canon Stampede](https://canon.rodeo/game): ride a stampede of agents' changes for 40 seconds reviewing every
 change yourself, then 40 the Canon way.
 

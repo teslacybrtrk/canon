@@ -1,5 +1,5 @@
-// Sample board state for design work: open https://canon.rodeo/board?mock
-// Covers every claim status and both kinds of "why" (seed fact, accepted fact).
+// Sample board state for the demo (https://canon.rodeo/demo), which plays the judge's moves on it in the browser.
+// Starts with a Ready clash pair, a Ready rule change, an independent Ready fact, work in progress and a rejection.
 // Every preview link points at the production app, which always exists (rehearsal Previews get deleted on reset).
 (() => {
   const GENESIS = "https://farmstand.canon.rodeo"; // sample data: the always-on production app
@@ -66,10 +66,10 @@
           verdict("farmstand-p2q8zz", SOLD_OUT, "ready", { factId: "no-double-booking", held: true, detail: "ok" })), clashes: CLASH("c-2") },
         { ...claim("c-10", "agent-3", "stalls-can-be-shared", "Two vendors can share a stall on the same market day", "ready", "Market manager wants co-op stalls where two small vendors share one stall", "farmstand-k8s2co",
           verdict("farmstand-k8s2co", SOLD_OUT, "ready", { factId: "stalls-can-be-shared", held: true, detail: "ok" })), clashes: CLASH("c-10") },
-        claim("c-3", "agent-3", "no-double-booking", "A stall cannot be double-booked", "unproven", "Joining the reservation race", "farmstand-m4n1aa",
+        claim("c-3", "agent-8", "no-double-booking", "A stall cannot be double-booked", "unproven", "Joining the reservation race", "farmstand-m4n1aa",
           verdict("farmstand-m4n1aa", SOLD_OUT, "unproven", { factId: "no-double-booking", held: false, detail: "step 2: POST /api/reservations returned 201, expected 409" })),
-        claim("c-4", "agent-5", "search-by-name", "Shoppers can search products by name", "behind", "Shoppers want to find eggs fast", "farmstand-9tw8ex",
-          verdict("farmstand-9tw8ex", GENESIS, "behind", { factId: "search-by-name", held: true, detail: "ok" })),
+        claim("c-4", "agent-5", "search-by-name", "Shoppers can search products by name", "ready", "Shoppers want to find eggs fast", "farmstand-9tw8ex",
+          verdict("farmstand-9tw8ex", GENESIS, "ready", { factId: "search-by-name", held: true, detail: "ok" })),
         claim("c-5", "agent-6", "stall-hours", "Every stall shows its opening hours", "checking", "People show up before the stalls open", "farmstand-h7k2qq", null),
         claim("c-6", "human:maintainer", "stall-hours", "Every stall shows its opening hours", "open", "Trying it by hand", "farmstand-q1w2e3", null),
         claim("c-7", "agent-4", "sold-out-refused", "A sold-out product cannot be added to the basket", "accepted", "Honey keeps getting oversold", "farmstand-yplv6l",

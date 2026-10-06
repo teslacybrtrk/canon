@@ -28,7 +28,8 @@ export { VerifyAttempt, PromoteAttempt, RefreshAttempt } from "./pipelines";
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/demo") return Response.redirect(`${url.origin}/board${url.search}`, 302);
+    // The demo is the board page, run in the browser on sample data (it reads its own path).
+    if (url.pathname === "/demo") return env.ASSETS.fetch(new Request(new URL("/board", url), request));
     if (url.pathname === "/meta") return json({ sourcePublic: env.SOURCE_PUBLIC === "true" });
     const served = (await serveGit(request, env)) ?? (await serveSource(request, env));
     if (served) return served;

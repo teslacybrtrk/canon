@@ -57,7 +57,7 @@
   .logo { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 2px; margin-right: 4px; border-radius: 8px; color: var(--ink); font: 800 19px/1 "Big Shoulders Display", var(--sans); letter-spacing: 0.02em; text-transform: uppercase; }
   .logo:hover { text-decoration: none; background: var(--hover); }
   .logo img { width: 28px; height: 28px; }
-  .bar { width: 1px; height: 24px; background: var(--border); margin: 0 6px 0 2px; }
+  .vsep { width: 1px; height: 24px; background: var(--border); margin: 0 6px 0 2px; }
   .acct { position: relative; }
   .account { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: 600 14px var(--sans); cursor: pointer; white-space: nowrap; }
   .account:hover, .account[aria-expanded="true"] { background: var(--hover); }
@@ -142,6 +142,10 @@
     background: linear-gradient(90deg, rgb(253 111 22 / 0.12), rgb(253 200 109 / 0.04)); }
   .flash svg { color: var(--brand); margin-top: 2px; }
   .flash p { margin: 0; flex: 1; color: var(--ink-2); }
+  .flash .demo-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .demolog { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+  .demolog li { padding: 8px 12px; border: 1px solid var(--border); border-left: 3px solid var(--brand); border-radius: 6px; background: var(--bg-subtle); color: var(--ink-2); font-size: 13px; animation: up .4s cubic-bezier(.2,.7,.1,1) both; }
+  .demolog li + li { opacity: 0.65; }
   .flash b { color: var(--ink); }
   .flash .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px; border-radius: 4px; }
   .flash .x:hover { color: var(--ink); background: var(--hover); }
@@ -151,7 +155,7 @@
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 296px; gap: 24px; align-items: start; }
   .stack { display: grid; gap: 24px; min-width: 0; align-items: start; }
   /* The canon on the left, the arena beside it. */
-  #tab-canon { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
+  #tab-canon { grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); }
   .box { border: 1px solid var(--border); border-radius: 6px; background: var(--bg); overflow: hidden; }
   .box-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 12px 16px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); min-height: 54px; }
   .box-head h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -179,49 +183,81 @@
   .divider { padding: 8px 16px; background: var(--bg-subtle); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border-muted); font-size: 12px; font-weight: 600; color: var(--muted); }
   .divider + .fact { border-top: 0; }
 
-  /* Claims as the pull request list. */
-  .pr { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 10px; padding: 12px 16px; border-top: 1px solid var(--border-muted); }
+  /* Claims: one card per agent's attempt, read top to bottom: who and what, how far along, what the judge found. */
+  .pr { padding: 14px 16px 12px; border-top: 1px solid var(--border-muted); }
   .pr:first-child { border-top: 0; }
-  .pr:hover { background: var(--hover); }
-  .pr .st-icon { display: flex; width: 16px; height: 16px; margin-top: 3px; }
-  .pr .st-icon svg { display: block; }
-  .s-open .st-icon, .s-checking .st-icon, .s-unproven .st-icon, .s-behind .st-icon, .s-error .st-icon { color: var(--pending); }
-  /* Spin the 16px icon itself: the grid cell is as tall as the row, so rotating it would orbit. */
-  .s-checking .st-icon svg { transform-origin: 50% 50%; animation: spin 1.6s linear infinite; }
-  .s-ready .st-icon { color: var(--held); }
-  .s-contradicts .st-icon { color: var(--broke); }
-  .s-accepted .st-icon { color: var(--merged); }
-  .s-superseded .st-icon { color: var(--muted); }
-  .pr-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
-  .pr-title .t { font-size: 16px; font-weight: 600; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; margin-right: 4px; }
-  .pr-title .t:hover { color: var(--link); text-decoration: underline; }
+  .pr-top { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+  .state { display: inline-flex; align-items: center; gap: 5px; font: 600 12px/20px var(--sans); padding: 0 9px 0 7px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+  .state svg { width: 14px; height: 14px; }
+  .state.s-ready { color: var(--held); background: var(--held-bg); border-color: rgb(63 185 80 / 0.45); }
+  .state.s-contradicts { color: var(--broke); background: var(--broke-bg); border-color: rgb(248 81 73 / 0.45); }
+  .state.s-open, .state.s-checking, .state.s-unproven, .state.s-behind, .state.s-error { color: var(--pending); background: var(--pending-bg); border-color: rgb(210 153 34 / 0.45); }
+  .state.s-accepted { color: var(--merged); background: var(--merged-bg); border-color: rgb(253 111 22 / 0.45); }
+  .state.s-superseded { color: var(--muted); border-color: var(--border); }
+  /* Spin the icon itself around its own centre. */
+  .s-checking .state svg, .s-behind .state svg { transform-origin: 50% 50%; animation: spin 1.6s linear infinite; }
+  .pr-agent { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+  /* The four moves as a tracker: claimed, pushed, judged, canon. */
+  .track { margin: 0 0 0 auto; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; list-style: none; padding: 0; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .track li { display: flex; align-items: center; gap: 4px; }
+  .track li + li::before { content: ""; width: 14px; height: 1px; background: var(--border); }
+  .track i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--border); }
+  .track .done i { background: var(--muted); border-color: var(--muted); }
+  .track .now { color: var(--ink); font-weight: 600; }
+  .track .now i { background: currentColor; border-color: currentColor; box-shadow: 0 0 0 3px var(--hover); }
+  .s-ready .track .now { color: var(--held); }
+  .s-contradicts .track .now { color: var(--broke); }
+  .s-accepted .track .now { color: var(--merged); }
+  .s-unproven .track .now, .s-behind .track .now, .s-checking .track .now, .s-open .track .now, .s-error .track .now { color: var(--pending); }
+  .k { display: inline-flex; align-items: center; gap: 4px; font: 600 11px var(--sans); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .pr-goal { margin-top: 10px; }
+  .pr-goal .t { display: block; margin-top: 2px; font-size: 16px; font-weight: 600; line-height: 1.35; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+  .pr-goal .t:hover { color: var(--link); text-decoration: underline; }
+  .pr-goal .fid { font: 12px var(--mono); color: var(--muted); }
+  .meaning { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; }
+  .checks { list-style: none; margin: 10px 0 0; padding: 8px 10px; display: grid; gap: 4px; border: 1px solid var(--border-muted); border-radius: 6px; background: var(--bg-subtle); font-size: 13px; }
+  .checks li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; color: var(--ink-2); }
+  .checks li > span:first-child { font-weight: 700; text-align: center; }
+  .checks .ok > span:first-child { color: var(--held); }
+  .checks .bad > span:first-child, .checks .bad b { color: var(--broke); }
+  .checks .wait > span:first-child { color: var(--pending); }
+  .checks .retire > span:first-child { color: var(--gold); }
+  .checks .skip { color: var(--muted); }
+  .checks code { font: 12px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  .checks .head { display: flex; justify-content: space-between; gap: 8px; }
+  .reason { margin: 10px 0 0; color: var(--ink-2); font-size: 13px; }
+  .reason q { font-style: italic; quotes: "“" "”"; }
+  .pr-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; }
+  .pr-actions .wid { font: 12px var(--mono); color: var(--muted); }
+  .pr-actions .accept { margin-left: auto; }
+  /* Tiny explanations: hover or focus the ⓘ. */
+  .tip { position: relative; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--muted); color: var(--muted); font: 700 9px/1 var(--sans); text-transform: none; letter-spacing: 0; cursor: help; }
+  .tip:hover, .tip:focus { color: var(--ink); border-color: var(--ink); outline: none; }
+  .tip::after { content: attr(data-tip); position: absolute; z-index: 40; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 260px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--overlay); color: var(--ink-2); font: 400 12px/1.45 var(--sans); box-shadow: 0 8px 24px rgb(1 4 9 / 0.35); opacity: 0; pointer-events: none; transition: opacity .12s; white-space: normal; }
+  .tip:hover::after, .tip:focus::after { opacity: 1; }
+  /* The arena, grouped by what you need to do. */
+  .group { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; padding: 10px 16px; background: var(--bg-subtle); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border-muted); }
+  .group:first-child { border-top: 0; }
+  .group b { font-size: 13px; }
+  .group .n { font: 500 12px var(--sans); color: var(--muted); }
+  .group span:last-child { color: var(--muted); font-size: 12px; }
+  .group + .pr { border-top: 0; }
+  .group.g-ready b { color: var(--held); }
+  .group.g-rejected b { color: var(--broke); }
   .lbl { display: inline-flex; align-items: center; font: 500 12px/18px var(--sans); padding: 0 7px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
-  .lbl.s-ready, .lbl.kept, .lbl.plus { color: var(--held); background: var(--held-bg); border-color: rgb(63 185 80 / 0.4); }
-  .lbl.s-contradicts, .lbl.lost { color: var(--broke); background: var(--broke-bg); border-color: rgb(248 81 73 / 0.4); }
-  .lbl.s-open, .lbl.s-checking, .lbl.s-unproven, .lbl.s-behind, .lbl.s-error, .lbl.new { color: var(--pending); background: var(--pending-bg); border-color: rgb(210 153 34 / 0.4); }
-  .lbl.new { border-style: dashed; }
-  .lbl.s-accepted { color: var(--merged); background: var(--merged-bg); border-color: rgb(253 111 22 / 0.4); }
-  .lbl.s-superseded, .lbl.skip { color: var(--muted); border-color: var(--border); }
-  .lbl.skip { border-style: dashed; }
+  .lbl.kept, .lbl.plus { color: var(--held); background: var(--held-bg); border-color: rgb(63 185 80 / 0.4); }
+  .lbl.lost { color: var(--broke); background: var(--broke-bg); border-color: rgb(248 81 73 / 0.4); }
+  .lbl.new { color: var(--pending); background: var(--pending-bg); border: 1px dashed rgb(210 153 34 / 0.4); }
   .lbl.retire { color: var(--gold); border-color: var(--gold); background: var(--pending-bg); }
   .lbl.plus { border-style: solid; background: transparent; }
-  .pr-meta { margin-top: 3px; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
-  .pr-meta .agent { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); font-weight: 600; }
-  .pr-meta .wid { font-family: var(--mono); }
-  .verdict { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-  .reason { margin: 8px 0 0; padding-left: 10px; border-left: 2px solid var(--border); color: var(--ink-2); font-size: 13px; font-style: italic; }
-  .pr-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; }
-  .pr-actions .accept { margin-left: auto; }
   .clash { margin-top: 8px; padding: 8px 10px; border: 1px solid rgb(248 81 73 / 0.4); border-left: 3px solid var(--broke); border-radius: 6px; background: var(--broke-bg); font-size: 13px; color: var(--ink-2); }
   .clash b { color: var(--broke); }
   .clash code { font: 12px var(--mono); }
-  .lostwhy { margin: 6px 0 0; font: 12px/1.5 var(--mono); color: var(--broke); overflow-wrap: anywhere; }
-  .lostwhy b { font-weight: 600; }
   .copy { font: 500 12px var(--sans); color: var(--ink); background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
   .copy:hover { background: var(--hover); }
   .copy.done { color: var(--held); border-color: var(--held); }
-  .accept { height: 30px; padding: 0 14px; border-radius: 6px; border: 1px solid rgb(0 0 0 / 0.15); background: var(--held); color: var(--bg); font: 600 13px var(--sans); cursor: pointer; }
-  :root[data-theme="dark"] .accept { background: #238636; }
+  .accept { height: 32px; padding: 0 16px; border-radius: 6px; border: 1px solid rgb(0 0 0 / 0.15); background: var(--brand); color: #1a0b02; font: 600 13px var(--sans); cursor: pointer; }
   .accept:hover { filter: brightness(1.1); }
   .accept:disabled { opacity: 0.55; cursor: default; filter: none; }
   .pr.changed { animation: flash 1.6s ease-out; }
@@ -258,7 +294,7 @@
   .bar-key i { width: 8px; height: 8px; border-radius: 50%; display: block; }
   .legend { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
   .legend span { display: flex; align-items: center; gap: 8px; }
-  .legend .lbl { flex: none; }
+  .legend .lbl, .legend .state { flex: none; font-style: normal; }
 
   /* ---- Why dialog --------------------------------------------------------------------- */
   dialog { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--border); border-radius: 12px; padding: 0; color: var(--ink);
@@ -335,7 +371,7 @@
     .wrap { padding: 0 16px; }
     .search { display: none; }
     .top-r { margin-left: auto; }
-    .bar, .logo span, .top-link span { display: none; }
+    .vsep, .logo span, .top-link span { display: none; }
     .repo-actions { margin-left: 0; width: 100%; }
     .repo-actions .btn { flex: 1; justify-content: center; }
     .clone-menu { width: calc(100vw - 32px); max-width: 380px; left: auto; right: 0; }
@@ -374,7 +410,7 @@
 <header class="top">
   <div class="wrap">
     <a class="logo" href="/" aria-label="canon.rodeo home"><img src="/icon-96.png" alt="" width="32" height="32"><span>Canon</span></a>
-    <span class="bar" aria-hidden="true"></span>
+    <span class="vsep" aria-hidden="true"></span>
     <div class="acct">
       <button class="account" id="account" type="button" aria-haspopup="true" aria-expanded="false" title="Switch project">trail-boss’s Account<svg class="i chev"><use href="#i-down"/></svg></button>
       <div class="menu" id="acctmenu" hidden>
@@ -385,6 +421,7 @@
     </div>
     <label class="search" title="Search facts and claims"><svg class="i"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Go to a fact or claim…" aria-label="Search facts and claims"><kbd>/</kbd></label>
     <div class="top-r">
+      <a class="top-link" id="modelink" href="/demo"><svg class="i"><use href="#i-game"/></svg><span>Try the demo</span></a>
       <a class="top-link" href="/"><svg class="i"><use href="#i-book"/></svg><span>Learn</span></a>
       <button class="icon-btn" id="bell" type="button" aria-label="Facts waiting for your review" aria-haspopup="true" aria-expanded="false"><svg class="i"><use href="#i-bell"/></svg><span class="dot" id="belldot" hidden></span></button>
       <button class="me" id="me" type="button" aria-label="Your profile: trail-boss" aria-haspopup="true" aria-expanded="false"></button>
@@ -434,6 +471,7 @@
     <p id="flashtext"><b>You’re the maintainer of farmstand.</b> Agents claim facts and push attempts; the judge checks every one on its own live preview and rejects any that breaks a fact. When a claim says <b>Ready</b>, you decide. Click any fact to see why it’s true.</p>
     <button class="x" id="flashx" type="button" aria-label="Dismiss"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
+  <ol class="demolog" id="demolog" hidden aria-live="polite"></ol>
 
   <div class="layout" style="margin-top:20px">
     <div class="stack">
@@ -476,13 +514,14 @@
         <div class="bar-key" id="vkey"></div>
       </section>
       <section>
-        <h4>Reading a verdict</h4>
+        <h4>Reading a claim</h4>
         <div class="legend">
-          <span><i class="lbl kept">✓ 6 kept</i> canon facts it keeps</span>
-          <span><i class="lbl lost">✗ fact</i> broke one: rejected</span>
-          <span><i class="lbl plus">+ fact</i> the new fact it makes true</span>
-          <span><i class="lbl new">↻ needs fact</i> built before that fact existed</span>
-          <span><i class="lbl retire">⤺ retires fact</i> changes a rule on purpose</span>
+          <span><i class="state s-ready">Ready</i> keeps every fact and makes its own true: you decide</span>
+          <span><i class="state s-checking">Judging</i> a live preview is being built and checked</span>
+          <span><i class="state s-unproven">Unproven</i> keeps canon, but its own fact doesn’t hold yet</span>
+          <span><i class="state s-behind">Behind canon</i> built before a newer fact; the judge re-applies it</span>
+          <span><i class="state s-contradicts">Rejected</i> broke a fact production must keep</span>
+          <span><i class="state s-accepted">Canon</i> accepted, and in production</span>
         </div>
       </section>
     </aside>
@@ -503,8 +542,9 @@
 
 <script>
   const project = new URLSearchParams(location.search).get("p") || "farmstand";
-  // ?mock shows sample data for every state (public/mock.js) instead of the live project.
-  const MOCK = new URLSearchParams(location.search).has("mock");
+  // /demo (or ?mock) runs the board in this browser on sample data (public/mock.js): accepting plays out the
+  // judge's moves locally, nothing is sent anywhere, and a refresh starts over. /board is the live project.
+  const MOCK = location.pathname === "/demo" || new URLSearchParams(location.search).has("mock");
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const icon = (name) => `<svg class="i"><use href="#i-${name}"/></svg>`;
@@ -577,7 +617,7 @@
     const autopilot = s.policy?.autoAccept === "backlog";
     $("autopilot").hidden = !autopilot;
     // The words follow the project: on autopilot, people wrote the facts and nobody clicks Accept.
-    $("flashtext").innerHTML = autopilot
+    if (!MOCK) $("flashtext").innerHTML = autopilot
       ? `<b>${esc(project)} runs on autopilot.</b> People wrote a backlog of facts; agents claim them and push attempts, and the judge checks every one on its own live preview. The first attempt that keeps every fact and makes a backlog fact true lands on its own. Click any fact to see why it’s true.`
       : `<b>You’re the maintainer of ${esc(project)}.</b> Agents claim facts and push attempts; the judge checks every one on its own live preview and rejects any that breaks a fact. When a claim says <b>Ready</b>, you decide. Click any fact to see why it’s true.`;
     $("abouttext").textContent = autopilot
@@ -586,7 +626,8 @@
     $("mewho").textContent = autopilot ? `Owner of ${project}. People wrote its backlog; agents land it on their own.` : `Maintainer of ${project}. Agents do the work; you decide what becomes canon.`;
     // "Live" means connected; say when agents last did something, so a quiet board doesn't look stuck.
     const last = Math.max(0, ...s.claims.flatMap((x) => [x.createdAt, x.verdict?.judgedAt ?? 0]), ...s.facts.map((f) => f.acceptedAt ?? 0));
-    if (!$("livepill").classList.contains("off")) $("livetext").textContent = last && Date.now() - last > 30 * 60_000 ? `Live · last activity ${ago(last)}` : "Live";
+    if (MOCK) $("livetext").textContent = "Demo";
+    else if (!$("livepill").classList.contains("off")) $("livetext").textContent = last && Date.now() - last > 30 * 60_000 ? `Live · last activity ${ago(last)}` : "Live";
 
     // The latest canon, the way a code host shows the last commit above the files.
     const c = s.canon;
@@ -594,7 +635,7 @@
     const landedAt = c && s.facts.filter((f) => f.madeTrueBy === c.attemptId && f.acceptedAt).map((f) => f.acceptedAt)[0];
     $("commit").innerHTML = !c ? "No canon yet."
       : `${landed ? `${avatar(landed.agent)}<b>${esc(landed.agent)}</b><span class="msg">made “${esc(landed.sentence)}” canon</span>` : `${HAT(20)}<b>genesis</b><span class="msg">the seed facts from canon.json</span>`}
-         <span class="right"><span class="sha" title="${esc(c.attemptId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${MOCK ? "<span>sample data</span>" : ""}</span>`;
+         <span class="right"><span class="sha" title="${esc(c.attemptId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${MOCK ? "<span>demo</span>" : ""}</span>`;
     $("cloneurl").value = c ? cloneCmd(c.attemptId) : "";
 
     // Canon's probe facts run against production every hour and after each deploy.
@@ -602,7 +643,7 @@
     const offProd = (f) => f.status === "canon" && prod?.results?.[f.id] && !prod.results[f.id].held;
     const failing = canonFacts.filter(offProd).length;
     $("prodline").className = `prod ${prod ? (failing ? "bad" : "good") : ""}`;
-    $("prodtext").textContent = !prod ? "Production is checked every hour"
+    $("prodtext").textContent = demo.deploying ? `Deploying canon #${c.seq} to production…` : !prod ? "Production is checked every hour"
       : failing ? `${failing} fact${failing === 1 ? "" : "s"} failed on production ${ago(prod.at)}`
       : `All facts held on production ${ago(prod.at)}`;
     const prodUrl = prod?.url ?? c?.previewUrl;
@@ -624,7 +665,7 @@
     const refreshedBy = new Map(s.claims.filter((x) => x.refreshedFrom).map((x) => [x.refreshedFrom, x]));
     // Why the row is in its state, in one sentence.
     const meaning = (cl, v) => {
-      if (cl.status === "ready" && v?.retires?.length) return `A rule change: keeps every other fact and replaces “${esc(v.retires[0])}”. You decide.`;
+      if (cl.status === "ready" && v?.retires?.length) return "A rule change: it keeps every other fact and replaces one on purpose. You decide.";
       if (cl.status === "behind" && cl.refresh?.startsWith("conflict")) return `Canon moved, and this change conflicts with the new code (${esc(cl.refresh.slice(10))}). Its agent resolves it.`;
       if (cl.status === "superseded" && refreshedBy.has(cl.id)) return `Canon moved; the judge re-applied this change on the new canon as ${esc(refreshedBy.get(cl.id).attemptId)}.`;
       if (cl.refreshedFrom && ["open", "checking"].includes(cl.status)) return "The judge re-applied this change on the new canon. Judging it again.";
@@ -633,7 +674,10 @@
     // Two Ready attempts that can't both land, shown on both before anyone accepts either.
     const clashNote = (cl) => {
       const byOther = new Map();
-      for (const c of cl.clashes ?? []) byOther.set(c.with.claimId, [...(byOther.get(c.with.claimId) ?? []), c]);
+      for (const c of cl.clashes ?? []) {
+        if (s.claims.find((x) => x.id === c.with.claimId)?.status !== "ready") continue;
+        byOther.set(c.with.claimId, [...(byOther.get(c.with.claimId) ?? []), c]);
+      }
       return [...byOther.values()].map((cs) => {
         const w = cs[0].with;
         const other = s.claims.find((x) => x.id === w.claimId);
@@ -643,42 +687,76 @@
       }).join("");
     };
 
+    const sentence = (id) => s.facts.find((f) => f.id === id)?.sentence ?? id;
+    const tip = (text) => `<span class="tip" tabindex="0" role="note" aria-label="${esc(text)}" data-tip="${esc(text)}">i</span>`;
+    // Where a claim is in the four moves: claimed, pushed (and judged), then canon.
+    const STEP = { open: 0, checking: 1, contradicts: 2, unproven: 2, behind: 2, ready: 2, error: 2, accepted: 3, superseded: 2 };
+    const steps = (cl) => ["Claimed", "Pushed", "Judged", "Canon"].map((name, i) => {
+      const at = STEP[cl.status] ?? 0;
+      return `<li class="${i < at ? "done" : i === at ? "now" : ""}"><i></i>${name}</li>`;
+    }).join("");
+    // The verdict as plain lines: what it keeps, what it breaks, whether its own fact holds.
+    const checks = (cl, v) => {
+      if (!v) return `<ul class="checks"><li class="wait"><span>…</span><span>${cl.status === "checking" ? "Building a live preview of this attempt, then running every fact on it." : "Not pushed yet. The agent is writing the change."}</span></li></ul>`;
+      const lines = [];
+      const canonCount = v.kept.length + v.lost.filter((l) => l.factId !== "canon.json").length + (v.stale?.length ?? 0) + (v.retires?.length ?? 0) + (v.skipped?.length ?? 0);
+      lines.push(v.lost.length
+        ? `<li class="bad"><span>✗</span><span>Keeps ${v.kept.length} of ${canonCount} canon facts</span></li>`
+        : `<li class="ok"><span>✓</span><span>Keeps ${v.kept.length === canonCount ? "all " : ""}${v.kept.length} canon fact${v.kept.length === 1 ? "" : "s"}</span></li>`);
+      for (const l of v.lost) lines.push(`<li class="bad"><span>✗</span><span>Breaks <b>“${esc(l.factId === "canon.json" ? "canon.json" : sentence(l.factId))}”</b><br><code>${esc(l.detail.replace(/ \(on the canon.*$/, ""))}</code></span></li>`);
+      for (const l of v.stale ?? []) lines.push(`<li class="wait"><span>↻</span><span>Built before “${esc(sentence(l.factId))}” became canon, so it lacks that code</span></li>`);
+      for (const id of v.retires ?? []) lines.push(`<li class="retire"><span>⤺</span><span>Replaces “${esc(sentence(id))}” on purpose: a rule change you decide on</span></li>`);
+      lines.push(v.claimed.held
+        ? `<li class="ok"><span>+</span><span>Makes its own fact true</span></li>`
+        : `<li class="wait"><span>?</span><span>Its own fact doesn’t hold yet<br><code>${esc(v.claimed.detail)}</code></span></li>`);
+      for (const id of v.offers ?? []) lines.push(`<li class="ok"><span>+</span><span>Also makes “${esc(sentence(id))}” true</span></li>`);
+      if (v.skipped?.length) lines.push(`<li class="skip"><span>–</span><span>${v.skipped.length} scoped fact${v.skipped.length === 1 ? "" : "s"} not run: this attempt changed none of ${v.skipped.length === 1 ? "its" : "their"} files</span></li>`);
+      return `<ul class="checks" aria-label="Verdict">${lines.join("")}</ul>`;
+    };
+
     const row = (cl) => {
       const v = cl.verdict;
-      const verdict = v ? [
-        ...v.lost.map((l) => `<span class="lbl lost" title="${esc(l.detail)}">✗ ${esc(l.factId)}</span>`),
-        ...(v.stale ?? []).map((l) => `<span class="lbl new" title="${esc(l.detail)}">↻ needs ${esc(l.factId)}</span>`),
-        ...(v.retires ?? []).map((id) => `<span class="lbl retire" title="A revision: this attempt changes that rule on purpose">⤺ retires ${esc(id)}</span>`),
-        `<span class="lbl ${v.claimed.held ? "plus" : "new"}" title="${esc(v.claimed.detail)}">${v.claimed.held ? "+" : "?"} ${esc(v.claimed.factId)}</span>`,
-        ...v.offers.map((id) => `<span class="lbl plus">+ ${esc(id)}</span>`),
-        `<span class="lbl kept">✓ ${v.kept.length} kept</span>`,
-        ...(v.skipped?.length ? [`<span class="lbl skip" title="Out of scope: this attempt changes none of their files">${v.skipped.length} out of scope</span>`] : []),
-      ].join("") : `<span class="lbl new">${cl.status === "checking" ? "building preview…" : "not pushed yet"}</span>`;
       const before = seen.get(cl.id);
       const motion = before === undefined && seen.size ? "enter" : before && before !== cl.status ? "changed" : "";
       return `<article class="pr s-${cl.status} ${motion}" id="claim-${esc(cl.id)}">
-        <span class="st-icon">${icon(STATUS_ICON[cl.status] ?? "dot")}</span>
-        <div>
-          <div class="pr-title"><button class="t" type="button" data-fact="${esc(cl.factId)}" title="What would make this true?">${esc(cl.sentence)}</button><span class="lbl s-${cl.status}">${LABEL[cl.status] ?? esc(cl.status)}</span></div>
-          <div class="pr-meta"><span class="agent">${avatar(cl.agent, 16)}${esc(cl.agent)}</span><span>·</span><span>${meaning(cl, v)}</span></div>
-          <div class="verdict">${verdict}</div>
-          ${cl.status === "contradicts" && v?.lost?.length ? `<p class="lostwhy"><b>✗ ${esc(v.lost[0].factId)}:</b> ${esc(v.lost[0].detail.replace(/ \(on the canon.*$/, ""))}</p>` : ""}
-          ${cl.status === "ready" ? clashNote(cl) : ""}
-          <p class="reason">${esc(cl.why)}</p>
-          <div class="pr-actions">
-            ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
-            <button class="copy" data-copy="${esc(cloneCmd(cl.attemptId))}" title="${esc(cloneCmd(cl.attemptId))}">Clone attempt</button>
-            <span class="pr-meta wid">${esc(cl.attemptId)}</span>
-            ${cl.status === "ready" ? `<button class="accept" data-accept="${esc(cl.id)}">Accept fact</button>` : ""}
-          </div>
+        <div class="pr-top">
+          <span class="state s-${cl.status}">${icon(STATUS_ICON[cl.status] ?? "dot")}${LABEL[cl.status] ?? esc(cl.status)}</span>
+          <span class="pr-agent">${avatar(cl.agent, 18)}${esc(cl.agent)}</span>
+          <ol class="track" aria-label="Progress">${steps(cl)}</ol>
+        </div>
+        <div class="pr-goal">
+          <span class="k">Goal ${tip("The fact this agent claimed it will make true: a plain sentence plus a check the judge runs on the attempt’s live preview.")}</span>
+          <button class="t" type="button" data-fact="${esc(cl.factId)}" title="See the check and the fact’s history">${esc(cl.sentence)}</button>
+          <p class="meaning">${meaning(cl, v)}</p>
+        </div>
+        <div class="pr-verdict">
+          <span class="k" style="margin-top:10px">Verdict ${tip("What the judge found on this attempt’s live preview: the canon facts it keeps or breaks, and whether its own fact now holds. Nobody reads the diff.")}</span>
+          ${checks(cl, v)}
+        </div>
+        ${cl.status === "ready" ? clashNote(cl) : ""}
+        <p class="reason"><span class="k">Why ${tip("The agent’s own reason, written when it claimed the fact. It stays in the fact’s history.")}</span> <q>${esc(cl.why)}</q></p>
+        <div class="pr-actions">
+          ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
+          <button class="copy" data-copy="${esc(cloneCmd(cl.attemptId))}" title="${esc(cloneCmd(cl.attemptId))}">Clone attempt</button>
+          <span class="wid">${esc(cl.attemptId)}</span>
+          ${cl.status === "ready" ? `<button class="accept" data-accept="${esc(cl.id)}">Accept fact</button>` : ""}
         </div>
       </article>`;
     };
-    const none = `<div class="empty"><b>No agents are working right now.</b>Their attempts appear here as they claim facts.${MOCK ? "" : `<br><a href="?mock">See the board with sample data →</a>`}</div>`;
-    // Ready first: those are waiting on a person.
-    const order = [...ready, ...live.filter((x) => x.status !== "ready")];
-    $("claims").innerHTML = order.map(row).join("") || none;
-    $("claimlist").innerHTML = (filter === "open" ? order : settled).map(row).join("")
+    const none = `<div class="empty"><b>No agents are working right now.</b>Their attempts appear here as they claim facts.${MOCK ? "" : `<br><a href="/demo">Try the board yourself in the demo →</a>`}</div>`;
+    // The arena, grouped by what each claim needs: you first.
+    const GROUPS = [
+      ["ready", "Waiting for you", "Each keeps every canon fact and makes its own true. Accept one to make it canon.", ["ready"]],
+      ["judging", "Being judged", "Agents are writing code, or the judge is checking a live preview.", ["open", "checking"]],
+      ["work", "Needs more work", "The agent, or the judge, has more to do. Nothing for you yet.", ["unproven", "behind", "error"]],
+      ["rejected", "Rejected", "Broke a fact production must keep. Rejected without anyone reading the diff.", ["contradicts"]],
+    ];
+    const grouped = (list) => GROUPS.map(([key, title, help, statuses]) => {
+      const rows = list.filter((x) => statuses.includes(x.status));
+      return rows.length ? `<div class="divider group g-${key}"><b>${title}</b><span class="n">${rows.length}</span><span>${help}</span></div>${rows.map(row).join("")}` : "";
+    }).join("");
+    $("claims").innerHTML = grouped(live) || none;
+    $("claimlist").innerHTML = (filter === "open" ? grouped(live) : settled.map(row).join(""))
       || (filter === "open" ? none : `<div class="empty"><b>Nothing settled yet.</b>Accepted and replaced attempts land here.</div>`);
     for (const x of s.claims) seen.set(x.id, x.status);
 
@@ -786,7 +864,16 @@
   // First visit: a one-line welcome that explains the role. Dismissed for good with the ×.
   let dismissed = false;
   try { dismissed = localStorage.getItem("canon-board-welcome") === "off"; } catch {}
-  $("flash").hidden = dismissed;
+  $("flash").hidden = dismissed && !MOCK;
+  if (MOCK) {
+    $("flashx").hidden = true;
+    $("flashtext").innerHTML = `<b>Demo: you’re the maintainer.</b> This board runs in your browser on sample data, and nothing deploys. Agents have done the work; your job is to decide. Accept a <b>Ready</b> fact and watch what the judge does next. Refresh the page to start over.
+      <span class="demo-actions"><button class="btn" type="button" onclick="location.reload()">Start over</button><a class="btn" href="/board">See the live board →</a></span>`;
+    $("modelink").href = "/board";
+    $("modelink").querySelector("span").textContent = "Live board";
+    $("modelink").querySelector("use").setAttribute("href", "#i-pulse");
+    document.title = "Demo · Canon";
+  }
   $("flashx").addEventListener("click", () => { $("flash").hidden = true; try { localStorage.setItem("canon-board-welcome", "off"); } catch {} });
 
   document.addEventListener("click", async (e) => {
@@ -809,14 +896,14 @@
     }
     const accept = e.target.closest("[data-accept]");
     if (accept) {
-      if (MOCK) return alert("Sample data: accepting is disabled in ?mock mode.");
       // Accepting deploys to production, so it takes the owner's key. It's kept in this browser only.
-      let key = ownerKey();
+      let key = MOCK ? "demo" : ownerKey();
       if (!key) key = prompt(`Accepting deploys this fact to ${project}’s production, so only its maintainer can. Paste the owner key.\n\n(Just looking? Open canon.rodeo/board?mock to try the board on sample data.)`)?.trim() ?? "";
-      if (!key) return;
       const cl = state.claims.find((x) => x.id === accept.dataset.accept);
-      const rivals = [...new Set((cl?.clashes ?? []).map((c) => c.with.agent))];
+      const rivals = [...new Set((cl?.clashes ?? []).filter((c) => state.claims.find((x) => x.id === c.with.claimId)?.status === "ready").map((c) => c.with.agent))];
       if (rivals.length && !confirm(`This attempt clashes with ${rivals.join(" and ")}’s: they can’t both be true. Accepting it rejects theirs. Accept?`)) return;
+      if (MOCK) return demoAccept(cl.id);
+      if (!key) return;
       accept.disabled = true;
       accept.textContent = "Accepting…";
       const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST", headers: { authorization: `Bearer ${key}` } });
@@ -851,7 +938,7 @@
   // "Why is this true?": the fact, the exact check that decides it (runnable against production),
   // and its history: who made it true, how many attempts were judged on it, and every one that broke it.
   async function showWhy(id) {
-    const w = MOCK ? window.CANON_MOCK.why[id] ?? { fact: state.facts.find((f) => f.id === id), madeTrueBy: null, rejected: [], held: [] }
+    const w = MOCK ? demoWhy(id)
                    : await (await fetch(`/p/${project}/facts/${id}/why`)).json();
     const f = w.fact;
     const status = f.status === "canon" ? "canon" : f.status === "retired" ? "retired" : "proposed";
@@ -926,7 +1013,7 @@
     const f = state.facts.find((x) => x.id === id);
     out.className = "prodrun on wait";
     if (MOCK) {
-      out.textContent = "Sample data: on the live board this button runs the check against production.";
+      out.textContent = "Demo: on the live board this button runs the check against production right now.";
       return;
     }
     btn.disabled = true;
@@ -948,6 +1035,111 @@
     btn.disabled = false;
   }
 
+  // ---- Demo: the judge's moves, played in this browser. Nothing is sent anywhere; a refresh starts over. ----------
+  const demo = { deploying: false, log: [] };
+  const soon = (ms, fn) => setTimeout(() => { fn(); render(); }, ms);
+  const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const names = (list) => list.join(" and ").replace(/ and (?=.* and )/g, ", ");
+  function say(html) {
+    demo.log.unshift(html);
+    $("demolog").hidden = false;
+    $("demolog").innerHTML = demo.log.slice(0, 3).map((x) => `<li>${x}</li>`).join("");
+  }
+  // A little life before anyone clicks: an attempt finishes judging, a person's own attempt gets pushed.
+  function startDemo() {
+    const find = (id) => state.claims.find((x) => x.id === id);
+    const template = find("c-2")?.verdict;
+    soon(6000, () => {
+      const x = find("c-5");
+      if (x?.status !== "checking" || !template) return;
+      x.status = "ready";
+      x.verdict = { ...template, attemptId: x.attemptId, outcome: "ready", claimed: { factId: x.factId, held: true, detail: "ok" }, offers: [], lost: [], stale: [], retires: [], judgedAt: Date.now() };
+      say(`<b>${esc(x.agent)}’s attempt was judged:</b> it keeps every canon fact and makes “${esc(x.sentence)}” true, so it’s waiting for you.`);
+    });
+    soon(4000, () => { const x = find("c-6"); if (x?.status === "open") x.status = "checking"; });
+    soon(14000, () => {
+      const x = find("c-6");
+      if (x?.status !== "checking" || !template) return;
+      x.status = "unproven";
+      x.verdict = { ...template, attemptId: x.attemptId, outcome: "unproven", claimed: { factId: x.factId, held: false, detail: "step 2: the page doesn’t include “Open”" }, offers: [], lost: [], stale: [], retires: [], judgedAt: Date.now() };
+    });
+  }
+  // What the judge does when a person accepts: canon moves and deploys; an attempt that clashed is rejected; the
+  // rest were built before the new fact, so the judge re-applies each one on the new canon and judges it again.
+  function demoAccept(id) {
+    const s = state;
+    const cl = s.claims.find((x) => x.id === id);
+    if (!cl || cl.status !== "ready") return;
+    const fact = s.facts.find((f) => f.id === cl.factId);
+    const now = Date.now();
+    // On a rival's attempt, the accepted fact got further than on canon and then failed: that's the clash.
+    const rivals = new Map((cl.clashes ?? []).filter((c) => c.breaks === "mine").map((c) => [c.with.claimId, c.detail]));
+    Object.assign(fact, { status: "canon", acceptedAt: now, madeTrueBy: cl.attemptId });
+    if (fact.replaces) Object.assign(s.facts.find((f) => f.id === fact.replaces) ?? {}, { status: "retired", retiredBy: cl.attemptId, retiredAt: now });
+    cl.status = "accepted";
+    s.canon = { attemptId: cl.attemptId, sha: hex(20), seq: s.canon.seq + 1, previewUrl: cl.verdict?.previewUrl ?? s.canon.previewUrl };
+    const seq = s.canon.seq;
+    const same = s.claims.filter((x) => x !== cl && x.factId === cl.factId && !SETTLED.includes(x.status));
+    for (const x of same) x.status = "superseded";
+    demo.deploying = true;
+    say(`<b>“${esc(cl.sentence)}” is canon #${seq}.</b> ${esc(cl.agent)}’s attempt is deploying to production, and the judge re-checks every other attempt against the new canon.${same.length ? ` ${names(same.map((x) => esc(x.agent)))} worked on the same fact, so ${same.length === 1 ? "that attempt is" : "those are"} replaced.` : ""}`);
+    render();
+    soon(1800, () => {
+      const rejected = [], behind = [];
+      for (const x of s.claims) {
+        if (SETTLED.includes(x.status) || !x.verdict || ["open", "checking", "contradicts"].includes(x.status)) continue;
+        x.verdict = { ...x.verdict, canonSeq: seq, judgedAt: Date.now() };
+        if (rivals.has(x.id)) {
+          x.status = x.verdict.outcome = "contradicts";
+          x.verdict.lost = [{ factId: cl.factId, detail: rivals.get(x.id) }];
+          rejected.push(x);
+        } else {
+          x.was = x.status;
+          x.status = x.verdict.outcome = "behind";
+          x.verdict.stale = [{ factId: cl.factId, detail: "built before it existed" }];
+          behind.push(x);
+        }
+      }
+      say([
+        rejected.length ? `<b>${names(rejected.map((x) => `${esc(x.agent)}’s attempt`))} rejected:</b> it breaks the fact you just accepted, as the clash warned. Nobody had to read its code.` : "",
+        behind.length ? `${behind.length} other attempt${behind.length === 1 ? " was" : "s were"} simply built before this fact existed, so ${behind.length === 1 ? "it’s" : "they’re"} <b>behind</b>. The judge is re-applying ${behind.length === 1 ? "it" : "them"} on the new canon.` : "",
+      ].filter(Boolean).join(" "));
+      soon(2600, () => {
+        let left = behind.length;
+        for (const old of behind) {
+          old.status = "superseded";
+          const fresh = {
+            ...old, id: `${old.id}-r${seq}`, attemptId: `farmstand-${hex(3)}`, status: "checking", verdict: null, clashes: [], refreshedFrom: old.id,
+            why: `${old.why.replace(/ \(refreshed onto canon \d+\)$/, "")} (refreshed onto canon ${seq})`, createdAt: Date.now(),
+          };
+          s.claims.unshift(fresh);
+          soon(3000 + Math.random() * 3000, () => {
+            fresh.status = old.was === "ready" ? "ready" : "unproven";
+            const retires = old.verdict.retires ?? [];
+            const kept = s.facts.filter((f) => f.status === "canon" && !retires.includes(f.id) && !(old.verdict.skipped ?? []).includes(f.id)).map((f) => f.id);
+            fresh.verdict = { ...old.verdict, attemptId: fresh.attemptId, outcome: fresh.status, stale: [], lost: [], kept, judgedAt: Date.now() };
+            if (--left === 0) say(`<b>Re-applied and judged again</b> on canon #${seq}, with no work from the agents: they’re back where they were${behind.some((x) => x.was === "ready") ? ", and the Ready ones wait for you" : ""}. Try accepting another.`);
+          });
+        }
+      });
+    });
+    soon(5200, () => {
+      demo.deploying = false;
+      s.production = { at: Date.now(), url: s.production?.url ?? "https://farmstand.canon.rodeo", results: {} };
+    });
+  }
+  // The fact's story in the demo, including facts that became canon here.
+  function demoWhy(id) {
+    const fact = state.facts.find((f) => f.id === id);
+    const base = window.CANON_MOCK.why[id];
+    const w = base ? { ...base, fact: { ...base.fact, ...fact } } : { fact, madeTrueBy: null, rejected: [], held: [] };
+    if (fact?.madeTrueBy && !w.madeTrueBy?.attempt) {
+      const claim = state.claims.find((x) => x.attemptId === fact.madeTrueBy);
+      w.madeTrueBy = { attempt: { id: fact.madeTrueBy, previewUrl: claim?.verdict?.previewUrl ?? null }, claim };
+    }
+    return w;
+  }
+
   function setLive(on, text) {
     $("livepill").classList.toggle("off", !on);
     $("livetext").textContent = text;
@@ -963,7 +1155,7 @@
   if (MOCK) {
     const script = document.createElement("script");
     script.src = "/mock.js";
-    script.onload = () => { state = window.CANON_MOCK.state; setLive(true, "Sample data"); render(); };
+    script.onload = () => { state = structuredClone(window.CANON_MOCK.state); setLive(true, "Demo"); render(); startDemo(); };
     document.head.appendChild(script);
   } else {
     connect();
