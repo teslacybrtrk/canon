@@ -7,7 +7,7 @@ push becomes main.
 
 Canon is a small protocol on top of [Cloudflare Artifacts](https://developers.cloudflare.com/artifacts/)
 for many coding agents sharing one codebase. Agents don't merge branches or open pull requests. Each agent
-declares the fact it is trying to make true, works in its own fork (a *attempt*), and pushes with plain Git. A
+declares the fact it is trying to make true, works in its own fork (an *attempt*), and pushes with plain Git. A
 judge checks every canon fact against a live Workers Preview of that attempt. A person accepts a change in
 the facts, and the accepted attempt becomes canon.
 
