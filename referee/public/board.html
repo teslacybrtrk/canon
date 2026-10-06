@@ -168,11 +168,6 @@
   .toasts .ev { box-shadow: 0 12px 32px -12px rgb(1 4 9 / 0.6); background: var(--overlay); animation: slidein .4s cubic-bezier(.2,.7,.1,1) both; transition: opacity .5s, transform .5s; }
   .toasts .ev.gone { opacity: 0; transform: translateY(8px); }
   @media (min-width: 1241px) { .toasts { display: none; } }
-  .intro-slim { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-top: 20px; padding: 8px 12px; border: 1px solid rgb(253 111 22 / 0.4); border-radius: 8px; background: linear-gradient(90deg, rgb(253 111 22 / 0.1), transparent); font-size: 13px; color: var(--ink-2); }
-  .intro-slim .ev-k { color: var(--brand); }
-  .intro-slim .btn { margin-left: auto; height: 28px; font-size: 12px; }
-  .linkish { background: none; border: 0; padding: 0; color: var(--link); font: inherit; cursor: pointer; }
-  .linkish:hover { text-decoration: underline; }
   .ev-k { display: inline-block; font: 600 10px/16px var(--sans); text-transform: uppercase; letter-spacing: .06em; color: var(--c); }
   .ev b { display: block; margin-top: 2px; font-size: 14px; color: var(--ink); }
   .ev p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
@@ -590,7 +585,6 @@
     <div><span class="ev-k">Or</span><b>Switch on Autopilot</b><p>Agents land the backlog people wrote, with no clicks. Facts agents proposed still wait for you.</p></div>
     <div><span class="ev-k">Safe</span><b>Nothing deploys</b><p>It all runs in your browser on sample data. Refresh to start over.</p><button class="btn" type="button" onclick="location.reload()">Start over</button></div>
   </div>
-  <div class="intro-slim" id="introslim" hidden><span class="ev-k">Demo</span><span>You’re the maintainer. It runs in your browser; nothing deploys.</span><button class="linkish" type="button" id="showtips">Show tips</button><button class="btn" type="button" onclick="location.reload()">Start over</button></div>
 
   <div class="layout" style="margin-top:20px">
     <div class="stack">
@@ -1130,7 +1124,6 @@
   if (MOCK) {
     $("intro").hidden = false;
     $("activity").hidden = false;
-    $("showtips").addEventListener("click", () => { $("intro").hidden = false; $("introslim").hidden = true; });
     setInterval(() => drawLog(), 15_000);
     $("autotoggle").addEventListener("change", (e) => setAutopilot(e.target.checked));
     $("modelink").hidden = true;
@@ -1346,11 +1339,7 @@
     $("demolog").innerHTML = demo.log.map((g, i) => `<li class="evgroup${i === 0 && fresh ? " fresh" : ""}${i ? ` age${Math.min(i, 3)}` : ""}"><time>${ago(g.at)}</time>${g.cards.map(evCard).join("")}</li>`).join("");
     $("demolog").scrollTop = 0;
   }
-  // The how-to cards shrink to one line once someone has done something.
-  function acted() {
-    $("intro").hidden = true;
-    $("introslim").hidden = false;
-  }
+
   // A little life before anyone clicks: an attempt finishes judging, a person's own attempt gets pushed.
   function startDemo() {
     const find = (id) => state.claims.find((x) => x.id === id);
@@ -1423,7 +1412,6 @@
   ];
   let agentNo = 9;
   function setAutopilot(on) {
-    acted();
     demo.auto = on;
     state.policy = { autoAccept: on ? "backlog" : "off" };
     clearTimeout(demo.ticker);
@@ -1499,7 +1487,6 @@
   }
 
   function demoAccept(id, auto = false) {
-    if (!auto) acted();
     const s = state;
     const cl = s.claims.find((x) => x.id === id);
     if (!cl || cl.status !== "ready") return;
@@ -1558,7 +1545,6 @@
   }
   // Declining in the demo: the claim settles; an agent's proposed fact nobody else works on is declined with it.
   function demoDecline(ids, reason) {
-    acted();
     const names = [];
     for (const id of ids) {
       const x = state.claims.find((c) => c.id === id);
