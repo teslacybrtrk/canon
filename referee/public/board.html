@@ -554,7 +554,7 @@
 <script>
   const project = new URLSearchParams(location.search).get("p") || "farmstand";
   // /demo (or ?mock) runs the board in this browser on sample data (public/mock.js): accepting plays out the
-  // judge's moves locally, nothing is sent anywhere, and a refresh starts over. /board is the live project.
+  // judge's moves locally, nothing is sent anywhere, and a refresh starts over. /board is the live project (unlinked: shared by URL).
   const MOCK = location.pathname === "/demo" || new URLSearchParams(location.search).has("mock");
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -897,11 +897,9 @@
   if (MOCK) {
     $("flashx").hidden = true;
     $("flashtext").innerHTML = `<b>Demo: you’re the maintainer.</b> This board runs in your browser on sample data, and nothing deploys. Agents have done the work; your job is to decide. Accept a <b>Ready</b> fact and watch what the judge does next, or switch on <b>Autopilot</b> and watch agents land the backlog people wrote on their own. Refresh the page to start over.
-      <span class="demo-actions"><button class="btn" type="button" onclick="location.reload()">Start over</button><a class="btn" href="/board">See the live board →</a></span>`;
+      <span class="demo-actions"><button class="btn" type="button" onclick="location.reload()">Start over</button></span>`;
     $("autotoggle").addEventListener("change", (e) => setAutopilot(e.target.checked));
-    $("modelink").href = "/board";
-    $("modelink").querySelector("span").textContent = "Live board";
-    $("modelink").querySelector("use").setAttribute("href", "#i-pulse");
+    $("modelink").hidden = true;
     document.title = "Demo · Canon";
   }
   $("flashx").addEventListener("click", () => { $("flash").hidden = true; try { localStorage.setItem("canon-board-welcome", "off"); } catch {} });
@@ -928,7 +926,7 @@
     if (accept) {
       // Accepting deploys to production, so it takes the owner's key. It's kept in this browser only.
       let key = MOCK ? "demo" : ownerKey();
-      if (!key) key = prompt(`Accepting deploys this fact to ${project}’s production, so only its maintainer can. Paste the owner key.\n\n(Just looking? Open canon.rodeo/board?mock to try the board on sample data.)`)?.trim() ?? "";
+      if (!key) key = prompt(`Accepting deploys this fact to ${project}’s production, so only its maintainer can. Paste the owner key.\n\n(Just looking? canon.rodeo/demo lets you play the maintainer on sample data.)`)?.trim() ?? "";
       const cl = state.claims.find((x) => x.id === accept.dataset.accept);
       const rivals = [...new Set((cl?.clashes ?? []).filter((c) => state.claims.find((x) => x.id === c.with.claimId)?.status === "ready").map((c) => c.with.agent))];
       if (rivals.length && !confirm(`This attempt clashes with ${rivals.join(" and ")}’s: they can’t both be true. Accepting it rejects theirs. Accept?`)) return;
@@ -1043,7 +1041,7 @@
     const f = state.facts.find((x) => x.id === id);
     out.className = "prodrun on wait";
     if (MOCK) {
-      out.textContent = "Demo: on the live board this button runs the check against production right now.";
+      out.textContent = "Demo: on a real project this button runs the check against production right now.";
       return;
     }
     btn.disabled = true;
