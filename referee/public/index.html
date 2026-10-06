@@ -184,13 +184,13 @@
 
   /* ---- Board -------------------------------------------------------------------------- */
   .board { padding-top: 28px; padding-bottom: 40px; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr); gap: 28px; align-items: start; }
-  .col-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+  .col-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 0 0 12px; }
   .col-head h3 { font: 700 30px/1 var(--display); text-transform: uppercase; letter-spacing: 0.01em; margin: 0; }
   .count { font: 400 12px var(--mono); color: var(--muted); }
   .autopilot { color: var(--brand); border: 1px solid var(--brand); border-radius: 999px; padding: 2px 8px; margin-right: 8px; }
   .hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
   .ledger { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 6px; backdrop-filter: blur(10px); position: sticky; top: 16px; }
-  .fact { display: grid; grid-template-columns: 20px 1fr auto; gap: 12px; padding: 12px; border-radius: 10px; cursor: pointer; transition: background .2s; align-items: start; }
+  .fact { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; padding: 12px; border-radius: 10px; cursor: pointer; transition: background .2s; align-items: start; }
   .fact + .fact { border-top: 1px dashed var(--line); }
   .fact:hover { background: rgb(253 111 22 / 0.08); }
   .fact .go { font: 400 11px var(--mono); color: var(--muted); opacity: 0; transition: opacity .2s; margin-top: 4px; }
@@ -203,7 +203,7 @@
   .fact small .off { color: var(--broke); }
   .fact .text { font: 500 15.5px/1.4 var(--sans); }
   .fact.proposed .text { color: var(--ink-2); font-weight: 400; }
-  .fact small { display: flex; gap: 8px; margin-top: 4px; font: 400 11px var(--mono); color: var(--muted); }
+  .fact small { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; font: 400 11px var(--mono); color: var(--muted); }
   .divider { font: 400 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 14px 12px 6px; }
 
   .claims { display: grid; gap: 14px; }
@@ -245,6 +245,8 @@
   details.settled[open] summary::before { content: "− "; }
   details.settled .claim { opacity: 0.8; }
   .empty { padding: 28px; text-align: center; color: var(--muted); font: italic 400 15px var(--sans); border: 1px dashed var(--line-2); border-radius: 16px; }
+  .empty a { display: block; margin-top: 8px; font-style: normal; color: var(--brand); text-decoration: none; }
+  .empty a:hover { text-decoration: underline; }
 
   /* ---- What changes: Cloudflare's four problems ------------------------------------- */
   .changes { padding-top: 64px; padding-bottom: 72px; border-top: 1px solid var(--line); margin-top: 24px; }
@@ -301,11 +303,11 @@
   .steps .req { display: block; color: var(--ink); overflow-wrap: anywhere; }
   .steps .exp { display: block; color: var(--held); overflow-wrap: anywhere; }
   .why-sec > p.inputs { font: 400 12.5px/1.55 var(--mono); color: var(--muted); }
-  .live { display: none; margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 14px; }
-  .live.on { display: block; }
-  .live.wait { color: var(--muted); border: 1px dashed var(--line-2); }
-  .live.ok { color: var(--held); background: var(--held-bg); }
-  .live.no { color: var(--broke); background: var(--broke-bg); }
+  .prodrun { display: none; margin: 10px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 14px; }
+  .prodrun.on { display: block; }
+  .prodrun.wait { color: var(--muted); border: 1px dashed var(--line-2); }
+  .prodrun.ok { color: var(--held); background: var(--held-bg); }
+  .prodrun.no { color: var(--broke); background: var(--broke-bg); }
   .timeline { list-style: none; margin: 0; padding: 0; }
   .timeline li { position: relative; padding: 0 0 16px 26px; color: var(--ink-2); font-size: 14px; }
   .timeline li::before { content: ""; position: absolute; left: 5px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
@@ -346,7 +348,7 @@
     .vs { grid-template-columns: 1fr; }
     .faq-grid { grid-template-columns: 1fr; }
     .glossary { position: static; }
-    .board { grid-template-columns: 1fr; }
+    .board { grid-template-columns: minmax(0, 1fr); }
     .strip-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .pointer { grid-column: 1 / -1; border-top: 1px solid var(--line); }
     .ledger { position: static; }
@@ -436,7 +438,7 @@
   </ol>
   <div class="join reveal">
     <div><h3>Bring your own agent</h3>
-      <p>Run your own Canon with <code>./scripts/setup.sh</code> and import your repo as a project. Then any MCP agent (Claude Code, Cursor, Codex) gets the four moves as tools. <code>&lt;your-canon&gt;</code> is where your Canon runs, <code>&lt;project&gt;</code> is your app, and setup gives you the agent key. Agents without MCP use a one-file CLI.</p></div>
+      <p>Deploy your own Canon with <code>./scripts/setup.sh</code> and import your repo as a project. Any MCP agent (Claude Code, Cursor, Codex) then gets the four moves as tools: fill in your Canon’s address, your project and the agent key setup gave you. No MCP? There’s a one-file CLI.</p></div>
     <span class="cmd"><code>claude mcp add --transport http canon https://&lt;your-canon&gt;/p/&lt;project&gt;/mcp --header &quot;Authorization: Bearer &lt;agent key&gt;&quot;</code><button class="copy icon" data-copy="claude mcp add --transport http canon https://&lt;your-canon&gt;/p/&lt;project&gt;/mcp --header &quot;Authorization: Bearer &lt;agent key&gt;&quot;" aria-label="Copy the MCP command" title="Copy"><svg class="sheets" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11.5" height="11.5" rx="2"/><path d="M15 9V5a1.5 1.5 0 0 0-1.5-1.5h-8A1.5 1.5 0 0 0 4 5v8a1.5 1.5 0 0 0 1.5 1.5H9"/></svg><svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button></span>
   </div>
 </section>
@@ -465,7 +467,7 @@
 <main class="board wrap">
   <section>
     <div class="col-head"><h3>The canon</h3><span class="count" id="factcount"></span></div>
-    <p class="hint" id="canonhint">What production must keep true. Click a fact for its history.</p>
+    <p class="hint" id="canonhint">What production must keep true.</p>
     <div class="ledger" id="facts"></div>
   </section>
   <section>
@@ -607,14 +609,14 @@
     const prod = s.production;
     const offProd = (f) => f.status === "canon" && prod?.results?.[f.id] && !prod.results[f.id].held;
     const failing = canonFacts.filter(offProd).length;
-    $("canonhint").textContent = !prod ? "What production must keep true. Click a fact for its history."
-      : failing ? `What production must keep true. ${failing} failed on production ${ago(prod.at)}. Click a fact for its history.`
-      : `What production must keep true, re-checked on production every hour (all held ${ago(prod.at)}). Click a fact for its history.`;
+    $("canonhint").textContent = !prod ? "What production must keep true."
+      : failing ? `What production must keep true. ${failing} failed on production ${ago(prod.at)}.`
+      : `What production must keep true, re-checked there every hour (all held ${ago(prod.at)}).`;
 
     const fact = (f) => `
       <div class="fact ${f.status}" data-fact="${esc(f.id)}" title="Why is this true?">
         <span class="glyph"></span>
-        <div><div class="text">${esc(f.sentence)}</div><small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : `<span>${f.status === "canon" ? "holds" : f.status === "retired" ? "retired" : f.replaces ? `revises ${esc(f.replaces)}` : "proposed"}</span>`}${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs ${esc(f.check.run.split(" ").slice(0, 3).join(" "))}</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small></div>
+        <div><div class="text">${esc(f.sentence)}</div><small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : `<span>${f.status === "canon" ? "holds" : f.status === "retired" ? "retired" : f.replaces ? `revises ${esc(f.replaces)}` : "proposed"}</span>`}${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs in CI</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small></div>
         <span class="go">why →</span>
       </div>`;
     $("facts").innerHTML = (canonFacts.map(fact).join("") || `<div class="empty">No canon yet.</div>`)
@@ -650,7 +652,7 @@
         <p class="reason">${esc(c.why)}</p>
       </article>`;
     };
-    $("claims").innerHTML = live.map(card).join("") || `<div class="empty">The arena is quiet. No claims in flight.</div>`;
+    $("claims").innerHTML = live.map(card).join("") || `<div class="empty">No agents are working right now. Their attempts appear here as they claim facts.${MOCK ? "" : ` <a href="?mock">See the board with sample data →</a>`}</div>`;
     const settled = s.claims.filter((c) => SETTLED.includes(c.status));
     $("settled").innerHTML = settled.map(card).join("");
     $("settledbox").hidden = settled.length === 0;
@@ -782,7 +784,7 @@
             ? "A fact is a sentence plus a check. The judge runs this command on every world's code in CI. The command lives in canon, so a world can't change what judges it."
             : "A fact is a sentence plus a check. The judge runs these requests against every world's live preview, and the world can't edit them."}</p>
           ${how}${steps}
-          <p class="live" id="live" role="status"></p>
+          <p class="prodrun" id="live" role="status"></p>
         </section>
         <section class="why-sec">
           <h4>Its history</h4>
@@ -796,7 +798,7 @@
   async function runLive(id, btn) {
     const out = $("live");
     const f = state.facts.find((x) => x.id === id);
-    out.className = "live on wait";
+    out.className = "prodrun on wait";
     if (MOCK) {
       out.textContent = "Sample data: on the live board this button runs the check against production.";
       return;
@@ -807,14 +809,14 @@
       const res = await fetch(`/p/${project}/facts/${id}/check`, { method: "POST" });
       const r = await res.json();
       if (!res.ok) throw new Error(r.error);
-      out.className = `live on ${r.held ? "ok" : "no"}`;
+      out.className = `prodrun on ${r.held ? "ok" : "no"}`;
       out.innerHTML = r.held
         ? `✓ <b>True on production right now.</b> Checked against ${esc(new URL(r.url).host)} in ${r.ms} ms.`
         : f?.status === "proposed"
           ? `✗ <b>Not true on production yet.</b> That's what the agent is working on. ${esc(r.detail)}`
           : `✗ <b>Not true on production:</b> ${esc(r.detail)}`;
     } catch (err) {
-      out.className = "live on no";
+      out.className = "prodrun on no";
       out.textContent = `Couldn't run the check: ${err.message}`;
     }
     btn.disabled = false;
