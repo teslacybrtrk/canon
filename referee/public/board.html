@@ -49,7 +49,7 @@
   code, .mono { font: 12px var(--mono); }
   button { font: inherit; color: inherit; }
   svg.i { width: 16px; height: 16px; flex: none; fill: currentColor; vertical-align: text-bottom; }
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+  .wrap { margin: 0 auto; padding: 0 32px; }
 
   /* ---- Global header ------------------------------------------------------------------ */
   .top { background: var(--header); border-bottom: 1px solid var(--border); }
@@ -135,7 +135,9 @@
   /* ---- Layout -------------------------------------------------------------------------- */
   main { padding-top: 24px; padding-bottom: 48px; }
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 296px; gap: 24px; align-items: start; }
-  .stack { display: grid; gap: 24px; min-width: 0; }
+  .stack { display: grid; gap: 24px; min-width: 0; align-items: start; }
+  /* The canon on the left, the arena beside it. */
+  #tab-canon { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
   .box { border: 1px solid var(--border); border-radius: 6px; background: var(--bg); overflow: hidden; }
   .box-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 12px 16px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); min-height: 54px; }
   .box-head h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -297,10 +299,14 @@
   @keyframes lift { from { opacity: 0; transform: translateY(12px) scale(.99); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
-  @media (max-width: 1012px) {
+  /* Narrower: the sidebar moves under both columns and lays its sections side by side. */
+  @media (max-width: 1240px) {
     .layout { grid-template-columns: minmax(0, 1fr); }
-    .side { position: static; }
-    .side section { margin-bottom: 16px; padding-bottom: 16px; }
+    .side { position: static; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 32px; padding-top: 8px; border-top: 1px solid var(--border-muted); }
+    .side section { margin-bottom: 0; padding: 16px 0; border-bottom: 0; }
+  }
+  @media (max-width: 900px) {
+    #tab-canon { grid-template-columns: minmax(0, 1fr); }
     .side .hide-sm { display: none; }
   }
   @media (max-width: 760px) {
