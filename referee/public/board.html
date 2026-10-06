@@ -150,9 +150,26 @@
   .switch input:checked + i { background: var(--brand); }
   .switch input:checked + i::after { transform: translateX(14px); background: #1a0b02; }
   .switch input:focus-visible + i { outline: 2px solid var(--brand); outline-offset: 2px; }
-  .demolog { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
-  .demolog li { padding: 8px 12px; border: 1px solid var(--border); border-left: 3px solid var(--brand); border-radius: 6px; background: var(--bg-subtle); color: var(--ink-2); font-size: 13px; animation: up .4s cubic-bezier(.2,.7,.1,1) both; }
-  .demolog li + li { opacity: 0.65; }
+  .demolog { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  .ev { --c: var(--brand); position: relative; padding: 10px 12px 11px; border: 1px solid var(--border); border-top: 3px solid var(--c); border-radius: 8px; background: var(--bg-subtle); animation: up .45s cubic-bezier(.2,.7,.1,1) both; }
+  .ev.old { opacity: .5; animation: none; }
+  .ev-k { display: inline-block; font: 600 10px/16px var(--sans); text-transform: uppercase; letter-spacing: .06em; color: var(--c); }
+  .ev b { display: block; margin-top: 2px; font-size: 14px; color: var(--ink); }
+  .ev p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+  .ev-canon, .ev-autopilot, .ev-done { --c: var(--brand); }
+  .ev-deploy, .ev-check { --c: var(--link); }
+  .ev-rejected { --c: var(--broke); }
+  .ev-behind, .ev-backlog { --c: var(--pending); }
+  .ev-reapplied, .ev-judged { --c: var(--held); }
+  .ev-replaced, .ev-declined, .ev-you { --c: var(--muted); }
+  /* The demo's how-to, as four short cards. */
+  .intro { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 20px; }
+  .intro > div { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-subtle); }
+  .intro > div:first-child { border-color: rgb(253 111 22 / 0.5); background: linear-gradient(160deg, rgb(253 111 22 / 0.14), rgb(253 200 109 / 0.03)); }
+  .intro .ev-k { color: var(--brand); }
+  .intro b { display: block; margin-top: 2px; font-size: 14px; }
+  .intro p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+  .intro .btn { margin-top: 8px; height: 28px; font-size: 12px; }
   .flash b { color: var(--ink); }
   .flash .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px; border-radius: 4px; }
   .flash .x:hover { color: var(--ink); background: var(--hover); }
@@ -274,7 +291,34 @@
   .reason q { font-style: italic; quotes: "“" "”"; }
   .pr-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; }
   .pr-actions .wid { font: 12px var(--mono); color: var(--muted); }
-  .pr-actions .accept { margin-left: auto; }
+  .pr-actions { justify-content: flex-end; margin-top: 10px; }
+  .pr-actions .accept { margin-left: 0; }
+  details.more { margin-top: 8px; }
+  details.more > summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; color: var(--link); font-size: 13px; font-weight: 500; user-select: none; }
+  details.more > summary::-webkit-details-marker { display: none; }
+  details.more > summary::before { content: "▸"; font-size: 10px; transition: transform .2s; }
+  details.more[open] > summary::before { transform: rotate(90deg); }
+  details.more > summary span { color: var(--muted); font-weight: 400; }
+  details.more[open] > summary ~ * { animation: up .3s cubic-bezier(.2,.7,.1,1) both; }
+  details.more .k { margin-top: 12px; }
+  .pr-links { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; }
+  .pr-links .wid { font: 12px var(--mono); color: var(--muted); }
+  .trail { margin: 6px 0 0; padding: 0 0 0 4px; list-style: none; counter-reset: step; display: grid; gap: 8px; font-size: 13px; color: var(--ink-2); }
+  .trail > li { position: relative; padding-left: 26px; counter-increment: step; }
+  .trail > li::before { content: counter(step); position: absolute; left: 0; top: 1px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--bg-subtle); border: 1px solid var(--border); color: var(--muted); font: 600 10px var(--sans); }
+  .trail > li.ok::before { border-color: rgb(63 185 80 / 0.5); color: var(--held); }
+  .trail > li.bad::before { border-color: rgb(248 81 73 / 0.5); color: var(--broke); }
+  .trail > li:not(:last-child)::after { content: ""; position: absolute; left: 9px; top: 21px; bottom: -8px; width: 1px; background: var(--border-muted); }
+  .trail code { font: 12px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  .trail li.bad > code, .ran .bad code { color: var(--broke); }
+  .ran { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+  .ran li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; }
+  .ran li > span:first-child { font-weight: 700; }
+  .ran .ok > span:first-child { color: var(--held); }
+  .ran .bad > span:first-child { color: var(--broke); }
+  .ran small { color: var(--muted); font-size: 11px; }
+  .ran code { display: block; }
+  .ran small code { display: inline; font-size: 11px; }
   /* Tiny explanations: hover or focus the ⓘ. */
   .tip { position: relative; display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--muted); color: var(--muted); font: 700 9px/1 var(--sans); text-transform: none; letter-spacing: 0; cursor: help; }
   .tip:hover, .tip:focus { color: var(--ink); border-color: var(--ink); outline: none; }
@@ -516,6 +560,12 @@
     <p id="flashtext"><b>You’re the maintainer of farmstand.</b> Agents claim facts and push attempts; the judge checks every one on its own live preview and rejects any that breaks a fact. When a claim says <b>Ready</b>, you decide. Click any fact to see why it’s true.</p>
     <button class="x" id="flashx" type="button" aria-label="Dismiss"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
+  <div class="intro" id="intro" hidden>
+    <div><span class="ev-k">Demo</span><b>You’re the maintainer</b><p>Agents claimed facts and pushed attempts, and the judge checked each one. You decide what becomes canon.</p></div>
+    <div><span class="ev-k">Try</span><b>Accept a Ready fact</b><p>Or pick a side in the clash. Watch the judge reject the loser and re-apply the rest on the new canon.</p></div>
+    <div><span class="ev-k">Or</span><b>Switch on Autopilot</b><p>Agents land the backlog people wrote, with no clicks. Facts agents proposed still wait for you.</p></div>
+    <div><span class="ev-k">Safe</span><b>Nothing deploys</b><p>It all runs in your browser on sample data. Refresh to start over.</p><button class="btn" type="button" onclick="location.reload()">Start over</button></div>
+  </div>
   <ol class="demolog" id="demolog" hidden aria-live="polite"></ol>
 
   <div class="layout" style="margin-top:20px">
@@ -611,6 +661,7 @@
   };
   const SETTLED = ["accepted", "superseded", "declined"];
   let foldOpen = false; // the folded Rejected group, kept open across renders once someone opens it
+  const openCards = new Set(); // cards whose Details someone opened, kept open across renders
   const seen = new Map(); // claim id -> last status, to animate arrivals and changes
   let state = null;
   let filter = "open";
@@ -792,7 +843,10 @@
         case "checking": return them("the judge", cl.refreshedFrom ? "It’s checking the re-applied attempt on a live preview." : "It’s building a live preview and running every fact on it.");
         case "unproven": return them("the agent", "It makes its own fact hold and pushes again. Nothing for you.");
         case "behind": return cl.refresh && cl.refresh !== "started" ? them("the agent", "Its change conflicts with the new canon’s code; it refreshes and resolves that.") : them("the judge", "It’s re-applying this on the new canon.");
-        case "contradicts": return them("the agent", "It fixes what broke, or gives up. Nothing for you.");
+        case "contradicts": {
+          const broke = v?.lost?.[0];
+          return them("the agent", `${broke ? `It broke “${esc(broke.factId === "canon.json" ? "canon.json" : sentence(broke.factId))}”. ` : ""}It fixes that, or gives up. Nothing for you.`);
+        }
         case "error": return them("the agent", "It pushes again.");
         case "declined": return `<p class="next">Declined${cl.declineReason ? `: “${esc(cl.declineReason)}”` : "."}</p>`;
         default: return "";
@@ -800,10 +854,44 @@
     };
     const declineBtn = (cl) => SETTLED.includes(cl.status) ? "" : `<button class="decline" data-decline="${esc(cl.id)}">Decline</button>`;
 
+    // How the judge decided, step by step, from the verdict and each fact's own check.
+    const OUTCOME = {
+      ready: "<b>Ready.</b> It kept every canon fact and made its own true, so a person decides.",
+      contradicts: "<b>Rejected.</b> A fact production must keep broke on it.",
+      unproven: "<b>Unproven.</b> Canon held, but its own fact doesn’t hold yet.",
+      behind: "<b>Behind.</b> A fact accepted after it forked fails only because it predates that code; the judge re-applies it on the new canon.",
+      error: "<b>Couldn’t judge.</b> The platform failed, not the code.",
+    };
+    const howChecked = (f) => !f?.check ? ""
+      : f.check.kind === "command" ? `ran <code>${esc(f.check.run.length > 48 ? `${f.check.run.slice(0, 48)}…` : f.check.run)}</code> on the commit, in CI`
+      : `${f.check.steps.length} request${f.check.steps.length === 1 ? "" : "s"} to the preview${(f.check.samples ?? 1) > 1 ? `, ${f.check.samples} random samples` : ""}${f.check.vars ? ", inputs drawn from the commit" : ""}`;
+    const trail = (cl, v) => {
+      if (!v) return `<ol class="trail"><li>Nothing judged yet: ${cl.status === "checking" ? "the preview of its latest push is still building." : "the agent hasn’t pushed."}</li></ol>`;
+      const ran = [
+        ...v.lost.filter((l) => l.factId !== "canon.json").map((l) => [l.factId, false, l.detail]),
+        ...(v.stale ?? []).map((l) => [l.factId, false, "built before this fact existed"]),
+        ...v.kept.map((id) => [id, true, ""]),
+      ];
+      const steps = [
+        `<li><b>Built</b> commit <code>${esc(v.sha.slice(0, 7))}</code> as its own live preview${v.previewUrl ? ` at <a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">${esc(new URL(v.previewUrl).host)}</a>` : ""}.</li>`,
+        v.ledger?.status === "tampered"
+          ? `<li class="bad"><b>Read canon.json</b>: ${esc(v.ledger.detail)}.</li>`
+          : `<li><b>Read canon.json</b>: canon’s facts plus its own${v.ledger?.status === "behind" ? ", missing a fact accepted after it forked" : ", nothing else changed"}.</li>`,
+        `<li><b>Ran ${ran.length} canon fact${ran.length === 1 ? "" : "s"}</b>${(v.retires ?? []).length ? `, not the one it replaces on purpose (“${esc(sentence(v.retires[0]))}”)` : ""}:<ul class="ran">${ran.map(([id, ok, d]) => `<li class="${ok ? "ok" : "bad"}"><span>${ok ? "✓" : "✗"}</span><span>${esc(sentence(id))} <small>${howChecked(s.facts.find((f) => f.id === id))}</small>${ok ? "" : `<code>${esc(d.replace(/ \(on the canon.*$/, ""))}</code>`}</span></li>`).join("")}</ul></li>`,
+        v.skipped?.length ? `<li><b>Skipped</b> ${v.skipped.map((id) => `“${esc(sentence(id))}”`).join(", ")}: scoped to files this attempt didn’t change.</li>` : "",
+        `<li class="${v.claimed.held ? "ok" : "bad"}"><b>Ran its own fact</b> (${howChecked(s.facts.find((f) => f.id === v.claimed.factId)) || "its check"}): ${v.claimed.held ? "it holds" : `it doesn’t hold yet: <code>${esc(v.claimed.detail)}</code>`}.</li>`,
+        (v.offers ?? []).length ? `<li><b>Also checked</b> other proposed facts: it happens to make ${v.offers.map((id) => `“${esc(sentence(id))}”`).join(", ")} true too.</li>` : "",
+        (cl.clashes ?? []).length ? `<li class="bad"><b>Compared</b> with other Ready attempts: it clashes with ${[...new Set(cl.clashes.map((k) => esc(k.with.agent)))].join(" and ")}’s.</li>` : "",
+        `<li><b>Decided</b>: ${OUTCOME[v.outcome] ?? esc(v.outcome)} Judged against canon #${esc(v.canonSeq)}, ${ago(v.judgedAt)}.</li>`,
+      ];
+      return `<ol class="trail">${steps.filter(Boolean).join("")}</ol>`;
+    };
+
     const row = (cl) => {
       const v = cl.verdict;
       const before = seen.get(cl.id);
       const motion = before === undefined && seen.size ? "enter" : before && before !== cl.status ? "changed" : "";
+      const live = !SETTLED.includes(cl.status);
       return `<article class="pr s-${cl.status} ${motion}" id="claim-${esc(cl.id)}">
         <div class="pr-top">
           <span class="state s-${cl.status}">${icon(STATUS_ICON[cl.status] ?? "dot")}${LABEL[cl.status] ?? esc(cl.status)}</span>
@@ -813,22 +901,24 @@
         <div class="pr-goal">
           <span class="k">Goal ${tip("The fact this agent claimed it will make true: a plain sentence plus a check the judge runs on the attempt’s live preview.")}</span>
           <button class="t" type="button" data-fact="${esc(cl.factId)}" title="See the check and the fact’s history">${esc(cl.sentence)}</button>
-          <p class="meaning">${meaning(cl, v)}</p>
-          ${nextStep(cl, v)}
         </div>
-        <div class="pr-verdict">
-          <span class="k" style="margin-top:10px">Verdict ${tip("What the judge found on this attempt’s live preview: the canon facts it keeps or breaks, and whether its own fact now holds. Nobody reads the diff.")}</span>
-          ${checks(cl, v)}
-        </div>
+        ${nextStep(cl, v)}
         ${cl.status === "ready" ? clashNote(cl) : ""}
-        <p class="reason"><span class="k">Why ${tip("The agent’s own reason, written when it claimed the fact. It stays in the fact’s history.")}</span> <q>${esc(cl.why)}</q></p>
-        <div class="pr-actions">
-          ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
-          <button class="copy" data-copy="${esc(cloneCmd(cl.attemptId))}" title="${esc(cloneCmd(cl.attemptId))}">Clone attempt</button>
-          <span class="wid">${esc(cl.attemptId)}</span>
-          ${declineBtn(cl)}
-          ${cl.status === "ready" ? `<button class="accept" data-accept="${esc(cl.id)}">Accept fact</button>` : ""}
-        </div>
+        <details class="more" data-card="${esc(cl.id)}"${openCards.has(cl.id) ? " open" : ""}>
+          <summary>Details <span>· how the judge decided</span></summary>
+          <p class="meaning">${meaning(cl, v)}</p>
+          <span class="k">Verdict ${tip("What the judge found on this attempt’s live preview: the canon facts it keeps or breaks, and whether its own fact now holds. Nobody reads the diff.")}</span>
+          ${checks(cl, v)}
+          <span class="k">How the judge decided ${tip("Every step the judge took, in order. It builds the exact commit, runs each fact’s own check on it, and decides by a fixed rule. No person and no model reads the code.")}</span>
+          ${trail(cl, v)}
+          <p class="reason"><span class="k">Why ${tip("The agent’s own reason, written when it claimed the fact. It stays in the fact’s history.")}</span> <q>${esc(cl.why)}</q></p>
+          <div class="pr-links">
+            ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
+            <button class="copy" data-copy="${esc(cloneCmd(cl.attemptId))}" title="${esc(cloneCmd(cl.attemptId))}">Clone attempt</button>
+            <span class="wid">${esc(cl.attemptId)}</span>
+          </div>
+        </details>
+        ${live ? `<div class="pr-actions">${declineBtn(cl)}${cl.status === "ready" ? `<button class="accept" data-accept="${esc(cl.id)}">Accept fact</button>` : ""}</div>` : ""}
       </article>`;
     };
     const none = `<div class="empty"><b>No agents are working right now.</b>Their attempts appear here as they claim facts.${MOCK ? "" : `<br><a href="/demo">Try the board yourself in the demo →</a>`}</div>`;
@@ -845,10 +935,14 @@
       return `<article class="pr duel-side s-${x.status}" id="claim-${esc(x.id)}">
         <div class="pr-top"><span class="state s-ready">${icon("check")}Ready</span><span class="pr-agent">${avatar(x.agent, 18)}${esc(x.agent)}</span></div>
         <div class="pr-goal"><span class="k">Goal</span><button class="t" type="button" data-fact="${esc(x.factId)}" title="See the check and the fact’s history">${esc(x.sentence)}</button></div>
-        <p class="keeps"><b>✓ Keeps all ${x.verdict?.kept.length ?? 0} canon facts</b> and makes its own true.</p>
-        ${fails ? `<p class="fails">On ${esc(other.agent)}’s attempt, this fact fails:<code>${esc(fails.detail.replace(/ \(on the canon.*$/, ""))}</code></p>` : ""}
-        <p class="reason"><span class="k">Why</span> <q>${esc(x.why)}</q></p>
-        <div class="links">${x.verdict?.previewUrl ? `<a href="${esc(x.verdict.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(x.attemptId))}">Clone attempt</button></div>
+        <details class="more" data-card="${esc(x.id)}"${openCards.has(x.id) ? " open" : ""}>
+          <summary>Details <span>· how the judge decided</span></summary>
+          <p class="keeps"><b>✓ Keeps all ${x.verdict?.kept.length ?? 0} canon facts</b> and makes its own true.</p>
+          ${fails ? `<p class="fails">On ${esc(other.agent)}’s attempt, this fact fails:<code>${esc(fails.detail.replace(/ \(on the canon.*$/, ""))}</code></p>` : ""}
+          ${trail(x, x.verdict)}
+          <p class="reason"><span class="k">Why</span> <q>${esc(x.why)}</q></p>
+          <div class="links">${x.verdict?.previewUrl ? `<a href="${esc(x.verdict.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(x.attemptId))}">Clone attempt</button></div>
+        </details>
         <p class="then">Choosing this makes it canon and rejects ${esc(other.agent)}’s attempt.</p>
         <button class="accept" data-accept="${esc(x.id)}" data-chosen>Choose this one</button>
       </article>`;
@@ -928,7 +1022,10 @@
     }
   }
   $("search").addEventListener("input", applySearch);
-  document.addEventListener("toggle", (e) => { if (e.target.matches?.("details.gfold")) foldOpen = e.target.open; }, true);
+  document.addEventListener("toggle", (e) => {
+    if (e.target.matches?.("details.gfold")) foldOpen = e.target.open;
+    if (e.target.matches?.("details.more")) e.target.open ? openCards.add(e.target.dataset.card) : openCards.delete(e.target.dataset.card);
+  }, true);
 
   // Tabs, kept in the URL hash so a link can open either one.
   function showTab() {
@@ -985,11 +1082,9 @@
   // First visit: a one-line welcome that explains the role. Dismissed for good with the ×.
   let dismissed = false;
   try { dismissed = localStorage.getItem("canon-board-welcome") === "off"; } catch {}
-  $("flash").hidden = dismissed && !MOCK;
+  $("flash").hidden = dismissed || MOCK;
   if (MOCK) {
-    $("flashx").hidden = true;
-    $("flashtext").innerHTML = `<b>Demo: you’re the maintainer.</b> This board runs in your browser on sample data, and nothing deploys. Agents have done the work; your job is to decide. Accept a <b>Ready</b> fact and watch what the judge does next, or switch on <b>Autopilot</b> and watch agents land the backlog people wrote on their own. Refresh the page to start over.
-      <span class="demo-actions"><button class="btn" type="button" onclick="location.reload()">Start over</button></span>`;
+    $("intro").hidden = false;
     $("autotoggle").addEventListener("change", (e) => setAutopilot(e.target.checked));
     $("modelink").hidden = true;
     document.title = "Demo · Canon";
@@ -1178,10 +1273,13 @@
   const soon = (ms, fn) => setTimeout(() => { fn(); render(); }, ms);
   const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
   const names = (list) => list.join(" and ").replace(/ and (?=.* and )/g, ", ");
-  function say(html) {
-    demo.log.unshift(html);
+  // What just happened, as small cards: one per thing, newest first. `cards` is [kind, title, sentence] triples.
+  const KIND = { canon: "Canon", deploy: "Production", check: "Judge", replaced: "Replaced", rejected: "Rejected", behind: "Behind",
+    reapplied: "Re-applied", judged: "Judged", autopilot: "Autopilot", backlog: "Backlog", you: "You", declined: "Declined", done: "Done" };
+  function say(...cards) {
+    demo.log = [cards.map(([kind, title, body]) => ({ kind, title, body })), ...demo.log].slice(0, 2);
     $("demolog").hidden = false;
-    $("demolog").innerHTML = demo.log.slice(0, 3).map((x) => `<li>${x}</li>`).join("");
+    $("demolog").innerHTML = demo.log.map((group, g) => group.map((c, i) => `<li class="ev ev-${c.kind}${g ? " old" : ""}" style="animation-delay:${g ? 0 : i * 90}ms"><span class="ev-k">${KIND[c.kind] ?? c.kind}</span><b>${c.title}</b><p>${c.body}</p></li>`).join("")).join("");
   }
   // A little life before anyone clicks: an attempt finishes judging, a person's own attempt gets pushed.
   function startDemo() {
@@ -1193,7 +1291,7 @@
       x.status = "ready";
       x.verdict = { ...template, attemptId: x.attemptId, outcome: "ready", claimed: { factId: x.factId, held: true, detail: "ok" }, offers: [], lost: [], stale: [], retires: [], judgedAt: Date.now() };
       if (demo.auto) autoLand(x);
-      else say(`<b>${esc(x.agent)}’s attempt was judged:</b> it keeps every canon fact and makes “${esc(x.sentence)}” true, so it’s waiting for you.`);
+      else say(["judged", `${esc(x.agent)}’s attempt is Ready`, `It keeps every canon fact and makes “${esc(x.sentence)}” true.`], ["you", "Waiting for you", "Accept it, or decline. It’s at the top of the arena."]);
     });
     soon(4000, () => { const x = find("c-6"); if (x?.status === "open") x.status = "checking"; });
     soon(14000, () => {
@@ -1235,7 +1333,7 @@
           fresh.verdict = { ...demoVerdict(fresh), retires: old.verdict?.retires ?? [], claimed: old.verdict?.claimed ?? { factId: fresh.factId, held: true, detail: "ok" }, outcome: fresh.status };
           fresh.verdict.kept = fresh.verdict.kept.filter((id) => !fresh.verdict.retires.includes(id));
           if (fresh.status === "ready") autoLand(fresh);
-          if (--left === 0 && !demo.auto) say(`<b>Re-applied and judged again</b> on canon #${seq}, with no work from the agents: they’re back where they were${behind.some((x) => x.was === "ready") ? ", and the Ready ones wait for you" : ""}. Try accepting another, or turn on Autopilot.`);
+          if (--left === 0 && !demo.auto) say(["reapplied", "Re-applied", `The judge re-applied ${behind.length === 1 ? "it" : behind.length === 2 ? "both" : `all ${behind.length}`} on canon #${seq} and judged ${behind.length === 1 ? "it" : "them"} again. The agents did nothing.`], ["you", "Back where they were", `${behind.some((x) => x.was === "ready") ? "The Ready ones wait for you again." : "Their agents carry on."} Try another, or switch on Autopilot.`]);
         });
       }
     });
@@ -1263,8 +1361,10 @@
       for (const [id, sentence] of BACKLOG) {
         if (!state.facts.some((f) => f.id === id)) state.facts.push({ id, sentence, status: "proposed", origin: "backlog", check: window.CANON_MOCK.checks?.[id] ?? { kind: "probe", steps: [] }, scope: null, replaces: null, proposedBy: null, madeTrueBy: null, retiredBy: null, retiredAt: null, createdAt: Date.now(), acceptedAt: null });
       }
-      say(`<b>Autopilot on.</b> People wrote a backlog of facts (it’s in the canon column). Agents pick them up, and an attempt that keeps every fact and makes a backlog fact true lands on its own, with no click. Facts agents proposed themselves, like “A stall cannot be double-booked”, still wait for you.`);
-    } else say(on ? "<b>Autopilot back on.</b> Ready backlog attempts land on their own." : "<b>Autopilot off.</b> Ready attempts wait for you again.");
+      say(["autopilot", "Autopilot on", "An attempt that keeps every fact and makes a backlog fact true lands on its own. No click."],
+        ["backlog", "A backlog appears", "People wrote 4 facts for agents to make true. They’re in the canon column."],
+        ["you", "Still yours", "Facts agents proposed themselves, like the two clashing stall facts, still wait for you."]);
+    } else say(on ? ["autopilot", "Autopilot on", "Ready backlog attempts land on their own again."] : ["you", "Autopilot off", "Ready attempts wait for you again."]);
     if (on) for (const x of state.claims) if (x.status === "ready") autoLand(x);
     render();
     if (on) tick();
@@ -1280,7 +1380,7 @@
     const left = state.facts.some((f) => f.status === "proposed" && f.origin === "backlog");
     if (!left && !demo.doneSaid) {
       demo.doneSaid = true;
-      return say(`<b>Backlog done.</b> ${demo.landed} fact${demo.landed === 1 ? "" : "s"} landed on autopilot: agents wrote the code, the judge checked it, and nobody read a diff or clicked Accept.`);
+      return say(["done", "Backlog done", `${demo.landed} fact${demo.landed === 1 ? "" : "s"} landed on autopilot. Agents wrote the code and the judge checked it.`], ["you", "Nobody clicked", "No one read a diff or pressed Accept. People only wrote the facts."]);
     }
     demo.ticker = setTimeout(tick, 2400);
   }
@@ -1301,7 +1401,7 @@
       x.failOnce = null;
       x.status = "contradicts";
       x.verdict = { ...v, outcome: "contradicts", lost: [lost], kept: v.kept.filter((id) => id !== lost.factId) };
-      say(`<b>${esc(x.agent)}’s attempt rejected:</b> the linter fact broke (${esc(lost.detail.split(": ").pop())}). Autopilot never lands a broken attempt; the agent fixes it and pushes again.`);
+      say(["rejected", `${esc(x.agent)}’s attempt rejected`, `The linter fact broke: ${esc(lost.detail.split(": ").pop())}.`], ["autopilot", "Never lands broken code", "Autopilot only lands attempts that keep every fact. The agent fixes it and pushes again."]);
       soon(2800, () => { if (x.status === "contradicts") { x.status = "checking"; soon(3200, () => judgeDemo(x)); } });
       return;
     }
@@ -1345,9 +1445,13 @@
     for (const x of same) x.status = "superseded";
     demo.deploying = true;
     s.canon.fact = cl.factId;
-    say(auto
-      ? `<b>Autopilot landed “${esc(cl.sentence)}” as canon #${seq}.</b> ${esc(cl.agent)}’s attempt kept every fact and made a backlog fact true, so nobody had to click. It’s deploying, and the judge re-checks the rest.`
-      : `<b>“${esc(cl.sentence)}” is canon #${seq}.</b> ${esc(cl.agent)}’s attempt is deploying to production, and the judge re-checks every other attempt against the new canon.${same.length ? ` ${names(same.map((x) => esc(x.agent)))} worked on the same fact, so ${same.length === 1 ? "that attempt is" : "those are"} replaced.` : ""}`);
+    if (auto) say(["autopilot", `Landed: canon #${seq}`, `“${esc(cl.sentence)}”. ${esc(cl.agent)}’s attempt kept every fact and made a backlog fact true, so nobody clicked.`], ["deploy", "Deploying", `${esc(cl.agent)}’s attempt is going to production.`]);
+    else say(
+      ["canon", `Canon #${seq}`, `“${esc(cl.sentence)}” is canon now: a fact production must keep from here on.`],
+      ["deploy", "Deploying", `${esc(cl.agent)}’s attempt, the exact commit the judge checked, is going to production.`],
+      ["check", "Re-checking the rest", "Every other attempt in flight is judged again against the new canon."],
+      ...(same.length ? [["replaced", "Replaced", `${names(same.map((x) => esc(x.agent)))} worked on the same fact, so ${same.length === 1 ? "that attempt is" : "those are"} no longer needed.`]] : []),
+    );
     render();
     soon(1800, () => {
       const rejected = [], behind = [];
@@ -1366,15 +1470,17 @@
           behind.push(x);
         }
       }
-      const note = [
-        rejected.length ? `<b>${names(rejected.map((x) => `${esc(x.agent)}’s attempt`))} rejected:</b> it breaks the fact you just accepted, as the clash warned. Nobody had to read its code.` : "",
-        behind.length && !auto ? `${behind.length} other attempt${behind.length === 1 ? " was" : "s were"} simply built before this fact existed, so ${behind.length === 1 ? "it’s" : "they’re"} <b>behind</b>. The judge is re-applying ${behind.length === 1 ? "it" : "them"} on the new canon.` : "",
-      ].filter(Boolean).join(" ");
-      if (note) say(note);
+      const cards = [
+        ...(rejected.length ? [["rejected", `${names(rejected.map((x) => esc(x.agent)))}’s attempt rejected`, "It breaks the fact you just accepted, as the clash warned. Nobody read its code."]] : []),
+        ...(behind.length && !auto ? [["behind", `${behind.length} attempt${behind.length === 1 ? "" : "s"} behind`, `${behind.length === 1 ? "It was" : "They were"} built before this fact existed, so ${behind.length === 1 ? "it lacks" : "they lack"} its code. Nothing is wrong with ${behind.length === 1 ? "it" : "them"}.`],
+          ["check", "Re-applying", `The judge re-applies ${behind.length === 1 ? "it" : "each one"} on the new canon, in CI, and judges again. No agent needed.`]] : []),
+      ];
+      if (cards.length) say(...cards);
       reapply(behind);
     });
     soon(5200, () => {
       demo.deploying = false;
+      if (!auto) say(["deploy", "In production", `Canon #${seq} is live, and every canon fact holds there.`]);
       s.production = { at: Date.now(), url: s.production?.url ?? "https://farmstand.canon.rodeo", results: {} };
     });
   }
@@ -1391,7 +1497,8 @@
       const others = state.claims.some((c) => c !== x && c.factId === x.factId && !SETTLED.includes(c.status));
       if (fact?.status === "proposed" && fact.origin !== "backlog" && !others) Object.assign(fact, { status: "declined", declinedAt: Date.now(), declineReason: reason.trim() || null });
     }
-    if (names.length) say(`<b>You declined ${names.join(" and ")}’s ${names.length > 1 ? "attempts" : "attempt"}.</b> ${names.length > 1 ? "Their agents are" : "Its agent is"} told to stop, and the reason stays in the fact’s history. Nothing else changes: canon and production are untouched.`);
+    if (names.length) say(["declined", "Declined", `You declined ${names.join(" and ")}’s ${names.length > 1 ? "attempts" : "attempt"}. ${names.length > 1 ? "Their agents are" : "Its agent is"} told to stop.`],
+      ["you", "Reason kept", "Your reason stays in the fact’s history, like every failed attempt."], ["check", "Nothing else changes", "Canon and production are untouched."]);
     render();
   }
 
