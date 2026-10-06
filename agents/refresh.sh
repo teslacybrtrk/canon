@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # After a fact is accepted, tell agents whose attempts are now behind canon to refresh them.
 #   CANON_URL=https://canon.rodeo ./agents/refresh.sh agent-3 agent-4 agent-5
+# MODEL=sonnet for an agent that haiku keeps answering with a summary instead of refreshing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/env.sh
@@ -27,7 +28,7 @@ for agent in "$@"; do
     CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" CANON_CLAIMS="$PWD/claims" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md")
 
 $PROMPT" \
-      --model haiku --allowedTools "${TOOLS[@]}" --strict-mcp-config --disable-slash-commands \
+      --model "${MODEL:-haiku}" --allowedTools "${TOOLS[@]}" --strict-mcp-config --disable-slash-commands \
       --output-format stream-json --verbose > refresh.log 2>&1 && echo "$agent refreshed" || echo "$agent exited non-zero"
   ) &
   sleep 2
