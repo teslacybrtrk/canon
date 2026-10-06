@@ -55,7 +55,7 @@
     "ARTIFACTS_NAMESPACE": "canon",
     // Bump to give every project a fresh referee (see scripts/reset-project.sh).
     // Flip to "true" on submission day to publish canon.rodeo/canon.git and /src.
-    "SOURCE_PUBLIC": "false",
+    "SOURCE_PUBLIC": "true",
     "REFEREE_EPOCH": "11",
     "BACKUP_BUCKET_NAME": "canon-ci-snapshots",
     "CLOUDFLARE_ACCOUNT_ID": "2d9aba350caa70abf3ce6c910950ffd0",
