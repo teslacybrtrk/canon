@@ -204,7 +204,41 @@
   .state.s-contradicts { color: var(--broke); background: var(--broke-bg); border-color: rgb(248 81 73 / 0.45); }
   .state.s-open, .state.s-checking, .state.s-unproven, .state.s-behind, .state.s-error { color: var(--pending); background: var(--pending-bg); border-color: rgb(210 153 34 / 0.45); }
   .state.s-accepted { color: var(--merged); background: var(--merged-bg); border-color: rgb(253 111 22 / 0.45); }
-  .state.s-superseded { color: var(--muted); border-color: var(--border); }
+  .state.s-superseded, .state.s-declined { color: var(--muted); border-color: var(--border); }
+  .next { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+  .next b { color: var(--ink-2); }
+  .next.you b { color: var(--brand); }
+  .decline { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 500 13px var(--sans); cursor: pointer; }
+  .decline:hover { color: var(--broke); border-color: rgb(248 81 73 / 0.5); }
+  .pr-actions .decline { margin-left: auto; }
+  .pr-actions .decline + .accept { margin-left: 0; }
+  /* A clash, side by side: two attempts that can't both land, and you pick one. */
+  .duel { border-top: 1px solid var(--border-muted); padding: 14px 16px 16px; background: linear-gradient(180deg, rgb(248 81 73 / 0.06), transparent 60%); }
+  .group + .duel { border-top: 0; }
+  .duel-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+  .duel-head b { font-size: 15px; color: var(--broke); }
+  .duel-head span { color: var(--ink-2); font-size: 13px; }
+  .duel-sides { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; margin-top: 12px; align-items: stretch; }
+  .duel .vs { align-self: center; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font: 700 12px var(--sans); text-transform: uppercase; }
+  .duel-side { display: flex; flex-direction: column; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); transition: border-color .2s, box-shadow .2s, transform .2s; }
+  .duel-side:hover { border-color: var(--brand); box-shadow: 0 6px 24px -12px rgb(253 111 22 / 0.55); transform: translateY(-1px); }
+  .duel-side .pr-goal .t { font-size: 15px; }
+  .duel-side .fails { margin: 10px 0 0; padding: 8px 10px; border-radius: 6px; background: var(--broke-bg); color: var(--ink-2); font-size: 12px; }
+  .duel-side .fails code { display: block; margin-top: 2px; font: 12px var(--mono); color: var(--broke); overflow-wrap: anywhere; }
+  .duel-side .keeps { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  .duel-side .keeps b { color: var(--held); font-weight: 600; }
+  .duel-side .then { margin: auto 0 0; padding-top: 12px; font-size: 12px; color: var(--muted); }
+  .duel-side .accept { width: 100%; margin-top: 8px; }
+  .duel-side .links { display: flex; gap: 12px; margin-top: 8px; font-size: 12px; }
+  .duel-foot { display: flex; justify-content: center; margin-top: 12px; }
+  @media (max-width: 760px) { .duel-sides { grid-template-columns: minmax(0, 1fr); } .duel .vs { justify-self: center; } }
+  details.gfold > summary { list-style: none; cursor: pointer; }
+  details.gfold > summary::-webkit-details-marker { display: none; }
+  details.gfold > summary::after { content: "Show ▾"; margin-left: auto; color: var(--link); font-size: 12px; }
+  details.gfold[open] > summary::after { content: "Hide ▴"; }
+  .fact.declined .glyph { background: transparent; box-shadow: none; border: 1.5px solid var(--border); }
+  .fact.declined .text { color: var(--muted); text-decoration: line-through; }
+  .why-chip.declined { color: var(--muted); border: 1px solid var(--border); }
   /* Spin the icon itself around its own centre. */
   .s-checking .state svg, .s-behind .state svg { transform-origin: 50% 50%; animation: spin 1.6s linear infinite; }
   .pr-agent { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); font-size: 13px; font-weight: 600; }
@@ -533,6 +567,7 @@
           <span><i class="state s-behind">Behind canon</i> built before a newer fact; the judge re-applies it</span>
           <span><i class="state s-contradicts">Rejected</i> broke a fact production must keep</span>
           <span><i class="state s-accepted">Canon</i> accepted, and in production</span>
+          <span><i class="state s-declined">Declined</i> you said no; the reason is kept</span>
         </div>
       </section>
     </aside>
@@ -559,8 +594,8 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const icon = (name) => `<svg class="i"><use href="#i-${name}"/></svg>`;
-  const LABEL = { open: "Working", checking: "Judging", contradicts: "Rejected", unproven: "Unproven", behind: "Behind canon", ready: "Ready", accepted: "Canon", superseded: "Replaced", error: "Retry" };
-  const STATUS_ICON = { open: "dot", checking: "sync", contradicts: "x", unproven: "dot", behind: "sync", ready: "check", accepted: "merged", superseded: "skip", error: "sync" };
+  const LABEL = { open: "Working", checking: "Judging", contradicts: "Rejected", unproven: "Unproven", behind: "Behind canon", ready: "Ready", accepted: "Canon", superseded: "Replaced", error: "Retry", declined: "Declined" };
+  const STATUS_ICON = { open: "dot", checking: "sync", contradicts: "x", unproven: "dot", behind: "sync", ready: "check", accepted: "merged", superseded: "skip", error: "sync", declined: "x" };
   // One plain sentence per status, so the row explains itself.
   const MEANING = {
     open: "Claimed. The agent is building its attempt.",
@@ -571,9 +606,11 @@
     ready: "Keeps every canon fact and makes its own true. Waiting for you.",
     accepted: "Accepted. This attempt is canon and in production.",
     superseded: "Replaced by a newer attempt.",
+    declined: "Declined by a person.",
     error: "Couldn’t be judged: a platform error, not the code. The agent pushes again.",
   };
-  const SETTLED = ["accepted", "superseded"];
+  const SETTLED = ["accepted", "superseded", "declined"];
+  let foldOpen = false; // the folded Rejected group, kept open across renders once someone opens it
   const seen = new Map(); // claim id -> last status, to animate arrivals and changes
   let state = null;
   let filter = "open";
@@ -630,6 +667,7 @@
     const backlog = proposed.filter((f) => f.origin === "backlog");
     const byAgents = proposed.filter((f) => f.origin !== "backlog");
     const retired = s.facts.filter((f) => f.status === "retired");
+    const declined = s.facts.filter((f) => f.status === "declined");
     const live = s.claims.filter((c) => !SETTLED.includes(c.status));
     const settled = s.claims.filter((c) => SETTLED.includes(c.status));
     const ready = live.filter((c) => c.status === "ready");
@@ -684,12 +722,13 @@
         <span class="glyph"></span>
         <span class="text">${esc(f.sentence)}</span>
         <small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : ""}${f.replaces ? `<span>revises ${esc(f.replaces)}</span>` : ""}${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs in CI</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small>
-        <span class="st ${f.status === "canon" && !offProd(f) ? "holds" : ""}">${f.status === "canon" ? (offProd(f) ? "failing" : "✓ holds") : f.status === "retired" ? "retired" : "proposed"}</span>
+        <span class="st ${f.status === "canon" && !offProd(f) ? "holds" : ""}">${f.status === "canon" ? (offProd(f) ? "failing" : "✓ holds") : f.status === "retired" ? "retired" : f.status === "declined" ? "declined" : "proposed"}</span>
       </div>`;
     $("facts").innerHTML = (canonFacts.map(fact).join("") || `<div class="empty">No canon yet.</div>`)
       + (backlog.length ? `<div class="divider">Backlog · written by people</div>` + backlog.map(fact).join("") : "")
       + (byAgents.length ? `<div class="divider">Proposed by agents</div>` + byAgents.map(fact).join("") : "")
-      + (retired.length ? `<div class="divider">Retired by revision</div>` + retired.map(fact).join("") : "");
+      + (retired.length ? `<div class="divider">Retired by revision</div>` + retired.map(fact).join("") : "")
+      + (declined.length ? `<div class="divider">Declined</div>` + declined.map(fact).join("") : "");
 
     const refreshedBy = new Map(s.claims.filter((x) => x.refreshedFrom).map((x) => [x.refreshedFrom, x]));
     // Why the row is in its state, in one sentence.
@@ -743,6 +782,24 @@
       return `<ul class="checks" aria-label="Verdict">${lines.join("")}</ul>`;
     };
 
+    // Who acts next, in one line: you, the agent or the judge.
+    const nextStep = (cl, v) => {
+      const you = (t) => `<p class="next you"><b>Next: you.</b> ${t}</p>`;
+      const them = (who, t) => `<p class="next"><b>Next: ${who}.</b> ${t}</p>`;
+      switch (cl.status) {
+        case "ready": return you(v?.retires?.length ? "Accept the rule change, or decline it." : "Accept it, or decline.");
+        case "open": return them("the agent", "It’s writing the change.");
+        case "checking": return them("the judge", cl.refreshedFrom ? "It’s checking the re-applied attempt on a live preview." : "It’s building a live preview and running every fact on it.");
+        case "unproven": return them("the agent", "It makes its own fact hold and pushes again. Nothing for you.");
+        case "behind": return cl.refresh && cl.refresh !== "started" ? them("the agent", "Its change conflicts with the new canon’s code; it refreshes and resolves that.") : them("the judge", "It’s re-applying this on the new canon.");
+        case "contradicts": return them("the agent", "It fixes what broke, or gives up. Nothing for you.");
+        case "error": return them("the agent", "It pushes again.");
+        case "declined": return `<p class="next">Declined${cl.declineReason ? `: “${esc(cl.declineReason)}”` : "."}</p>`;
+        default: return "";
+      }
+    };
+    const declineBtn = (cl) => SETTLED.includes(cl.status) ? "" : `<button class="decline" data-decline="${esc(cl.id)}">Decline</button>`;
+
     const row = (cl) => {
       const v = cl.verdict;
       const before = seen.get(cl.id);
@@ -757,6 +814,7 @@
           <span class="k">Goal ${tip("The fact this agent claimed it will make true: a plain sentence plus a check the judge runs on the attempt’s live preview.")}</span>
           <button class="t" type="button" data-fact="${esc(cl.factId)}" title="See the check and the fact’s history">${esc(cl.sentence)}</button>
           <p class="meaning">${meaning(cl, v)}</p>
+          ${nextStep(cl, v)}
         </div>
         <div class="pr-verdict">
           <span class="k" style="margin-top:10px">Verdict ${tip("What the judge found on this attempt’s live preview: the canon facts it keeps or breaks, and whether its own fact now holds. Nobody reads the diff.")}</span>
@@ -768,6 +826,7 @@
           ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
           <button class="copy" data-copy="${esc(cloneCmd(cl.attemptId))}" title="${esc(cloneCmd(cl.attemptId))}">Clone attempt</button>
           <span class="wid">${esc(cl.attemptId)}</span>
+          ${declineBtn(cl)}
           ${cl.status === "ready" ? `<button class="accept" data-accept="${esc(cl.id)}">Accept fact</button>` : ""}
         </div>
       </article>`;
@@ -780,9 +839,41 @@
       ["work", "Needs more work", "The agent, or the judge, has more to do. Nothing for you yet.", ["unproven", "behind", "error"]],
       ["rejected", "Rejected", "Broke a fact production must keep. Rejected without anyone reading the diff.", ["contradicts"]],
     ];
+    // Two Ready attempts that clash, side by side: you choose one, or decline both.
+    const side = (x, other) => {
+      const fails = (x.clashes ?? []).find((k) => k.with.claimId === other.id && k.breaks === "mine");
+      return `<article class="pr duel-side s-${x.status}" id="claim-${esc(x.id)}">
+        <div class="pr-top"><span class="state s-ready">${icon("check")}Ready</span><span class="pr-agent">${avatar(x.agent, 18)}${esc(x.agent)}</span></div>
+        <div class="pr-goal"><span class="k">Goal</span><button class="t" type="button" data-fact="${esc(x.factId)}" title="See the check and the fact’s history">${esc(x.sentence)}</button></div>
+        <p class="keeps"><b>✓ Keeps all ${x.verdict?.kept.length ?? 0} canon facts</b> and makes its own true.</p>
+        ${fails ? `<p class="fails">On ${esc(other.agent)}’s attempt, this fact fails:<code>${esc(fails.detail.replace(/ \(on the canon.*$/, ""))}</code></p>` : ""}
+        <p class="reason"><span class="k">Why</span> <q>${esc(x.why)}</q></p>
+        <div class="links">${x.verdict?.previewUrl ? `<a href="${esc(x.verdict.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(x.attemptId))}">Clone attempt</button></div>
+        <p class="then">Choosing this makes it canon and rejects ${esc(other.agent)}’s attempt.</p>
+        <button class="accept" data-accept="${esc(x.id)}" data-chosen>Choose this one</button>
+      </article>`;
+    };
+    const duel = ([a, b]) => `<section class="duel" aria-label="Choose one of two clashing attempts">
+        <div class="duel-head"><b>Choose one</b><span>Both keep every canon fact, but they built the same behaviour opposite ways, so only one can land.</span></div>
+        <div class="duel-sides">${side(a, b)}<span class="vs">or</span>${side(b, a)}</div>
+        <div class="duel-foot"><button class="decline" data-decline="${esc(a.id)},${esc(b.id)}">Decline both</button></div>
+      </section>`;
+    const readyRows = (rows) => {
+      const paired = new Set(), duels = [];
+      for (const x of rows) {
+        if (paired.has(x.id)) continue;
+        const y = rows.find((r) => r !== x && !paired.has(r.id) && (x.clashes ?? []).some((k) => k.with.claimId === r.id));
+        if (y) { paired.add(x.id); paired.add(y.id); duels.push([x, y]); }
+      }
+      return duels.map(duel).join("") + rows.filter((x) => !paired.has(x.id)).map(row).join("");
+    };
     const grouped = (list) => GROUPS.map(([key, title, help, statuses]) => {
       const rows = list.filter((x) => statuses.includes(x.status));
-      return rows.length ? `<div class="divider group g-${key}"><b>${title}</b><span class="n">${rows.length}</span><span>${help}</span></div>${rows.map(row).join("")}` : "";
+      if (!rows.length) return "";
+      const head = `<b>${title}</b><span class="n">${rows.length}</span><span>${help}</span>`;
+      // Rejections are the agents' business: folded away unless you open them.
+      if (key === "rejected") return `<details class="gfold"${foldOpen || $("search").value ? " open" : ""}><summary class="divider group g-${key}">${head}</summary>${rows.map(row).join("")}</details>`;
+      return `<div class="divider group g-${key}">${head}</div>${key === "ready" ? readyRows(rows) : rows.map(row).join("")}`;
     }).join("");
     $("claims").innerHTML = grouped(live) || none;
     $("claimlist").innerHTML = (filter === "open" ? grouped(live) : settled.map(row).join(""))
@@ -837,6 +928,7 @@
     }
   }
   $("search").addEventListener("input", applySearch);
+  document.addEventListener("toggle", (e) => { if (e.target.matches?.("details.gfold")) foldOpen = e.target.open; }, true);
 
   // Tabs, kept in the URL hash so a link can open either one.
   function showTab() {
@@ -929,7 +1021,7 @@
       if (!key) key = prompt(`Accepting deploys this fact to ${project}’s production, so only its maintainer can. Paste the owner key.\n\n(Just looking? canon.rodeo/demo lets you play the maintainer on sample data.)`)?.trim() ?? "";
       const cl = state.claims.find((x) => x.id === accept.dataset.accept);
       const rivals = [...new Set((cl?.clashes ?? []).filter((c) => state.claims.find((x) => x.id === c.with.claimId)?.status === "ready").map((c) => c.with.agent))];
-      if (rivals.length && !confirm(`This attempt clashes with ${rivals.join(" and ")}’s: they can’t both be true. Accepting it rejects theirs. Accept?`)) return;
+      if (rivals.length && !accept.hasAttribute("data-chosen") && !confirm(`This attempt clashes with ${rivals.join(" and ")}’s: they can’t both be true. Accepting it rejects theirs. Accept?`)) return;
       if (MOCK) return demoAccept(cl.id);
       if (!key) return;
       accept.disabled = true;
@@ -938,6 +1030,23 @@
       // Keep a key the judge took; forget one it refused.
       try { if (res.status === 401 || res.status === 403) localStorage.removeItem("canon-key"); else if (res.status !== 503) localStorage.setItem("canon-key", key); } catch {}
       if (!res.ok) { alert((await res.json()).error); accept.disabled = false; accept.textContent = "Accept fact"; }
+      return;
+    }
+    const decline = e.target.closest("[data-decline]");
+    if (decline) {
+      const ids = decline.dataset.decline.split(",");
+      const reason = prompt(ids.length > 1 ? "Decline both attempts? Say why (kept in the facts’ history):" : "Decline this claim? Say why (kept in the fact’s history):");
+      if (reason === null) return;
+      if (MOCK) return demoDecline(ids, reason);
+      let key = ownerKey();
+      if (!key) key = prompt(`Declining changes ${project}’s facts, so only its maintainer can. Paste the owner key.`)?.trim() ?? "";
+      if (!key) return;
+      decline.disabled = true;
+      for (const id of ids) {
+        const res = await fetch(`/p/${project}/claims/${id}/decline`, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify({ reason }) });
+        try { if (res.status === 401 || res.status === 403) localStorage.removeItem("canon-key"); else if (res.ok) localStorage.setItem("canon-key", key); } catch {}
+        if (!res.ok) { alert((await res.json()).error); decline.disabled = false; return; }
+      }
       return;
     }
     const run = e.target.closest("[data-run]");
@@ -969,7 +1078,7 @@
     const w = MOCK ? demoWhy(id)
                    : await (await fetch(`/p/${project}/facts/${id}/why`)).json();
     const f = w.fact;
-    const status = f.status === "canon" ? "canon" : f.status === "retired" ? "retired" : "proposed";
+    const status = ["canon", "retired", "declined"].includes(f.status) ? f.status : "proposed";
     const c = f.check;
     // Latest result per attempt (rows arrive newest first).
     const latest = [...new Map([...w.rejected].reverse().map((r) => [r.attempt_id, r])).values()];
@@ -1004,6 +1113,7 @@
         : `<li class="note"><b>${esc(w.proposer?.agent ?? m?.claim?.agent ?? "An agent")}</b> proposed it${(w.proposer ?? m?.claim)?.why ? `: “${esc((w.proposer ?? m.claim).why)}”` : "."}</li>`,
       w.replaces ? `<li class="note">A revision of “${esc(w.replaces.sentence)}”. The old rule was retired when this one was accepted.</li>` : "",
       m ? `<li class="held"><b>Made true</b> in <span class="attempt">${esc(m.attempt?.id)}</span>${f.acceptedAt ? ` and accepted ${ago(f.acceptedAt)}` : ""}.${links(m.attempt?.id, m.attempt?.previewUrl)}</li>` : "",
+      f.status === "declined" ? `<li class="broke"><b>Declined</b> by a person${f.declinedAt ? ` ${ago(f.declinedAt)}` : ""}${f.declineReason ? `: “${esc(f.declineReason)}”` : "."}</li>` : "",
       w.retiredBy ? `<li class="note"><b>Retired</b> by ${esc(w.retiredBy.claim?.agent)}'s revision, replaced by “${esc(w.retiredBy.replacement?.sentence ?? "")}”: “${esc(w.retiredBy.claim?.why)}”</li>` : "",
       judged.size ? `<li class="${failed.length ? "broke" : "held"}">${status === "proposed" ? "Tried" : "Judged"} on <b>${judged.size} attempt${judged.size === 1 ? "" : "s"}</b> so far: ${[status === "proposed" ? `${kept} made it true` : `${kept} kept it`, failed.length ? `${failed.length} broke it` : "", behind.length ? `${behind.length} were built before it existed` : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")}.${status === "proposed" && kept ? " Waiting for a person to accept it." : ""}</li>` : "",
       // Repeats of the same failure by the same agent collapse into one entry; links go to the latest attempt.
@@ -1016,7 +1126,7 @@
       <div class="why-head">
         <p class="kicker">${status === "proposed" ? "What would make this true?" : status === "retired" ? "Why was this true?" : "Why is this true?"}</p>
         <h3 id="whytitle">${esc(f.sentence)}</h3>
-        <div class="why-meta"><span class="why-chip ${status}">${status === "canon" ? "Canon" : status === "retired" ? "Retired" : "Proposed"}</span><span>${esc(f.id)}</span><span>${c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview${(c.samples ?? 1) > 1 ? ` × ${c.samples} runs` : ""}`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
+        <div class="why-meta"><span class="why-chip ${status}">${{ canon: "Canon", retired: "Retired", declined: "Declined", proposed: "Proposed" }[status]}</span><span>${esc(f.id)}</span><span>${c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview${(c.samples ?? 1) > 1 ? ` × ${c.samples} runs` : ""}`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
       </div>
       <div class="why-body">
         <section class="why-sec">
@@ -1268,6 +1378,23 @@
       s.production = { at: Date.now(), url: s.production?.url ?? "https://farmstand.canon.rodeo", results: {} };
     });
   }
+  // Declining in the demo: the claim settles; an agent's proposed fact nobody else works on is declined with it.
+  function demoDecline(ids, reason) {
+    const names = [];
+    for (const id of ids) {
+      const x = state.claims.find((c) => c.id === id);
+      if (!x || SETTLED.includes(x.status)) continue;
+      x.status = "declined";
+      x.declineReason = reason.trim() || null;
+      names.push(x.agent);
+      const fact = state.facts.find((f) => f.id === x.factId);
+      const others = state.claims.some((c) => c !== x && c.factId === x.factId && !SETTLED.includes(c.status));
+      if (fact?.status === "proposed" && fact.origin !== "backlog" && !others) Object.assign(fact, { status: "declined", declinedAt: Date.now(), declineReason: reason.trim() || null });
+    }
+    if (names.length) say(`<b>You declined ${names.join(" and ")}’s ${names.length > 1 ? "attempts" : "attempt"}.</b> ${names.length > 1 ? "Their agents are" : "Its agent is"} told to stop, and the reason stays in the fact’s history. Nothing else changes: canon and production are untouched.`);
+    render();
+  }
+
   // The fact's story in the demo, including facts that became canon here.
   function demoWhy(id) {
     const fact = state.facts.find((f) => f.id === id);

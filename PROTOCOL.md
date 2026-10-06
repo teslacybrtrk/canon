@@ -165,6 +165,11 @@ that attempt forked from. Failing at the same step as on canon only means the ot
 further and then failing means it built the very behaviour the fact tests, the other way: the two claims **clash**, and
 the board says so on both before a person picks one. Accepting one then rejects the other outright, with no refresh.
 
+`POST /p/:project/claims/:id/decline` with `{"reason": "…"}`: a person says no. The claim is settled, and its agent's
+next verdict says so. If an agent proposed the fact and nobody else is working on it, the fact is declined too, with
+the reason kept in its history; a backlog fact people wrote stays in the backlog. Two clashing Ready claims are
+settled by accepting one (the other is rejected) or declining both.
+
 After each deploy, and every hour, the judge runs canon's probe facts against production and shows the result on
 the board.
 

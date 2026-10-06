@@ -10,6 +10,9 @@ export const UPGRADES = [
   `ALTER TABLE attempts ADD COLUMN base_sha TEXT`,
   `ALTER TABLE claims ADD COLUMN refreshed_from TEXT`,
   `ALTER TABLE claims ADD COLUMN refresh TEXT`,
+  `ALTER TABLE claims ADD COLUMN decline_reason TEXT`,
+  `ALTER TABLE facts ADD COLUMN declined_at INTEGER`,
+  `ALTER TABLE facts ADD COLUMN decline_reason TEXT`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];
@@ -24,7 +27,7 @@ CREATE TABLE IF NOT EXISTS facts (
   id           TEXT PRIMARY KEY,
   sentence     TEXT NOT NULL,
   check_json   TEXT NOT NULL,
-  status       TEXT NOT NULL,          -- canon | proposed | retired
+  status       TEXT NOT NULL,          -- canon | proposed | retired | declined
   proposed_by  TEXT,                   -- claim id
   made_true_by TEXT,                   -- attempt id
   created_at   INTEGER NOT NULL,

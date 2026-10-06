@@ -18,6 +18,7 @@ export { VerifyAttempt, PromoteAttempt, RefreshAttempt } from "./pipelines";
 //        git push <remote> main               move 3: push     (plain Git)
 //   GET  /p/:project/attempts/:id/verdict       move 4: verdict
 //   POST /p/:project/claims/:id/accept        review: a human accepts a fact          owner key
+//   POST /p/:project/claims/:id/decline       review: a human says no ({"reason"})    owner key
 //   GET  /p/:project/facts/:id/why            the fact chain
 //   POST /p/:project/facts/:id/check          run a fact's check against production now
 //   GET  /p/:project/ws                       live board
@@ -61,6 +62,10 @@ export default {
         return verdict ? json(verdict) : json({ outcome: "pending" }, 202);
       }
       if ((match = route.match(/^POST \/claims\/([\w-]+)\/accept$/))) return json(await referee.accept(match[1]));
+      if ((match = route.match(/^POST \/claims\/([\w-]+)\/decline$/))) {
+        const body = await request.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
+        return json(await referee.decline(match[1], body.reason));
+      }
       if ((match = route.match(/^GET \/facts\/([\w-]+)\/why$/))) return json(await referee.why(match[1]));
       if ((match = route.match(/^POST \/facts\/([\w-]+)\/check$/))) return json(await referee.checkProduction(match[1]));
       return json({ error: "not found" }, 404);

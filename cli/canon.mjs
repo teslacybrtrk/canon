@@ -168,8 +168,12 @@ async function verdict() {
   for (;;) {
     v = await api("GET", `/attempts/${ctx.attemptId}/verdict`, undefined, true);
     const current = v.sha === head && v.outcome !== "pending";
-    if (current || v.refreshedAs || Date.now() >= deadline) break;
+    if (current || v.refreshedAs || v.declined || Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, 5_000));
+  }
+  if (v.declined) {
+    console.log(`DECLINED  attempt ${v.attemptId}: a person declined this claim (${v.declined}). Stop here.`);
+    process.exit(2);
   }
   if (v.refreshedAs && v.sha !== head) {
     console.log(`The judge re-applied this attempt on the current canon as ${v.refreshedAs} before your latest commit, so that commit isn't judged here. Run: canon refresh (it carries your work over to an attempt of your own).`);

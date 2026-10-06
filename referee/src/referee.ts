@@ -126,7 +126,9 @@ export class Referee extends DurableObject<Env> {
       const def = req.fact;
       if (typeof def?.id !== "string" || !/^[a-z0-9-]{3,48}$/.test(def.id)) throw new ProtocolError(400, 'a fact needs "id": a 3-48 char slug');
       if (typeof def.sentence !== "string" || !def.sentence.trim()) throw new ProtocolError(400, 'a fact needs "sentence": what must be true, in plain words');
-      if (this.fact(def.id)) throw new ProtocolError(409, `fact "${def.id}" exists; join it instead`);
+      const existing = this.fact(def.id);
+      if (existing?.status === "declined") throw new ProtocolError(409, `fact "${def.id}" was declined${existing.declineReason ? `: ${existing.declineReason}` : ""}`);
+      if (existing) throw new ProtocolError(409, `fact "${def.id}" exists; join it instead`);
       validateCheck(def.check);
       validateScope(def.scope);
       if (def.replaces) {
@@ -322,11 +324,22 @@ export class Referee extends DurableObject<Env> {
 
   async verdict(attemptId: string): Promise<Verdict | null> {
     await this.catchUp(attemptId);
-    const verdict = this.latestVerdict(attemptId);
     const claimId = this.attempt(attemptId)?.claimId;
+    const claim0 = claimId ? this.claim(claimId) : null;
+    // Declined before anything was judged: say so instead of "pending".
+    const verdict = this.latestVerdict(attemptId) ?? (claim0?.status === "declined"
+      ? { attemptId, sha: "", previewUrl: "", canonSeq: this.canonSeq(), outcome: "pending", kept: [], lost: [], retires: [], skipped: [], stale: [], offers: [],
+          claimed: { factId: claim0.factId, held: false, detail: "declined" }, ledger: { status: "ok", detail: "not read" }, judgedAt: Date.now() } satisfies Verdict
+      : null);
     if (!verdict || !claimId) return verdict;
     const next = this.rows(`SELECT attempt_id FROM claims WHERE refreshed_from = ?`, claimId)[0]?.attempt_id as string | undefined;
-    return { ...verdict, clashes: this.clashesFor(claimId), ...(next ? { refreshedAs: next } : {}) };
+    const claim = this.claim(claimId);
+    return {
+      ...verdict,
+      clashes: this.clashesFor(claimId),
+      ...(next ? { refreshedAs: next } : {}),
+      ...(claim?.status === "declined" ? { declined: claim.declineReason || "no reason given" } : {}),
+    };
   }
 
   /**
@@ -403,6 +416,24 @@ export class Referee extends DurableObject<Env> {
     }
     await this.revokeWriteTokens(attempt.id);
     return { canonSeq: seq, attemptId: attempt.id, sha: verdict.sha };
+  }
+
+  /**
+   * A person says no. The claim is settled; a fact an agent proposed that nobody else is working on is declined too,
+   * with the reason kept in its history (as failed attempts are). A backlog fact people wrote stays in the backlog.
+   */
+  decline(claimId: string, reason: unknown) {
+    const claim = this.claim(claimId);
+    if (!claim) throw new ProtocolError(404, "no such claim");
+    if (claim.status !== "open" && !LIVE.includes(claim.status)) throw new ProtocolError(409, `claim is ${claim.status}; only a claim still in flight can be declined`);
+    const note = typeof reason === "string" ? reason.trim().slice(0, 300) : "";
+    this.sql.exec(`UPDATE claims SET status = 'declined', decline_reason = ? WHERE id = ?`, note || null, claim.id);
+    const fact = this.fact(claim.factId);
+    const others = this.rows(`SELECT id FROM claims WHERE fact_id = ? AND id != ? AND status IN ('open', ${LIVE.map(() => "?").join(",")})`, claim.factId, claim.id, ...LIVE);
+    const factDeclined = fact?.status === "proposed" && fact.origin === "agent" && others.length === 0;
+    if (factDeclined) this.sql.exec(`UPDATE facts SET status = 'declined', declined_at = ?, decline_reason = ? WHERE id = ?`, Date.now(), note || null, fact.id);
+    this.broadcast();
+    return { claim: this.claim(claim.id), factDeclined };
   }
 
   /** The current canon's number: a deploy of an older one is skipped. */
@@ -974,6 +1005,8 @@ function toFact(r: Row): Fact {
     acceptedAt: r.accepted_at as number | null,
     retiredBy: (r.retired_by as string | null) ?? null,
     retiredAt: (r.retired_at as number | null) ?? null,
+    declinedAt: (r.declined_at as number | null) ?? null,
+    declineReason: (r.decline_reason as string | null) ?? null,
   };
 }
 
@@ -988,6 +1021,7 @@ function toClaim(r: Row): Claim {
     createdAt: r.created_at as number,
     refreshedFrom: (r.refreshed_from as string | null) ?? null,
     refresh: (r.refresh as string | null) ?? null,
+    declineReason: (r.decline_reason as string | null) ?? null,
   };
 }
 

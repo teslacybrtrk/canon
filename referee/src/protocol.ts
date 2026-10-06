@@ -10,7 +10,7 @@
 // decides which attempt they currently point at, and it judges every attempt with the
 // canon copy: an attempt may add the fact it claimed to its canon.json, nothing else.
 
-export type FactStatus = "canon" | "proposed" | "retired";
+export type FactStatus = "canon" | "proposed" | "retired" | "declined";
 // seed: from genesis canon.json · agent: proposed in a claim · backlog: written by people in canon.json for agents to build
 export type FactOrigin = "seed" | "agent" | "backlog";
 
@@ -23,6 +23,7 @@ export type ClaimStatus =
   | "behind" //      canon gained a fact after this attempt forked; the judge re-applies it on the current canon
   | "accepted" //    a human accepted the fact; this attempt is canon
   | "superseded" // another attempt made the same fact true first
+  | "declined" //   a person declined it (the reason is kept)
   | "error"; //      could not be judged: a platform error, not the code (push again)
 
 export interface Fact {
@@ -38,6 +39,8 @@ export interface Fact {
   createdAt: number;
   acceptedAt: number | null;
   retiredBy: string | null; // attempt that retired it (by accepting a revision)
+  declinedAt: number | null; // a person declined the claim that proposed it, and nobody else was working on it
+  declineReason: string | null;
   retiredAt: number | null;
 }
 
@@ -123,6 +126,7 @@ export interface Claim {
   refreshedFrom: string | null; // the behind claim the judge re-applied on the current canon as this one
   // How the judge's own refresh of this claim went, when it was behind: started, or why the agent must refresh it.
   refresh: string | null;
+  declineReason: string | null; // why a person declined it
 }
 
 // Two Ready claims that can't both land. `factId` failed on the other attempt's preview at a later step than on the
@@ -209,6 +213,7 @@ export interface Verdict {
   judgedAt: number;
   // Added when the verdict is read (GET /attempts/:id/verdict), not stored with it:
   refreshedAs?: string; // canon moved, and the judge re-applied this attempt on the current canon as this attempt
+  declined?: string; // a person declined this claim, for this reason
   clashes?: Clash[];
 }
 

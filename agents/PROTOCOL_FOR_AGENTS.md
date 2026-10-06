@@ -31,6 +31,7 @@ Use the `canon` command for the protocol and plain `git` for code.
      current canon with your changes re-applied. cd into it, resolve the conflict, push, and read the verdict again.
    - ERROR: the platform could not judge your push (not your code). Push again, then read the verdict.
    - READY: stop. A human decides whether your fact becomes canon.
+   - DECLINED: a person said no, with a reason. Stop; don't claim the same fact again.
 
 Rules: never push anywhere except your own attempt. Do not edit the fact's check to make it pass;
 the judge owns the checks. Keep the change as small as the fact needs. Leave package.json, package-lock.json,

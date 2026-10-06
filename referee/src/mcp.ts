@@ -199,10 +199,11 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
   let v: Verdict | null;
   for (;;) {
     v = (await referee.verdict(attempt)) as Verdict | null;
-    if ((v && (v.refreshedAs || !sha || v.sha.startsWith(sha) || sha.startsWith(v.sha))) || Date.now() >= deadline) break;
+    if ((v && (v.refreshedAs || v.declined || !sha || v.sha.startsWith(sha) || sha.startsWith(v.sha))) || Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, 5_000));
   }
   // Canon moved and the judge re-applied this attempt on the current canon: report the newer attempt instead.
+  if (v?.declined) return `DECLINED: a person declined the claim for attempt ${v.attemptId} (${v.declined}). Stop here.`;
   const moved: string[] = [];
   if (v?.refreshedAs && sha && !v.sha.startsWith(sha) && !sha.startsWith(v.sha)) {
     return `The judge re-applied attempt ${attempt} on the current canon as ${v.refreshedAs} before your commit ${sha.slice(0, 8)}, so that commit isn't judged. Call canon_refresh with attempt "${attempt}": it carries your work over to an attempt of your own.`;
@@ -217,6 +218,7 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
   if (!v || (sha && !v.sha.startsWith(sha) && !sha.startsWith(v.sha))) {
     return `No verdict${sha ? ` for ${sha.slice(0, 8)}` : ""} yet: the preview is still building (about a minute after a push), or the commit isn't pushed. Call canon_verdict again.`;
   }
+  if (v.declined) return [...moved, `DECLINED: a person declined the claim for attempt ${v.attemptId} (${v.declined}). Stop here.`].join("\n");
   const out = [...moved, `VERDICT ${v.outcome.toUpperCase()}: attempt ${v.attemptId} @ ${v.sha.slice(0, 8)}`];
   if (v.outcome === "error") return [...out, v.claimed.detail, "This is not about your code. Push again (an empty commit is fine), then call canon_verdict."].join("\n");
   if (v.previewUrl) out.push(`preview ${v.previewUrl}`);
