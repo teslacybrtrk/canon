@@ -150,9 +150,29 @@
   .switch input:checked + i { background: var(--brand); }
   .switch input:checked + i::after { transform: translateX(14px); background: #1a0b02; }
   .switch input:focus-visible + i { outline: 2px solid var(--brand); outline-offset: 2px; }
-  .demolog { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
-  .ev { --c: var(--brand); position: relative; padding: 10px 12px 11px; border: 1px solid var(--border); border-top: 3px solid var(--c); border-radius: 8px; background: var(--bg-subtle); animation: up .45s cubic-bezier(.2,.7,.1,1) both; }
-  .ev.old { opacity: .5; animation: none; }
+  /* Activity: a timeline docked in the sidebar. Nothing on the board moves when an event arrives. */
+  .demolog { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; max-height: min(52vh, 520px); overflow-y: auto; scrollbar-width: thin; padding-right: 2px; }
+  .side .evgroup { display: grid; gap: 6px; align-items: stretch; transition: opacity .6s; }
+  .side .evgroup b { color: var(--ink); }
+  .demolog { scrollbar-color: var(--border) transparent; }
+  .evgroup time { font-size: 11px; color: var(--muted); }
+  .evgroup.age1 { opacity: .7; }
+  .evgroup.age2 { opacity: .5; }
+  .evgroup.age3 { opacity: .35; }
+  .side .ev-empty { display: block; color: var(--muted); font-size: 12.5px; }
+  .ev { --c: var(--brand); position: relative; padding: 8px 10px 9px 12px; border: 1px solid var(--border); border-left: 3px solid var(--c); border-radius: 6px; background: var(--bg-subtle); }
+  .evgroup.fresh .ev { animation: slidein .45s cubic-bezier(.2,.7,.1,1) both; }
+  @keyframes slidein { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 0 rgb(253 111 22 / 0.6); animation: beacon 2.4s ease-out infinite; }
+  .toasts { position: fixed; z-index: 60; right: 16px; bottom: 16px; display: grid; gap: 8px; width: min(340px, calc(100vw - 32px)); pointer-events: none; }
+  .toasts .ev { box-shadow: 0 12px 32px -12px rgb(1 4 9 / 0.6); background: var(--overlay); animation: slidein .4s cubic-bezier(.2,.7,.1,1) both; transition: opacity .5s, transform .5s; }
+  .toasts .ev.gone { opacity: 0; transform: translateY(8px); }
+  @media (min-width: 1241px) { .toasts { display: none; } }
+  .intro-slim { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-top: 20px; padding: 8px 12px; border: 1px solid rgb(253 111 22 / 0.4); border-radius: 8px; background: linear-gradient(90deg, rgb(253 111 22 / 0.1), transparent); font-size: 13px; color: var(--ink-2); }
+  .intro-slim .ev-k { color: var(--brand); }
+  .intro-slim .btn { margin-left: auto; height: 28px; font-size: 12px; }
+  .linkish { background: none; border: 0; padding: 0; color: var(--link); font: inherit; cursor: pointer; }
+  .linkish:hover { text-decoration: underline; }
   .ev-k { display: inline-block; font: 600 10px/16px var(--sans); text-transform: uppercase; letter-spacing: .06em; color: var(--c); }
   .ev b { display: block; margin-top: 2px; font-size: 14px; color: var(--ink); }
   .ev p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
@@ -566,7 +586,7 @@
     <div><span class="ev-k">Or</span><b>Switch on Autopilot</b><p>Agents land the backlog people wrote, with no clicks. Facts agents proposed still wait for you.</p></div>
     <div><span class="ev-k">Safe</span><b>Nothing deploys</b><p>It all runs in your browser on sample data. Refresh to start over.</p><button class="btn" type="button" onclick="location.reload()">Start over</button></div>
   </div>
-  <ol class="demolog" id="demolog" hidden aria-live="polite"></ol>
+  <div class="intro-slim" id="introslim" hidden><span class="ev-k">Demo</span><span>You’re the maintainer. It runs in your browser; nothing deploys.</span><button class="linkish" type="button" id="showtips">Show tips</button><button class="btn" type="button" onclick="location.reload()">Start over</button></div>
 
   <div class="layout" style="margin-top:20px">
     <div class="stack">
@@ -588,6 +608,10 @@
     </div>
 
     <aside class="side">
+      <section class="activity" id="activity" hidden>
+        <h4>Activity <span class="pulse-dot" aria-hidden="true"></span></h4>
+        <ol class="demolog" id="demolog" aria-live="polite"><li class="ev-empty">What you do, what the judge does and what agents do appears here, newest first.</li></ol>
+      </section>
       <section>
         <h4>About</h4>
         <p id="abouttext">A farmers’ market app built by AI agents. Canon checks every agent’s attempt against the facts production must keep.</p>
@@ -634,6 +658,7 @@
   </div>
 </footer>
 
+<div class="toasts" id="toasts" aria-hidden="true"></div>
 <dialog id="why" aria-labelledby="whytitle"><div id="whybody"></div><div class="why-foot"><span>Every attempt stays addressable: the failed ones are the memory.</span><form method="dialog"><button class="copy">Close</button></form></div></dialog>
 
 <script>
@@ -1085,6 +1110,9 @@
   $("flash").hidden = dismissed || MOCK;
   if (MOCK) {
     $("intro").hidden = false;
+    $("activity").hidden = false;
+    $("showtips").addEventListener("click", () => { $("intro").hidden = false; $("introslim").hidden = true; });
+    setInterval(() => drawLog(), 15_000);
     $("autotoggle").addEventListener("change", (e) => setAutopilot(e.target.checked));
     $("modelink").hidden = true;
     document.title = "Demo · Canon";
@@ -1276,10 +1304,31 @@
   // What just happened, as small cards: one per thing, newest first. `cards` is [kind, title, sentence] triples.
   const KIND = { canon: "Canon", deploy: "Production", check: "Judge", replaced: "Replaced", rejected: "Rejected", behind: "Behind",
     reapplied: "Re-applied", judged: "Judged", autopilot: "Autopilot", backlog: "Backlog", you: "You", declined: "Declined", done: "Done" };
+  const evCard = (c, i = 0) => `<div class="ev ev-${c.kind}" style="animation-delay:${i * 90}ms"><span class="ev-k">${KIND[c.kind] ?? c.kind}</span><b>${c.title}</b><p>${c.body}</p></div>`;
   function say(...cards) {
-    demo.log = [cards.map(([kind, title, body]) => ({ kind, title, body })), ...demo.log].slice(0, 2);
-    $("demolog").hidden = false;
-    $("demolog").innerHTML = demo.log.map((group, g) => group.map((c, i) => `<li class="ev ev-${c.kind}${g ? " old" : ""}" style="animation-delay:${g ? 0 : i * 90}ms"><span class="ev-k">${KIND[c.kind] ?? c.kind}</span><b>${c.title}</b><p>${c.body}</p></li>`).join("")).join("");
+    demo.log = [{ at: Date.now(), cards: cards.map(([kind, title, body]) => ({ kind, title, body })) }, ...demo.log].slice(0, 12);
+    drawLog(true);
+    // Below 1240px the sidebar sits under the board, so the newest event also shows as toasts that fade.
+    if (matchMedia("(max-width: 1240px)").matches) {
+      const box = document.createElement("div");
+      box.innerHTML = demo.log[0].cards.slice(0, 3).map(evCard).join("");
+      for (const el of [...box.children]) {
+        $("toasts").appendChild(el);
+        // Never more than three at once: the oldest goes first.
+        while ($("toasts").children.length > 3) $("toasts").firstElementChild.remove();
+        setTimeout(() => { el.classList.add("gone"); setTimeout(() => el.remove(), 600); }, 5500);
+      }
+    }
+  }
+  function drawLog(fresh = false) {
+    if (!demo.log.length) return;
+    $("demolog").innerHTML = demo.log.map((g, i) => `<li class="evgroup${i === 0 && fresh ? " fresh" : ""}${i ? ` age${Math.min(i, 3)}` : ""}"><time>${ago(g.at)}</time>${g.cards.map(evCard).join("")}</li>`).join("");
+    $("demolog").scrollTop = 0;
+  }
+  // The how-to cards shrink to one line once someone has done something.
+  function acted() {
+    $("intro").hidden = true;
+    $("introslim").hidden = false;
   }
   // A little life before anyone clicks: an attempt finishes judging, a person's own attempt gets pushed.
   function startDemo() {
@@ -1353,6 +1402,7 @@
   ];
   let agentNo = 9;
   function setAutopilot(on) {
+    acted();
     demo.auto = on;
     state.policy = { autoAccept: on ? "backlog" : "off" };
     clearTimeout(demo.ticker);
@@ -1428,6 +1478,7 @@
   }
 
   function demoAccept(id, auto = false) {
+    if (!auto) acted();
     const s = state;
     const cl = s.claims.find((x) => x.id === id);
     if (!cl || cl.status !== "ready") return;
@@ -1486,6 +1537,7 @@
   }
   // Declining in the demo: the claim settles; an agent's proposed fact nobody else works on is declined with it.
   function demoDecline(ids, reason) {
+    acted();
     const names = [];
     for (const id of ids) {
       const x = state.claims.find((c) => c.id === id);
