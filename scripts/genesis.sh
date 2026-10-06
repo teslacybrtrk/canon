@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time setup: create the genesis world and push the demo app (which carries canon.json) into it.
+# One-time setup: create the genesis attempt and push the demo app (which carries canon.json) into it.
 # The referee builds a Preview of genesis and makes it canon once every fact in its canon.json holds.
 #   CANON_URL=https://canon-referee.<you>.workers.dev ./scripts/genesis.sh   (with CANON_KEY, the owner key, exported)
 # A different canon.json for this project (e.g. a backlog with autopilot):
@@ -21,7 +21,7 @@ if ! resp="$(printf 'authorization: Bearer %s\n' "$CANON_KEY" | curl -sS --fail-
   exit 1
 fi
 if [ -n "${IMPORT_URL:-}" ]; then
-  echo "Imported $IMPORT_URL as genesis. Watch $CANON_URL/?p=$PROJECT until its facts go green."
+  echo "Imported $IMPORT_URL as genesis. Watch $CANON_URL/board?p=$PROJECT until its facts go green."
   exit 0
 fi
 remote="$(node -e 'const r=JSON.parse(process.argv[1]); const u=new URL(r.remote); u.username="x"; u.password=r.token; console.log(u.toString())' "$resp")"
@@ -34,4 +34,4 @@ git -C "$work" init -q -b main
 git -C "$work" add -A
 git -C "$work" -c user.name=canon -c user.email=canon@canon.local commit -qm "genesis: farmstand"
 git -C "$work" push -q "$remote" main
-echo "Pushed genesis. Watch $CANON_URL/?p=$PROJECT until its facts go green."
+echo "Pushed genesis. Watch $CANON_URL/board?p=$PROJECT until its facts go green."

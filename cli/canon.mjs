@@ -4,15 +4,15 @@
 //   canon read [--for <path>]                   1. read canon, the backlog and claims in flight (--for: facts governing a file)
 //   canon claim --fact <file.json> --why "..."  2. declare a new fact (or a revision: "replaces" a canon fact)
 //   canon claim --join <fact-id>   --why "..."     ...or race for a fact someone already proposed
-//   git push                                    3. push the world (plain Git, from inside the world)
+//   git push                                    3. push the attempt (plain Git, from inside the attempt)
 //   canon verdict [--wait]                      4. which facts held, which broke, accepted or not
-//   canon refresh                               a BEHIND world: new world from current canon + your changes
-//   canon why <fact-id>                         the fact chain: who made it true, which worlds failed it
+//   canon refresh                               a BEHIND attempt: new attempt from current canon + your changes
+//   canon why <fact-id>                         the fact chain: who made it true, which attempts failed it
 //   canon init                                  a starter canon.json for the app in this folder
 //
 // Env: CANON_URL (where Canon runs, e.g. https://canon.rodeo), CANON_PROJECT (e.g. farmstand), CANON_AGENT (e.g. agent-3),
 //      CANON_KEY (the key that lets you claim; agents get the CANON_AGENT_KEY),
-//      CANON_WORKDIR (where worlds are cloned; default ./worlds)
+//      CANON_WORKDIR (where attempts are cloned; default ./attempts)
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -52,7 +52,7 @@ async function read() {
   const applies = (f) => !forPath || !f.scope || f.scope.some((g) => globToRegExp(g).test(forPath));
   const facts = s.facts.filter(applies);
   const label = (f) => `${f.id.padEnd(28)} ${f.sentence}${f.scope ? `  [${f.scope.join(", ")}]` : ""}${f.check.kind === "command" ? `  (runs: ${f.check.run})` : ""}`;
-  console.log(`CANON  world ${s.canon.worldId} @ ${s.canon.sha.slice(0, 8)}  (seq ${s.canon.seq})${s.policy?.autoAccept === "backlog" ? "  · autopilot: backlog facts land on their own" : ""}`);
+  console.log(`CANON  attempt ${s.canon.attemptId} @ ${s.canon.sha.slice(0, 8)}  (seq ${s.canon.seq})${s.policy?.autoAccept === "backlog" ? "  · autopilot: backlog facts land on their own" : ""}`);
   if (forPath) console.log(`(facts that govern ${forPath})`);
   for (const f of facts.filter((f) => f.status === "canon")) console.log(`  ✓ ${label(f)}`);
   const claimsFor = (id) => s.claims.filter((c) => c.factId === id && !["superseded"].includes(c.status));
@@ -79,25 +79,25 @@ async function claim() {
   else if (args.fact) body.fact = JSON.parse(readFileSync(factFile(args.fact), "utf8"));
   else fail("pass --fact <file.json> (id, sentence, check) or --join <fact-id>");
 
-  const { claim, world } = await api("POST", "/claims", body);
-  const dir = resolve(process.env.CANON_WORKDIR ?? "worlds", world.id);
-  await setupWorld(dir, claim, world, body.fact ?? (await api("GET", "/canon")).facts.find((f) => f.id === claim.factId));
+  const { claim, attempt } = await api("POST", "/claims", body);
+  const dir = resolve(process.env.CANON_WORKDIR ?? "attempts", attempt.id);
+  await setupAttempt(dir, claim, attempt, body.fact ?? (await api("GET", "/canon")).facts.find((f) => f.id === claim.factId));
 
   console.log(`Claim ${claim.id}: ${AGENT} is trying to make "${claim.factId}" true.`);
-  console.log(`World ${world.id} cloned to ${dir} (your fact is already in its canon.json; do not edit that file).`);
+  console.log(`Attempt ${attempt.id} cloned to ${dir} (your fact is already in its canon.json; do not edit that file).`);
   console.log(`Work there, commit, then: git push origin main && canon verdict --wait`);
 }
 
-// Clone a new world, mark it as Canon's, and commit the claimed fact into its canon.json.
-// The fact travels with the code; the judge rejects a world whose canon.json changes anything else.
-async function setupWorld(dir, claim, world, fact) {
-  const remote = new URL(world.remote);
+// Clone a new attempt, mark it as Canon's, and commit the claimed fact into its canon.json.
+// The fact travels with the code; the judge rejects an attempt whose canon.json changes anything else.
+async function setupAttempt(dir, claim, attempt, fact) {
+  const remote = new URL(attempt.remote);
   remote.username = "x";
-  remote.password = world.token;
+  remote.password = attempt.token;
   git(["clone", "--quiet", remote.toString(), dir]);
   git(["-C", dir, "config", "user.name", AGENT]);
   git(["-C", dir, "config", "user.email", `${AGENT}@canon.local`]);
-  writeFileSync(join(dir, ".git", "canon.json"), JSON.stringify({ project: PROJECT, claimId: claim.id, worldId: world.id, factId: claim.factId, agent: AGENT }, null, 2));
+  writeFileSync(join(dir, ".git", "canon.json"), JSON.stringify({ project: PROJECT, claimId: claim.id, attemptId: attempt.id, factId: claim.factId, agent: AGENT }, null, 2));
   installTrailerHook(dir, claim);
   const ledgerPath = join(dir, "canon.json");
   const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
@@ -113,54 +113,54 @@ async function setupWorld(dir, claim, world, fact) {
   git(["-C", dir, "commit", "--quiet", "-am", `canon: claim "${fact.sentence}"`]);
 }
 
-// A world that is BEHIND was built on an older canon. Make a fresh world from the current
-// canon for the same fact, and re-apply this world's own changes on top of it. The agent
+// An attempt that is BEHIND was built on an older canon. Make a fresh attempt from the current
+// canon for the same fact, and re-apply this attempt's own changes on top of it. The agent
 // (not the judge) resolves any conflict; nothing is merged on the server.
 async function refresh() {
-  const old = worldContext();
-  // Only a world that is behind needs a fresh copy of canon; refreshing anything else just makes noise.
-  const last = await api("GET", `/worlds/${old.worldId}/verdict`, undefined, true);
+  const old = attemptContext();
+  // Only an attempt that is behind needs a fresh copy of canon; refreshing anything else just makes noise.
+  const last = await api("GET", `/attempts/${old.attemptId}/verdict`, undefined, true);
   const mine = (await api("GET", "/canon")).claims.find((c) => c.id === old.claimId);
-  if (mine?.status === "superseded") fail(`this world was already refreshed or replaced; work in your newest world (canon verdict shows it)`);
-  if (last.outcome !== "behind") fail(`refresh is only for worlds that are BEHIND canon; this one is ${String(last.outcome).toUpperCase()}. Read its verdict instead.`);
+  if (mine?.status === "superseded") fail(`this attempt was already refreshed or replaced; work in your newest attempt (canon verdict shows it)`);
+  if (last.outcome !== "behind") fail(`refresh is only for attempts that are BEHIND canon; this one is ${String(last.outcome).toUpperCase()}. Read its verdict instead.`);
   const head = git(["-C", old.root, "rev-parse", "HEAD"]).trim();
   const claimCommit = git(["-C", old.root, "log", "--format=%H", "--grep=^canon: claim", "-n", "1"]).trim();
-  if (!claimCommit) fail("cannot find this world's claim commit");
+  if (!claimCommit) fail("cannot find this attempt's claim commit");
   const patch = git(["-C", old.root, "diff", "--binary", `${claimCommit}..${head}`, "--", ".", ":(exclude)canon.json"]);
 
   // The agent's original reason carries over: the why belongs to the change, not to the refresh.
   const state = await api("GET", "/canon");
   const original = state.claims.find((c) => c.id === old.claimId)?.why ?? "";
-  const { claim, world } = await api("POST", "/claims", {
+  const { claim, attempt } = await api("POST", "/claims", {
     agent: AGENT,
     why: `${original} (refreshed onto canon ${state.canon.seq})`.trim(),
     join: old.factId,
     replaces: old.claimId,
   });
-  const dir = resolve(dirname(old.root), world.id);
-  await setupWorld(dir, claim, world, state.facts.find((f) => f.id === claim.factId));
+  const dir = resolve(dirname(old.root), attempt.id);
+  await setupAttempt(dir, claim, attempt, state.facts.find((f) => f.id === claim.factId));
 
   if (patch.trim()) {
     const patchFile = join(dir, ".git", "canon-refresh.patch");
     writeFileSync(patchFile, patch);
     try {
       execFileSync("git", ["-C", dir, "apply", "--3way", patchFile], { stdio: ["ignore", "pipe", "pipe"] });
-      git(["-C", dir, "commit", "--quiet", "-am", `Re-apply ${old.worldId} on the current canon`]);
-      console.log(`Re-applied your changes from ${old.worldId}.`);
+      git(["-C", dir, "commit", "--quiet", "-am", `Re-apply ${old.attemptId} on the current canon`]);
+      console.log(`Re-applied your changes from ${old.attemptId}.`);
     } catch {
-      console.log(`Your changes from ${old.worldId} conflict with the current canon. Resolve the conflict markers in ${dir}, then commit.`);
+      console.log(`Your changes from ${old.attemptId} conflict with the current canon. Resolve the conflict markers in ${dir}, then commit.`);
     }
   }
-  console.log(`New world ${world.id} at ${dir}. cd there, then: git push origin main && canon verdict --wait`);
+  console.log(`New attempt ${attempt.id} at ${dir}. cd there, then: git push origin main && canon verdict --wait`);
 }
 
 async function verdict() {
-  const ctx = worldContext();
+  const ctx = attemptContext();
   const head = git(["-C", ctx.root, "rev-parse", "HEAD"]).trim();
   const deadline = Date.now() + (args.wait ? WAIT_MS : 0);
   let v;
   for (;;) {
-    v = await api("GET", `/worlds/${ctx.worldId}/verdict`, undefined, true);
+    v = await api("GET", `/attempts/${ctx.attemptId}/verdict`, undefined, true);
     const current = v.sha === head && v.outcome !== "pending";
     if (current || Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, 5_000));
@@ -172,7 +172,7 @@ async function verdict() {
       : `No verdict for ${head.slice(0, 8)}: it is not pushed. Run \`git push origin main\` first.`);
     process.exit(3);
   }
-  console.log(`VERDICT ${v.outcome.toUpperCase()}  world ${v.worldId} @ ${v.sha.slice(0, 8)}`);
+  console.log(`VERDICT ${v.outcome.toUpperCase()}  attempt ${v.attemptId} @ ${v.sha.slice(0, 8)}`);
   if (v.outcome === "error") {
     console.log(`\n${v.claimed.detail}\nThis is not about your code. Push again (an empty commit is fine: git commit --allow-empty -m retry && git push origin main), then canon verdict --wait.`);
     process.exit(2);
@@ -188,11 +188,11 @@ async function verdict() {
   if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.`);
   if (v.outcome === "contradicts") {
     const lostIds = v.lost.map((l) => l.factId).filter((id) => id !== "canon.json");
-    console.log(`\nThis world contradicts canon. Make the lost facts hold again and push.`);
-    if (lostIds.length) console.log(`If your goal is to change ${lostIds.join(", ")} on purpose, this world cannot land. Propose a revision instead:\n  canon claim --fact <revision.json> --why "<why the rule changes>"\n(a fact file with "replaces": "${lostIds[0]}"). That gives you a new world; implement the change there.`);
+    console.log(`\nThis attempt contradicts canon. Make the lost facts hold again and push.`);
+    if (lostIds.length) console.log(`If your goal is to change ${lostIds.join(", ")} on purpose, this attempt cannot land. Propose a revision instead:\n  canon claim --fact <revision.json> --why "<why the rule changes>"\n(a fact file with "replaces": "${lostIds[0]}"). That gives you a new attempt; implement the change there.`);
   }
   if (v.outcome === "unproven") console.log(`\nCanon held, but your fact does not hold yet. Fix and push again.`);
-  if (v.outcome === "behind") console.log(`\nCanon moved after this world forked. Run: canon refresh`);
+  if (v.outcome === "behind") console.log(`\nCanon moved after this attempt forked. Run: canon refresh`);
   process.exit(v.outcome === "ready" ? 0 : 2);
 }
 
@@ -200,10 +200,10 @@ async function why(factId) {
   if (!factId) fail("usage: canon why <fact-id>");
   const w = await api("GET", `/facts/${factId}/why`);
   console.log(`${w.fact.id} [${w.fact.status}]  ${w.fact.sentence}`);
-  if (w.madeTrueBy) console.log(`  made true by ${w.madeTrueBy.world.id} (${w.madeTrueBy.claim?.agent}: ${w.madeTrueBy.claim?.why})  ${w.madeTrueBy.world.previewUrl ?? ""}`);
+  if (w.madeTrueBy) console.log(`  made true by ${w.madeTrueBy.attempt.id} (${w.madeTrueBy.claim?.agent}: ${w.madeTrueBy.claim?.why})  ${w.madeTrueBy.attempt.previewUrl ?? ""}`);
   if (w.replaces) console.log(`  revises     ${w.replaces.id}: ${w.replaces.sentence}`);
-  if (w.retiredBy) console.log(`  retired by  ${w.retiredBy.world?.id} (${w.retiredBy.claim?.agent}: ${w.retiredBy.claim?.why}), replaced by ${w.retiredBy.replacement?.id ?? "?"}`);
-  for (const r of w.rejected) console.log(`  failed on  ${r.world_id} @ ${String(r.sha).slice(0, 8)} (${r.agent ?? "genesis"}): ${r.detail}  ${r.preview_url ?? ""}`);
+  if (w.retiredBy) console.log(`  retired by  ${w.retiredBy.attempt?.id} (${w.retiredBy.claim?.agent}: ${w.retiredBy.claim?.why}), replaced by ${w.retiredBy.replacement?.id ?? "?"}`);
+  for (const r of w.rejected) console.log(`  failed on  ${r.attempt_id} @ ${String(r.sha).slice(0, 8)} (${r.agent ?? "genesis"}): ${r.detail}  ${r.preview_url ?? ""}`);
 }
 
 // ---- helpers --------------------------------------------------------------------
@@ -229,19 +229,19 @@ async function api(method, path, body, allowPending = false) {
   return data;
 }
 
-function worldContext() {
+function attemptContext() {
   let dir = process.cwd();
   while (!existsSync(join(dir, ".git", "canon.json"))) {
     const up = dirname(dir);
     if (up === dir) {
-      // Not inside a world: use this agent's most recently claimed world under CANON_WORKDIR (default ./worlds).
-      const root = resolve(process.env.CANON_WORKDIR ?? "worlds");
-      const worlds = existsSync(root)
+      // Not inside an attempt: use this agent's most recently claimed attempt under CANON_WORKDIR (default ./attempts).
+      const root = resolve(process.env.CANON_WORKDIR ?? "attempts");
+      const attempts = existsSync(root)
         ? readdirSync(root).map((d) => join(root, d)).filter((d) => existsSync(join(d, ".git", "canon.json")))
         : [];
-      if (!worlds.length) fail("not inside a Canon world (run `canon claim` first, then cd into the world)");
-      dir = worlds.sort((a, b) => statSync(join(b, ".git", "canon.json")).mtimeMs - statSync(join(a, ".git", "canon.json")).mtimeMs)[0];
-      console.error(`(using your latest world: ${dir})`);
+      if (!attempts.length) fail("not inside a Canon attempt (run `canon claim` first, then cd into the attempt)");
+      dir = attempts.sort((a, b) => statSync(join(b, ".git", "canon.json")).mtimeMs - statSync(join(a, ".git", "canon.json")).mtimeMs)[0];
+      console.error(`(using your latest attempt: ${dir})`);
       break;
     }
     dir = up;
@@ -249,7 +249,7 @@ function worldContext() {
   return { root: dir, ...JSON.parse(readFileSync(join(dir, ".git", "canon.json"), "utf8")) };
 }
 
-// Every commit in a world carries the claim it serves: the "why" travels with the code.
+// Every commit in an attempt carries the claim it serves: the "why" travels with the code.
 function installTrailerHook(dir, claim) {
   const hook = join(dir, ".git", "hooks", "commit-msg");
   writeFileSync(

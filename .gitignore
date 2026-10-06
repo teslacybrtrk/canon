@@ -2,4 +2,4 @@ node_modules/
 .wrangler/
 worker-configuration.d.ts
 runs/
-worlds/
+attempts/

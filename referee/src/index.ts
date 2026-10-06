@@ -7,7 +7,7 @@ import { refereeForProject } from "./stub";
 
 export { CiSandbox };
 export { Referee } from "./referee";
-export { VerifyWorld, PromoteWorld } from "./pipelines";
+export { VerifyAttempt, PromoteAttempt } from "./pipelines";
 
 // The Canon HTTP surface. Reads are public. Writes need a bearer key: the owner's key (CANON_KEY)
 // can do anything, an agent's key (CANON_AGENT_KEY) can only declare. Running a fact's check
@@ -16,14 +16,14 @@ export { VerifyWorld, PromoteWorld } from "./pipelines";
 //   GET  /p/:project/canon                    move 1: read
 //   POST /p/:project/claims                   move 2: declare  (fork + token)        agent or owner key
 //        git push <remote> main               move 3: push     (plain Git)
-//   GET  /p/:project/worlds/:id/verdict       move 4: verdict
+//   GET  /p/:project/attempts/:id/verdict       move 4: verdict
 //   POST /p/:project/claims/:id/accept        review: a human accepts a fact          owner key
 //   GET  /p/:project/facts/:id/why            the fact chain
 //   POST /p/:project/facts/:id/check          run a fact's check against production now
 //   GET  /p/:project/ws                       live board
 //   GET  /p/:project/previews                 Preview names used (for reset)
 //   POST /p/:project/mcp                      the moves as MCP tools, for any MCP agent        agent or owner key
-//   git clone https://canon.rodeo/canon.git   Canon's own source, read-only (also /w/<world>.git, /src)
+//   git clone https://canon.rodeo/canon.git   Canon's own source, read-only (also /a/<attempt>.git, /src)
 //   POST /p/:project/genesis                  one-time setup (empty repo, or {"importUrl": "<git url>"})   owner key
 export default {
   async fetch(request, env) {
@@ -55,7 +55,7 @@ export default {
         return json(await referee.genesis(project, body.importUrl), 201);
       }
       if (route === "POST /claims") return json(await referee.declare(await request.json<DeclareRequest>()), 201);
-      if ((match = route.match(/^GET \/worlds\/([\w-]+)\/verdict$/))) {
+      if ((match = route.match(/^GET \/attempts\/([\w-]+)\/verdict$/))) {
         const verdict = await referee.verdict(match[1]);
         return verdict ? json(verdict) : json({ outcome: "pending" }, 202);
       }

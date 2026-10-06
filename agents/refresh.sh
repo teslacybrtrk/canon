@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# After a fact is accepted, tell agents whose worlds are now behind canon to refresh them.
+# After a fact is accepted, tell agents whose attempts are now behind canon to refresh them.
 #   CANON_URL=https://canon.rodeo ./agents/refresh.sh agent-3 agent-4 agent-5
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -11,10 +11,10 @@ export CANON_PROJECT="${CANON_PROJECT:-farmstand}"
 export PATH="$PWD/cli:$PATH"
 ROOT="$PWD"
 TOOLS=(Read Edit Write Glob Grep "Bash(canon:*)" "Bash(git:*)" "Bash(npm:*)" "Bash(npx:*)" "Bash(node:*)" "Bash(cd:*)" "Bash(ls:*)" "Bash(cat:*)" "Bash(pwd)" "Bash(sleep:*)")
-PROMPT="Canon has moved since you finished: another fact was accepted. Your world in ./worlds is now behind canon.
-cd into your world, run \`canon refresh\`, then cd into the new world it prints, resolve any conflict,
+PROMPT="Canon has moved since you finished: another fact was accepted. Your attempt in ./attempts is now behind canon.
+cd into your attempt, run \`canon refresh\`, then cd into the new attempt it prints, resolve any conflict,
 push, and run \`canon verdict --wait\`. When resolving conflicts, keep both canon's code and your own change
-working together. Before pushing, run \`npm ci\`, then \`npx tsc --noEmit -p tsconfig.json\` and \`npx biome lint src\` in the world
+working together. Before pushing, run \`npm ci\`, then \`npx tsc --noEmit -p tsconfig.json\` and \`npx biome lint src\` in the attempt
 and fix what they report. Refresh at most once: push, read the verdict once, and stop. If it contradicts canon,
 report the contradiction in one line."
 

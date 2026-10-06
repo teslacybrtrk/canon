@@ -7,7 +7,7 @@ export const UPGRADES = [
   `ALTER TABLE facts ADD COLUMN origin TEXT NOT NULL DEFAULT 'agent'`,
   `ALTER TABLE facts ADD COLUMN retired_by TEXT`,
   `ALTER TABLE facts ADD COLUMN retired_at INTEGER`,
-  `ALTER TABLE worlds ADD COLUMN base_sha TEXT`,
+  `ALTER TABLE attempts ADD COLUMN base_sha TEXT`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];
@@ -24,21 +24,21 @@ CREATE TABLE IF NOT EXISTS facts (
   check_json   TEXT NOT NULL,
   status       TEXT NOT NULL,          -- canon | proposed | retired
   proposed_by  TEXT,                   -- claim id
-  made_true_by TEXT,                   -- world id
+  made_true_by TEXT,                   -- attempt id
   created_at   INTEGER NOT NULL,
   accepted_at  INTEGER,
-  scope_json   TEXT,                   -- globs; NULL = applies to every world
+  scope_json   TEXT,                   -- globs; NULL = applies to every attempt
   replaces     TEXT,                   -- a revision: the canon fact this one retires
   origin       TEXT NOT NULL DEFAULT 'agent', -- seed | agent | backlog
-  retired_by   TEXT,                   -- world whose acceptance retired it
+  retired_by   TEXT,                   -- attempt whose acceptance retired it
   retired_at   INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS worlds (
+CREATE TABLE IF NOT EXISTS attempts (
   id          TEXT PRIMARY KEY,        -- Artifacts repo name == Preview name
   claim_id    TEXT,                    -- NULL for genesis
   remote      TEXT NOT NULL,
-  base_world  TEXT,
+  base_attempt  TEXT,
   base_sha    TEXT,                    -- canon commit it was forked from (for changed-file scopes)
   head_sha    TEXT,
   preview_url TEXT,
@@ -51,34 +51,34 @@ CREATE TABLE IF NOT EXISTS claims (
   agent      TEXT NOT NULL,
   fact_id    TEXT NOT NULL REFERENCES facts(id),
   why        TEXT NOT NULL,
-  world_id   TEXT NOT NULL REFERENCES worlds(id),
+  attempt_id   TEXT NOT NULL REFERENCES attempts(id),
   status     TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
 
--- The fact chain: every time a fact was checked against a world.
+-- The fact chain: every time a fact was checked against an attempt.
 CREATE TABLE IF NOT EXISTS results (
-  world_id TEXT NOT NULL,
+  attempt_id TEXT NOT NULL,
   sha      TEXT NOT NULL,
   fact_id  TEXT NOT NULL,
   held     INTEGER NOT NULL,
   detail   TEXT NOT NULL,
   at       INTEGER NOT NULL,
-  PRIMARY KEY (world_id, sha, fact_id)
+  PRIMARY KEY (attempt_id, sha, fact_id)
 );
 
 CREATE TABLE IF NOT EXISTS verdicts (
-  world_id TEXT NOT NULL,
+  attempt_id TEXT NOT NULL,
   sha      TEXT NOT NULL,
   json     TEXT NOT NULL,
   at       INTEGER NOT NULL,
-  PRIMARY KEY (world_id, sha)
+  PRIMARY KEY (attempt_id, sha)
 );
 
 -- Canon pointer history. The highest seq is current. Promotion appends a row.
 CREATE TABLE IF NOT EXISTS canon (
   seq           INTEGER PRIMARY KEY AUTOINCREMENT,
-  world_id      TEXT NOT NULL,
+  attempt_id      TEXT NOT NULL,
   sha           TEXT NOT NULL,
   accepted_fact TEXT,
   deployed      INTEGER NOT NULL DEFAULT 0,

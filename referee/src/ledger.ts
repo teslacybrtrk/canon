@@ -3,8 +3,8 @@ import type { CanonFile, Fact, FactDef, Ledger } from "./protocol";
 type Known = Pick<Fact, "id" | "sentence" | "check"> & { scope?: string[] | null; replaces?: string | null };
 
 /**
- * A world's canon.json must be canon plus its claimed fact, unchanged. Facts accepted
- * after the world forked may be missing, and facts retired after it forked may linger
+ * An attempt's canon.json must be canon plus its claimed fact, unchanged. Facts accepted
+ * after the attempt forked may be missing, and facts retired after it forked may linger
  * (both: behind). A revision may drop the fact it replaces. Anything else is tampering.
  */
 export function compareLedger(
@@ -28,7 +28,7 @@ export function compareLedger(
         lingering.push(f.id);
         continue;
       }
-      return { status: "tampered", detail: `canon.json adds "${f.id}", which this world did not claim` };
+      return { status: "tampered", detail: `canon.json adds "${f.id}", which this attempt did not claim` };
     }
     if (!same(f, truth)) return { status: "tampered", detail: `canon.json changes the fact "${f.id}"` };
   }
@@ -41,7 +41,7 @@ export function compareLedger(
       missing.length ? `canon gained ${missing.map((f) => f.id).join(", ")}` : "",
       lingering.length ? `canon retired ${lingering.join(", ")}` : "",
     ].filter(Boolean);
-    return { status: "behind", detail: `${parts.join(" and ")} after this world forked; declare a fresh world` };
+    return { status: "behind", detail: `${parts.join(" and ")} after this attempt forked; declare a fresh attempt` };
   }
   return { status: "ok", detail: "ok" };
 }

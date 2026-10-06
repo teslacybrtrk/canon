@@ -15,10 +15,10 @@ type StepFailure = { message: string; transient: boolean };
  */
 export async function runCheck(check: ProbeCheck, origin: string, seed: string = crypto.randomUUID()): Promise<CheckResult> {
   const started = Date.now();
-  for (let attempt = 0; ; attempt++) {
+  for (let retry = 0; ; retry++) {
     const failure = await runSamples(check, origin, seed);
     if (!failure) return { held: true, detail: "ok", ms: Date.now() - started };
-    if (!failure.transient || attempt >= TRANSIENT_RETRIES) {
+    if (!failure.transient || retry >= TRANSIENT_RETRIES) {
       return { held: false, detail: failure.message, ms: Date.now() - started };
     }
     await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
@@ -105,7 +105,7 @@ async function runStep(
 
 // A latency budget: one warm-up request, then `repeat` timed requests; every one must meet the
 // status expectation and the p95 must fit the budget. Slowness is marked transient, so a one-off
-// network blip reruns the check, while a genuinely slow world fails every time.
+// network blip reruns the check, while a genuinely slow attempt fails every time.
 async function runRepeated(
   step: ProbeStep,
   origin: string,

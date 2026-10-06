@@ -6,14 +6,14 @@ import type { Env } from "./env";
 import { refereeForRepo } from "./stub";
 
 // Started by the cf.artifacts.repo.pushed trigger for every repo in the namespace.
-// Builds the pushed world as a Workers Preview, then hands it to the referee to judge.
-export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
+// Builds the pushed attempt as a Workers Preview, then hands it to the referee to judge.
+export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
     const { repo, sha, branch } = event.payload;
     if (branch !== "main") return;
     const referee = refereeForRepo(this.env, repo);
-    const worldId = await step.do("register push", () => referee.pushed(repo, sha));
-    if (!worldId) return;
+    const attemptId = await step.do("register push", () => referee.pushed(repo, sha));
+    if (!attemptId) return;
 
     // One Preview per pushed commit. Within a single Preview, Durable Objects always run the
     // latest push, so only a Preview of its own keeps a judged attempt exactly as it was.
@@ -21,18 +21,18 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
 
     // A command that exits non-zero is a verdict about the code. Anything else (container capacity,
     // RPC or Workflows trouble) is the platform: retry with growing waits, and never blame the code.
-    const withRetries = async <T>(label: string, run: (attempt: number) => Promise<T>): Promise<T> => {
-      for (let attempt = 0; ; attempt++) {
+    const withRetries = async <T>(label: string, run: (retry: number) => Promise<T>): Promise<T> => {
+      for (let retry = 0; ; retry++) {
         try {
-          return await run(attempt);
+          return await run(retry);
         } catch (err) {
-          if (exitedNonZero(err) || attempt >= PLATFORM_RETRIES) throw err;
-          await step.sleep(`${label}: platform retry ${attempt + 1}`, `${15 * 2 ** attempt} seconds`);
+          if (exitedNonZero(err) || retry >= PLATFORM_RETRIES) throw err;
+          await step.sleep(`${label}: platform retry ${retry + 1}`, `${15 * 2 ** retry} seconds`);
         }
       }
     };
     const once = { retries: { limit: 0, delay: 1_000 }, timeout: 10 * 60_000 } as const;
-    const named = (name: string, attempt: number) => (attempt ? `${name} (retry ${attempt})` : name);
+    const named = (name: string, retry: number) => (retry ? `${name} (retry ${retry})` : name);
 
     let previewUrl: string;
     let deps: CiRunnerResult;
@@ -58,9 +58,9 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
     }
 
     // Command facts (lint, types, tests, budgets) run on this commit's checkout in ONE container,
-    // from the installed snapshot. The commands come from canon, never from the world.
+    // from the installed snapshot. The commands come from canon, never from the attempt.
     const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
-    // A claimed command fact also runs on the commit the world forked from: if it passes there, it isn't new.
+    // A claimed command fact also runs on the commit the attempt forked from: if it passes there, it isn't new.
     const base: Novelty | null = await step.do("forked-from commit", async () => {
       const n = await referee.noveltyFor(repo, sha);
       return n ? { factId: n.factId, run: n.run, files: n.files.map((f) => ({ path: f.path, b64: f.b64 })) } : null;
@@ -87,8 +87,8 @@ export class VerifyWorld extends CIWorkflow<CloudflareArtifacts, Env> {
   }
 }
 
-// Started by the referee when a human accepts a fact. Deploys the accepted world to production.
-export class PromoteWorld extends CIWorkflow<CloudflareArtifacts, Env> {
+// Started by the referee when a human accepts a fact. Deploys the accepted attempt to production.
+export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
     const { repo } = event.payload;
     const seq = Number(event.instanceId.match(/^promote-(\d+)-/)?.[1] ?? 0);

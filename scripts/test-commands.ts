@@ -27,8 +27,8 @@ assert.equal(exitedNonZero(new Error("WorkflowInternalError: Attempt failed due 
 console.log("ok  exit-code failures are verdicts; 503s and Workflows errors are platform errors");
 assert.match(commandFailure("npx tsc", new Error("src/a.ts(4,2): error TS2322: nope")), /error TS2322/);
 
-// A claimed command fact also runs on the commit the world forked from, rebuilt from the world's checkout.
-// Here the world removed a TODO from src/index.ts, added src/new.ts and deleted src/old.ts.
+// A claimed command fact also runs on the commit the attempt forked from, rebuilt from the attempt's checkout.
+// Here the attempt removed a TODO from src/index.ts, added src/new.ts and deleted src/old.ts.
 const ws = mkdtempSync(join(tmpdir(), "canon-ws-"));
 mkdirSync(join(ws, "src"));
 mkdirSync(join(ws, "node_modules"));
@@ -48,7 +48,7 @@ let res = run("export const a = 1; // TODO\n");
 assert.deepEqual(res, { head: true, base: false });
 assert.equal(readFileSync(join(ws, "src/index.ts"), "utf8"), "export const a = 1;\n");
 assert.ok(existsSync(join(ws, "src/new.ts")) && !existsSync(join(ws, "src/old.ts")));
-console.log("ok  fails on the forked-from commit -> a new fact; the world's own checkout is untouched");
+console.log("ok  fails on the forked-from commit -> a new fact; the attempt's own checkout is untouched");
 res = run("export const a = 1;\n");
 assert.deepEqual(res, { head: true, base: true });
 console.log("ok  passes on the forked-from commit too -> not a new fact (added files gone, deleted ones back, node_modules shared)");

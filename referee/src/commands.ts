@@ -12,9 +12,9 @@ const outputOf = (err: unknown) => {
 export const PLATFORM_RETRIES = 3;
 
 /**
- * A proposed command fact must fail on the commit its world forked from, or it is not a new fact. CI rebuilds
- * that commit from the world's checkout: these are the files the world changed, as they were at the fork
- * (base64), or null where the world added the file.
+ * A proposed command fact must fail on the commit its attempt forked from, or it is not a new fact. CI rebuilds
+ * that commit from the attempt's checkout: these are the files the attempt changed, as they were at the fork
+ * (base64), or null where the attempt added the file.
  */
 export interface Novelty {
   factId: string;
@@ -36,7 +36,7 @@ export function commandScript(commands: Array<{ factId: string; run: string }>, 
   return `bash -c ${shellQuote(lines.join("\n"))}`;
 }
 
-// Copies the world's checkout (sharing its node_modules), puts every changed file back as it was at the fork,
+// Copies the attempt's checkout (sharing its node_modules), puts every changed file back as it was at the fork,
 // and runs the claimed fact's command there. Only its exit code is reported. If the copy fails, the command
 // fails too, so a broken rebuild never refuses a fact.
 function baseScript(base: Novelty, b64: (text: string) => string): string[] {
@@ -48,7 +48,7 @@ function baseScript(base: Novelty, b64: (text: string) => string): string[] {
   ];
 }
 
-/** Whether the claimed fact's command passed on the commit its world forked from (null: it did not report). */
+/** Whether the claimed fact's command passed on the commit its attempt forked from (null: it did not report). */
 export function heldOnBase(base: Novelty, stdout: string): boolean | null {
   const code = stdout.match(new RegExp(`::canon-base::${base.factId}::(\\d+)`))?.[1];
   return code === undefined ? null : code === "0";

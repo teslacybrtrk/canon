@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reset a project after a rehearsal: delete its world repos and their Previews, put
+# Reset a project after a rehearsal: delete its attempt repos and their Previews, put
 # production back to the local demo app, then bump REFEREE_EPOCH and redeploy the referee
 # so the board starts empty. Afterwards run scripts/genesis.sh again.
 #   ./scripts/reset-project.sh farmstand rodeo

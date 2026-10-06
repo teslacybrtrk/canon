@@ -1,8 +1,8 @@
 import type { Env } from "./env";
 
-// canon.rodeo serves Canon's own source from Artifacts, and every world, read-only:
+// canon.rodeo serves Canon's own source from Artifacts, and every attempt, read-only:
 //   git clone https://canon.rodeo/canon.git               Canon's source (namespace canon-src)
-//   git clone https://canon.rodeo/w/<world-id>.git        any world, including rejected ones
+//   git clone https://canon.rodeo/a/<attempt-id>.git        any attempt, including rejected ones
 //   https://canon.rodeo/src                               browse Canon's source
 // The Worker mints a short-lived read token per request; pushes are always refused.
 
@@ -12,12 +12,12 @@ const READ_TOKEN_TTL_S = 300;
 
 export async function serveGit(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
-  const m = url.pathname.match(/^\/(?:(canon)|w\/([\w.-]+))\.git(\/.*)$/);
+  const m = url.pathname.match(/^\/(?:(canon)|(?:a|w)\/([\w.-]+))\.git(\/.*)$/);
   if (!m) return null;
-  const [, isSource, world, rest] = m;
+  const [, isSource, attempt, rest] = m;
   if (isSource && env.SOURCE_PUBLIC !== "true") return new Response("not found\n", { status: 404 });
   if (rest.includes("git-receive-pack") || url.searchParams.get("service") === "git-receive-pack") {
-    return new Response("canon.rodeo is read-only: push to your own world's remote instead.\n", { status: 403 });
+    return new Response("canon.rodeo is read-only: push to your own attempt's remote instead.\n", { status: 403 });
   }
   if (!(rest === "/info/refs" || rest === "/git-upload-pack")) return new Response("not found\n", { status: 404 });
 
@@ -25,7 +25,7 @@ export async function serveGit(request: Request, env: Env): Promise<Response | n
   let remote: string;
   let token: string;
   try {
-    using repo = await ns.get(isSource ? SOURCE_REPO : world);
+    using repo = await ns.get(isSource ? SOURCE_REPO : attempt);
     remote = (await repo.info()).remote;
     token = (await repo.createToken("read", READ_TOKEN_TTL_S)).plaintext.split("?expires=")[0];
   } catch {
@@ -89,7 +89,7 @@ export async function serveSource(request: Request, env: Env): Promise<Response 
     : `<p>Canon's own source, served from Cloudflare Artifacts by Canon's referee Worker.
         Latest commit <code>${head.hash.slice(0, 8)}</code>: ${esc(head.message.split("\n")[0])}.</p>
        <pre><code>git clone https://canon.rodeo/canon.git</code></pre>
-       <p>Every world can be cloned the same way, including rejected ones: <code>git clone https://canon.rodeo/w/&lt;world-id&gt;.git</code>.
+       <p>Every attempt can be cloned the same way, including rejected ones: <code>git clone https://canon.rodeo/a/&lt;attempt-id&gt;.git</code>.
         Mirror: <a href="${GITHUB_MIRROR}">${GITHUB_MIRROR}</a>. License: MIT.</p>`;
   return page(path || "Canon source", `${intro}${crumbs(parts)}<ul class="tree">${rows}</ul>`);
 }

@@ -73,7 +73,7 @@
   .sun { position: absolute; left: 50%; bottom: -370px; width: 500px; height: 500px; margin-left: -250px; border-radius: 50%;
     background: radial-gradient(circle at 50% 40%, #fdc86d 0%, #fd8a2c 38%, #ed5616 64%, rgb(237 86 22 / 0) 71%);
     animation: rise 1.6s cubic-bezier(.2,.7,.1,1) both, breathe 9s ease-in-out 1.6s infinite; }
-  /* sky.js draws the sun (canon), the moon (the judge), worlds and stars on this canvas; the CSS sun is the no-script fallback. */
+  /* sky.js draws the sun (canon), the moon (the judge), attempts and stars on this canvas; the CSS sun is the no-script fallback. */
   .sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
   .hero.sky-live .sun { display: none; }
   .ridge { position: absolute; left: 0; bottom: -1px; display: block; width: 100%; height: 47px; color: var(--bg); }
@@ -347,7 +347,7 @@
       <dt>Fact</dt><dd>A plain sentence plus a check that can fail: requests to a live preview, or a command on the code. “A stall cannot be double-booked.”</dd>
       <dt>Canon</dt><dd>The facts production must keep, re-checked on production every hour, and the attempt that makes them true. This is what “main” means here.</dd>
       <dt>Claim</dt><dd>An agent saying which new fact it is trying to make true.</dd>
-      <dt>Attempt</dt><dd>An agent’s own fork of canon, with its own Git remote and a live preview for every commit. The API calls it a <i>world</i>.</dd>
+      <dt>Attempt</dt><dd>An agent’s own fork of canon, with its own Git remote and a live preview for every commit. The API calls it a <i>attempt</i>.</dd>
       <dt>Verdict</dt><dd>What the judge found: facts kept, facts broken, and whether the new fact holds.</dd>
       <dt>Revision</dt><dd>A fact that replaces an existing one. The only way a rule changes, and a person approves it.</dd>
       <dt>Judge</dt><dd>The service that runs every check and keeps the canon. It decides what is true; it never merges code.</dd>

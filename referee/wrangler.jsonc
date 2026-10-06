@@ -8,11 +8,10 @@
   "assets": { "directory": "./public", "binding": "ASSETS" },
 
   // The board, the API and (day 7) read-only Git clones live at https://canon.rodeo.
-  // workers_dev stays on as a fallback URL.
   "routes": [{ "pattern": "canon.rodeo", "custom_domain": true }],
-  "workers_dev": true,
+  "workers_dev": false,
 
-  // Every world is a repo in this namespace: "<project>-genesis", "<project>-<id>".
+  // Every attempt is a repo in this namespace: "<project>-genesis", "<project>-<id>".
   "artifacts": [
     { "binding": "ARTIFACTS", "namespace": "canon" },
     // Canon's own source, served read-only at canon.rodeo/canon.git and /src.
@@ -46,8 +45,8 @@
     ]
   },
   "workflows": [
-    { "name": "canon-verify", "binding": "CI_WORKFLOW", "class_name": "VerifyWorld" },
-    { "name": "canon-promote", "binding": "PROMOTE_WORKFLOW", "class_name": "PromoteWorld" }
+    { "name": "canon-verify", "binding": "CI_WORKFLOW", "class_name": "VerifyAttempt" },
+    { "name": "canon-promote", "binding": "PROMOTE_WORKFLOW", "class_name": "PromoteAttempt" }
   ],
   "r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "canon-ci-snapshots" }],
 
@@ -56,12 +55,13 @@
     // Bump to give every project a fresh referee (see scripts/reset-project.sh).
     // Flip to "true" on submission day to publish canon.rodeo/canon.git and /src.
     "SOURCE_PUBLIC": "true",
-    "REFEREE_EPOCH": "11",
+    "REFEREE_EPOCH": "14",
     "BACKUP_BUCKET_NAME": "canon-ci-snapshots",
     "CLOUDFLARE_ACCOUNT_ID": "2d9aba350caa70abf3ce6c910950ffd0",
-    // Preview URLs are "<preview-name>-<worker-name>.<your-subdomain>.workers.dev".
-    "PREVIEW_URL_TEMPLATE": "https://{name}-farmstand.philipemanuele.workers.dev",
-    "PRODUCTION_URL": "https://{project}.philipemanuele.workers.dev"
+    // Previews are "<preview-name>-<worker-name>.<subdomain>.workers.dev"; production for each project is its
+    // own Worker on a canon.rodeo custom domain (scripts/setup.sh writes workers.dev addresses for your own Canon).
+    "PREVIEW_URL_TEMPLATE": "https://{name}-farmstand.canon-rodeo.workers.dev",
+    "PRODUCTION_URL": "https://{project}.canon.rodeo"
   },
   // Secrets (wrangler secret put): CF_TOKEN, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
   // CANON_KEY (owner: genesis and accepting facts), CANON_AGENT_KEY (agents: claim, never accept)

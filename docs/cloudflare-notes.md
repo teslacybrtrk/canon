@@ -11,7 +11,7 @@ Found while building, Oct 4–13, 2026.
    Inside one Preview, a request to an older deployment's URL runs that deployment's fetch handler, but its
    Durable Objects run the Preview's latest code. A judged attempt therefore stops being reproducible as soon
    as the agent pushes again.
-   *We did:* one Preview per pushed commit (`<world>-<sha7>`).
+   *We did:* one Preview per pushed commit (`<attempt>-<sha7>`).
    *Would help:* deployment URLs that pin Durable Object code too, or a documented note on this behaviour.
 
 2. **Forks do not get Previews from Workers Builds.**
@@ -25,7 +25,7 @@ Found while building, Oct 4–13, 2026.
    Every clone needs a token, so an open-source project cannot be cloned or browsed from Artifacts alone.
    *We did:* a Worker that proxies Git smart-HTTP (`info/refs`, `git-upload-pack`) with a 5-minute read token
    minted per request and refuses `git-receive-pack`: `git clone https://canon.rodeo/canon.git` works with no
-   token, and every world clones the same way. About 40 lines.
+   token, and every attempt clones the same way. About 40 lines.
    *Would help:* a per-repo public-read flag (clone and browse without a token, never push).
 
 4. **Importing a repo emits no `pushed` event.**
@@ -70,7 +70,7 @@ Found while building, Oct 4–13, 2026.
 
 13. **Previews are capped per Worker and the oldest are deleted without notice** (100 Free, 500 Paid). With a
     Preview per pushed commit, a few busy agent runs reach the cap, and a judged attempt's Preview can disappear.
-    *We did:* keep every world in Artifacts so its Preview can be rebuilt from the commit, and delete Previews on reset.
+    *We did:* keep every attempt in Artifacts so its Preview can be rebuilt from the commit, and delete Previews on reset.
     *Would help:* an event or warning before eviction, or a way to pin Previews that matter.
 
 14. **Redeploying a Worker kills its running Containers sessions.** A deploy of the judge's Worker (which also hosts the CI
@@ -83,7 +83,7 @@ Found while building, Oct 4–13, 2026.
 
 - `fork()` returns in about a second, and a fork's `source` field records lineage (`artifacts:canon/<parent>`),
   which is effectively a fork tree for free.
-- Repo-scoped tokens with revocation made "agents can only write their own world" and "accepted worlds are
+- Repo-scoped tokens with revocation made "agents can only write their own attempt" and "accepted attempts are
   frozen" a few lines each.
 - `readFile({ ref: <sha>, path })` from a Worker let the judge read `canon.json` at the exact judged commit.
 - Docker Hub images in `containers` meant deploying the CI sandbox needed no local Docker.

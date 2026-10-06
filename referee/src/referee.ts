@@ -20,12 +20,12 @@ import {
   type FactOrigin,
   type Ledger,
   type Verdict,
-  type World,
+  type Attempt,
 } from "./protocol";
 import { SCHEMA, UPGRADES } from "./schema";
 import { diffTrees, inScope } from "./scope";
 
-const WORLD_TOKEN_TTL_S = 4 * 60 * 60;
+const ATTEMPT_TOKEN_TTL_S = 4 * 60 * 60;
 const PREVIEW_READY_TIMEOUT_MS = 45_000;
 const LIVE: ClaimStatus[] = ["checking", "contradicts", "unproven", "behind", "ready", "error"];
 
@@ -59,7 +59,7 @@ export class Referee extends DurableObject<Env> {
   // ---- Setup ---------------------------------------------------------------------
 
   /**
-   * Creates the genesis world. Either push a repo containing canon.json to the returned
+   * Creates the genesis attempt. Either push a repo containing canon.json to the returned
    * remote, or pass `importUrl` to start from an existing Git repo (e.g. on GitHub).
    * Genesis becomes canon once its preview satisfies every fact in its own canon.json.
    */
@@ -71,18 +71,18 @@ export class Referee extends DurableObject<Env> {
       ? await this.env.ARTIFACTS.import({ source: { url: importUrl }, target: { name: id, opts: { description: `Canon genesis for ${project}` } } })
       : await this.env.ARTIFACTS.create(id, { description: `Canon genesis for ${project}` });
     this.setMeta("project", project);
-    this.sql.exec(`INSERT INTO worlds (id, claim_id, remote, created_at) VALUES (?, NULL, ?, ?)`, id, created.remote, Date.now());
+    this.sql.exec(`INSERT INTO attempts (id, claim_id, remote, created_at) VALUES (?, NULL, ?, ?)`, id, created.remote, Date.now());
     if (importUrl) {
       // An import emits no push event, so start the same verify pipeline directly.
       using repo = await this.env.ARTIFACTS.get(id);
       const [head] = await repo.log({ limit: 1 });
       if (head) {
-        this.sql.exec(`UPDATE worlds SET head_sha = ? WHERE id = ?`, head.hash, id);
+        this.sql.exec(`UPDATE attempts SET head_sha = ? WHERE id = ?`, head.hash, id);
         await this.env.CI_WORKFLOW.create({ id: `genesis-${head.hash.slice(0, 12)}`, params: this.ciParams(id, head.hash) });
       }
     }
     this.broadcast();
-    return { worldId: id, remote: created.remote, token: created.token };
+    return { attemptId: id, remote: created.remote, token: created.token };
   }
 
   // ---- Move 1: read ----------------------------------------------------------------
@@ -93,11 +93,11 @@ export class Referee extends DurableObject<Env> {
     const sentences = new Map(facts.map((f) => [f.id, f.sentence]));
     const claims = this.rows(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 200`).map((r) => {
       const claim = toClaim(r);
-      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict: this.latestVerdict(claim.worldId) };
+      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict: this.latestVerdict(claim.attemptId) };
     });
     return {
       project: this.meta("project") ?? "",
-      canon: canon && { worldId: canon.world_id as string, sha: canon.sha as string, seq: canon.seq as number, previewUrl: this.world(canon.world_id as string)?.previewUrl ?? null },
+      canon: canon && { attemptId: canon.attempt_id as string, sha: canon.sha as string, seq: canon.seq as number, previewUrl: this.attempt(canon.attempt_id as string)?.previewUrl ?? null },
       facts,
       claims,
       policy: { autoAccept: this.autoAccept() },
@@ -110,7 +110,7 @@ export class Referee extends DurableObject<Env> {
   async declare(req: DeclareRequest): Promise<Declared> {
     const project = this.requireProject();
     const canon = this.currentCanon();
-    if (!canon) throw new ProtocolError(409, "no canon yet: genesis world has not passed its seed facts");
+    if (!canon) throw new ProtocolError(409, "no canon yet: genesis attempt has not passed its seed facts");
     if (!req.agent || !req.why) throw new ProtocolError(400, "agent and why are required");
 
     let factId: string;
@@ -130,8 +130,8 @@ export class Referee extends DurableObject<Env> {
         if (!old || old.status !== "canon") throw new ProtocolError(404, `a revision must replace a canon fact; "${def.replaces}" is not one`);
       }
       // A fact canon already satisfies is not new, and a check that cannot fail is not a fact.
-      // (Command checks need CI: each push also runs them on the commit the world forked from.)
-      const canonPreview = this.world(canon.world_id as string)?.previewUrl;
+      // (Command checks need CI: each push also runs them on the commit the attempt forked from.)
+      const canonPreview = this.attempt(canon.attempt_id as string)?.previewUrl;
       if (canonPreview && def.check.kind === "probe") {
         const onCanon = await runCheck(def.check, canonPreview, `${canon.sha}:${def.id}`);
         if (onCanon.held) throw new ProtocolError(422, `"${def.sentence}" already holds on canon; it cannot fail, so it is not a new fact`);
@@ -141,51 +141,51 @@ export class Referee extends DurableObject<Env> {
     }
 
     const claimId = `c-${shortId()}`;
-    const worldId = `${project}-${shortId()}`;
-    const { remote, token, expiresAt } = await this.forkWorld(canon.world_id as string, worldId, `${req.agent}: ${factId}`);
+    const attemptId = `${project}-${shortId()}`;
+    const { remote, token, expiresAt } = await this.forkAttempt(canon.attempt_id as string, attemptId, `${req.agent}: ${factId}`);
     const now = Date.now();
     this.sql.exec(
-      `INSERT INTO worlds (id, claim_id, remote, base_world, base_sha, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      worldId, claimId, remote, canon.world_id, canon.sha, now,
+      `INSERT INTO attempts (id, claim_id, remote, base_attempt, base_sha, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      attemptId, claimId, remote, canon.attempt_id, canon.sha, now,
     );
     this.sql.exec(
-      `INSERT INTO claims (id, agent, fact_id, why, world_id, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)`,
-      claimId, req.agent, factId, req.why, worldId, now,
+      `INSERT INTO claims (id, agent, fact_id, why, attempt_id, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)`,
+      claimId, req.agent, factId, req.why, attemptId, now,
     );
     if (!("join" in req)) this.sql.exec(`UPDATE facts SET proposed_by = ? WHERE id = ?`, claimId, factId);
     const replaced = req.replaces ? this.claim(req.replaces) : null;
     if (replaced && replaced.factId === factId && LIVE.includes(replaced.status)) this.setClaimStatus(replaced.id, "superseded");
     this.broadcast();
-    return { claim: this.claim(claimId)!, world: { id: worldId, remote, token, expiresAt, branch: "main" } };
+    return { claim: this.claim(claimId)!, attempt: { id: attemptId, remote, token, expiresAt, branch: "main" } };
   }
 
   // ---- Move 3: push (heard from the Artifacts push event) ----------------------------
 
-  /** Records a push. Returns the world id if this repo is a Canon world that still accepts pushes. */
+  /** Records a push. Returns the attempt id if this repo is a Canon attempt that still accepts pushes. */
   pushed(repo: string, sha: string): string | null {
-    const world = this.world(repo);
-    if (!world || (world.frozen && world.claimId)) return null;
-    this.sql.exec(`UPDATE worlds SET head_sha = ? WHERE id = ?`, sha, repo);
-    if (world.claimId) this.setClaimStatus(world.claimId, "checking");
+    const attempt = this.attempt(repo);
+    if (!attempt || (attempt.frozen && attempt.claimId)) return null;
+    this.sql.exec(`UPDATE attempts SET head_sha = ? WHERE id = ?`, sha, repo);
+    if (attempt.claimId) this.setClaimStatus(attempt.claimId, "checking");
     this.broadcast();
     return repo;
   }
 
   /**
-   * A proposed command fact must fail on the commit its world forked from, or it is not a new fact. CI rebuilds
-   * that commit from the world's checkout with these files: each one the world changed, as it was at the fork.
+   * A proposed command fact must fail on the commit its attempt forked from, or it is not a new fact. CI rebuilds
+   * that commit from the attempt's checkout with these files: each one the attempt changed, as it was at the fork.
    */
   async noveltyFor(repo: string, sha: string): Promise<Novelty | null> {
-    const world = this.world(repo);
-    const fact = world?.claimId ? this.fact(this.claim(world.claimId)?.factId ?? "") : null;
-    if (!world?.baseSha || fact?.status !== "proposed" || fact.check.kind !== "command") return null;
-    const changed = await this.changedPaths(world, sha);
+    const attempt = this.attempt(repo);
+    const fact = attempt?.claimId ? this.fact(this.claim(attempt.claimId)?.factId ?? "") : null;
+    if (!attempt?.baseSha || fact?.status !== "proposed" || fact.check.kind !== "command") return null;
+    const changed = await this.changedPaths(attempt, sha);
     if (!changed) return null;
-    using artifacts = await this.env.ARTIFACTS.get(world.id);
+    using artifacts = await this.env.ARTIFACTS.get(attempt.id);
     const files: Novelty["files"] = [];
     let size = 0;
     for (const path of changed) {
-      const blob = await artifacts.readFile({ ref: world.baseSha, path });
+      const blob = await artifacts.readFile({ ref: attempt.baseSha, path });
       const b64 = blob ? base64(new Uint8Array(await blob.arrayBuffer())) : null;
       size += b64?.length ?? 0;
       if (size > NOVELTY_MAX_B64) return null;
@@ -195,17 +195,17 @@ export class Referee extends DurableObject<Env> {
   }
 
   /**
-   * The canon.json a new world must commit: canon's own file at the fork, plus the claimed fact (a revision drops
+   * The canon.json a new attempt must commit: canon's own file at the fork, plus the claimed fact (a revision drops
    * the fact it replaces; a backlog fact moves into the facts). This is what `canon claim` writes; MCP agents get it whole.
    */
-  async worldLedger(worldId: string): Promise<string> {
-    const world = this.world(worldId);
-    const claim = world?.claimId ? this.claim(world.claimId) : null;
+  async attemptLedger(attemptId: string): Promise<string> {
+    const attempt = this.attempt(attemptId);
+    const claim = attempt?.claimId ? this.claim(attempt.claimId) : null;
     const fact = claim ? this.fact(claim.factId) : null;
-    if (!world?.baseSha || !fact) throw new ProtocolError(404, `no claimed world "${worldId}"`);
-    using repo = await this.env.ARTIFACTS.get(worldId);
-    const blob = await repo.readFile({ ref: world.baseSha, path: "canon.json" });
-    if (!blob) throw new ProtocolError(404, "the world has no canon.json");
+    if (!attempt?.baseSha || !fact) throw new ProtocolError(404, `no claimed attempt "${attemptId}"`);
+    using repo = await this.env.ARTIFACTS.get(attemptId);
+    const blob = await repo.readFile({ ref: attempt.baseSha, path: "canon.json" });
+    if (!blob) throw new ProtocolError(404, "the attempt has no canon.json");
     const ledger = JSON.parse(await blob.text()) as CanonFile;
     const def: FactDef = { id: fact.id, sentence: fact.sentence, check: fact.check };
     if (fact.scope?.length) def.scope = fact.scope;
@@ -219,16 +219,16 @@ export class Referee extends DurableObject<Env> {
 
   /** Command facts the CI pipeline must run for this commit (lint, types, tests...), already filtered by scope. */
   async commandsFor(repo: string, sha: string): Promise<Array<{ factId: string; run: string }>> {
-    const world = this.world(repo);
-    if (!world) return [];
+    const attempt = this.attempt(repo);
+    if (!attempt) return [];
     // Before the first canon exists, genesis's own canon.json defines the facts.
-    if (!world.claimId && !this.currentCanon()) {
+    if (!attempt.claimId && !this.currentCanon()) {
       const file = await this.readCanonFile(repo, sha);
       if (!file.ok) return [];
       return [...file.facts, ...(file.backlog ?? [])].flatMap((f) => (f.check.kind === "command" ? [{ factId: f.id, run: f.check.run }] : []));
     }
-    const claimedId = world.claimId ? this.claim(world.claimId)?.factId : undefined;
-    const changed = await this.changedPaths(world, sha);
+    const claimedId = attempt.claimId ? this.claim(attempt.claimId)?.factId : undefined;
+    const changed = await this.changedPaths(attempt, sha);
     return this.rows(`SELECT * FROM facts WHERE status IN ('canon', 'proposed')`)
       .map(toFact)
       .filter((f) => f.check.kind === "command" && (f.id === claimedId || inScope(f.scope, changed)))
@@ -238,22 +238,22 @@ export class Referee extends DurableObject<Env> {
   // ---- Move 4: verdict --------------------------------------------------------------
 
   /**
-   * Judges a world at a commit against canon. `commands` are the results of the command facts
+   * Judges an attempt at a commit against canon. `commands` are the results of the command facts
    * the CI pipeline ran. Throws while the preview is not serving yet (the Workflow step retries).
    */
   async judge(repo: string, sha: string, previewUrl: string, commands: Record<string, CheckResult> = {}, notNew?: string): Promise<Verdict | null> {
-    const world = this.world(repo);
-    if (!world) return null;
-    // A claimed command fact that already passed on the commit its world forked from cannot fail: it is not new.
+    const attempt = this.attempt(repo);
+    if (!attempt) return null;
+    // A claimed command fact that already passed on the commit its attempt forked from cannot fail: it is not new.
     if (notNew && commands[notNew]?.held) {
-      commands = { ...commands, [notNew]: { held: false, detail: "it already passes on the commit this world forked from, so it can't fail: not a new fact", ms: 0 } };
+      commands = { ...commands, [notNew]: { held: false, detail: "it already passes on the commit this attempt forked from, so it can't fail: not a new fact", ms: 0 } };
     }
-    if (world.headSha && world.headSha !== sha) return null; // a newer push will be judged instead
-    this.sql.exec(`UPDATE worlds SET preview_url = ?, head_sha = ? WHERE id = ?`, previewUrl, sha, repo);
+    if (attempt.headSha && attempt.headSha !== sha) return null; // a newer push will be judged instead
+    this.sql.exec(`UPDATE attempts SET preview_url = ?, head_sha = ? WHERE id = ?`, previewUrl, sha, repo);
     await waitForPreview(previewUrl);
 
     // Before the first canon exists, genesis's own canon.json defines the facts, the backlog and the policy.
-    const isGenesis = !world.claimId && !this.currentCanon();
+    const isGenesis = !attempt.claimId && !this.currentCanon();
     if (isGenesis) {
       const file = await this.readCanonFile(repo, sha);
       this.sql.exec(`DELETE FROM facts`);
@@ -262,41 +262,41 @@ export class Referee extends DurableObject<Env> {
       for (const f of file.ok ? (file.backlog ?? []) : []) this.insertFact(f, "proposed", "backlog", now);
       this.setMeta("autoAccept", file.ok && file.policy?.autoAccept === "backlog" ? "backlog" : "off");
     }
-    const verdict = await this.evaluate(this.world(repo)!, sha, previewUrl, undefined, commands);
+    const verdict = await this.evaluate(this.attempt(repo)!, sha, previewUrl, undefined, commands);
 
     // Genesis becomes the first canon only if it declares facts and satisfies all of them.
     if (isGenesis && verdict.outcome === "ready" && verdict.kept.length > 0) {
-      this.sql.exec(`INSERT INTO canon (world_id, sha, at) VALUES (?, ?, ?)`, repo, sha, Date.now());
-      this.sql.exec(`UPDATE worlds SET frozen = 1 WHERE id = ?`, repo);
+      this.sql.exec(`INSERT INTO canon (attempt_id, sha, at) VALUES (?, ?, ?)`, repo, sha, Date.now());
+      this.sql.exec(`UPDATE attempts SET frozen = 1 WHERE id = ?`, repo);
       await this.revokeWriteTokens(repo);
       await this.scheduleProductionCheck(20_000);
     }
     this.broadcast();
-    await this.autopilot(world.claimId, verdict);
+    await this.autopilot(attempt.claimId, verdict);
     return verdict;
   }
 
-  /** A world that does not build breaks every fact. */
+  /** An attempt that does not build breaks every fact. */
   async buildFailed(repo: string, sha: string, detail: string): Promise<void> {
-    const world = this.world(repo);
-    if (!world || (world.headSha && world.headSha !== sha)) return;
-    await this.evaluate(world, sha, "", { held: false, detail: `build failed: ${detail.slice(0, 300)}`, ms: 0 });
+    const attempt = this.attempt(repo);
+    if (!attempt || (attempt.headSha && attempt.headSha !== sha)) return;
+    await this.evaluate(attempt, sha, "", { held: false, detail: `build failed: ${detail.slice(0, 300)}`, ms: 0 });
     this.broadcast();
   }
 
   /** The platform failed (container capacity, RPC, Workflows), not the code: say so, and let the agent push again. */
   couldNotJudge(repo: string, sha: string, detail: string): void {
-    const world = this.world(repo);
-    if (!world || (world.headSha && world.headSha !== sha)) return;
+    const attempt = this.attempt(repo);
+    if (!attempt || (attempt.headSha && attempt.headSha !== sha)) return;
     const message = `could not be judged (platform error, not your code): ${detail.replace(/\s+/g, " ").slice(0, 200)}. Push again.`;
     const verdict: Verdict = {
-      worldId: repo, sha, previewUrl: "", canonSeq: (this.currentCanon()?.seq as number | undefined) ?? 0, outcome: "error",
+      attemptId: repo, sha, previewUrl: "", canonSeq: (this.currentCanon()?.seq as number | undefined) ?? 0, outcome: "error",
       stale: [], kept: [], lost: [], retires: [], skipped: [], offers: [],
-      claimed: { factId: world.claimId ? (this.claim(world.claimId)?.factId ?? "") : "", held: false, detail: message },
+      claimed: { factId: attempt.claimId ? (this.claim(attempt.claimId)?.factId ?? "") : "", held: false, detail: message },
       ledger: { status: "ok", detail: "not read" }, judgedAt: Date.now(),
     };
-    this.sql.exec(`INSERT OR REPLACE INTO verdicts (world_id, sha, json, at) VALUES (?, ?, ?, ?)`, repo, sha, JSON.stringify(verdict), verdict.judgedAt);
-    if (world.claimId) this.setClaimStatus(world.claimId, "error");
+    this.sql.exec(`INSERT OR REPLACE INTO verdicts (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, repo, sha, JSON.stringify(verdict), verdict.judgedAt);
+    if (attempt.claimId) this.setClaimStatus(attempt.claimId, "error");
     this.broadcast();
   }
 
@@ -307,13 +307,13 @@ export class Referee extends DurableObject<Env> {
     return urls.filter((u) => u.startsWith(head) && u.endsWith(tail)).map((u) => u.slice(head.length, u.length - tail.length));
   }
 
-  verdict(worldId: string): Verdict | null {
-    return this.latestVerdict(worldId);
+  verdict(attemptId: string): Verdict | null {
+    return this.latestVerdict(attemptId);
   }
 
   // ---- Review and promotion ---------------------------------------------------------
 
-  /** A person (or the autopilot policy) accepts a change in the facts. The world comes along as evidence and becomes canon. */
+  /** A person (or the autopilot policy) accepts a change in the facts. The attempt comes along as evidence and becomes canon. */
   async accept(claimId: string) {
     const claim = this.claim(claimId);
     if (!claim) throw new ProtocolError(404, "no such claim");
@@ -321,29 +321,29 @@ export class Referee extends DurableObject<Env> {
     if (this.fact(claim.factId)?.status !== "proposed") {
       this.setClaimStatus(claim.id, "superseded");
       this.broadcast();
-      throw new ProtocolError(409, `"${claim.factId}" is no longer proposed; another world already settled it`);
+      throw new ProtocolError(409, `"${claim.factId}" is no longer proposed; another attempt already settled it`);
     }
-    const world = this.world(claim.worldId)!;
-    const verdict = this.latestVerdict(world.id);
+    const attempt = this.attempt(claim.attemptId)!;
+    const verdict = this.latestVerdict(attempt.id);
     const canon = this.currentCanon()!;
-    if (!verdict || verdict.sha !== world.headSha) throw new ProtocolError(409, "the world moved since its verdict; wait for the new one");
+    if (!verdict || verdict.sha !== attempt.headSha) throw new ProtocolError(409, "the attempt moved since its verdict; wait for the new one");
     if (verdict.canonSeq !== canon.seq) {
-      await this.evaluate(world, verdict.sha, verdict.previewUrl);
+      await this.evaluate(attempt, verdict.sha, verdict.previewUrl);
       this.broadcast();
       throw new ProtocolError(409, "canon moved since this verdict; re-judged, check the board");
     }
 
-    // Freeze first: an accepted world can no longer change under the canon pointer.
-    await this.revokeWriteTokens(world.id);
+    // Freeze first: an accepted attempt can no longer change under the canon pointer.
+    await this.revokeWriteTokens(attempt.id);
     const now = Date.now();
     const fact = this.fact(claim.factId)!;
-    this.sql.exec(`UPDATE worlds SET frozen = 1 WHERE id = ?`, world.id);
-    this.sql.exec(`UPDATE facts SET status = 'canon', made_true_by = ?, accepted_at = ? WHERE id = ?`, world.id, now, fact.id);
+    this.sql.exec(`UPDATE attempts SET frozen = 1 WHERE id = ?`, attempt.id);
+    this.sql.exec(`UPDATE facts SET status = 'canon', made_true_by = ?, accepted_at = ? WHERE id = ?`, attempt.id, now, fact.id);
     // A revision retires the fact it replaces: the rule changed on purpose, and the history says who and why.
     if (fact.replaces) {
-      this.sql.exec(`UPDATE facts SET status = 'retired', retired_by = ?, retired_at = ? WHERE id = ? AND status = 'canon'`, world.id, now, fact.replaces);
+      this.sql.exec(`UPDATE facts SET status = 'retired', retired_by = ?, retired_at = ? WHERE id = ? AND status = 'canon'`, attempt.id, now, fact.replaces);
     }
-    this.sql.exec(`INSERT INTO canon (world_id, sha, accepted_fact, at) VALUES (?, ?, ?, ?)`, world.id, verdict.sha, fact.id, now);
+    this.sql.exec(`INSERT INTO canon (attempt_id, sha, accepted_fact, at) VALUES (?, ?, ?, ?)`, attempt.id, verdict.sha, fact.id, now);
     this.setClaimStatus(claim.id, "accepted");
     this.sql.exec(
       `UPDATE claims SET status = 'superseded' WHERE fact_id = ? AND id != ? AND status NOT IN ('accepted', 'superseded')`,
@@ -351,13 +351,13 @@ export class Referee extends DurableObject<Env> {
     );
 
     const seq = this.currentCanon()!.seq as number;
-    await this.env.PROMOTE_WORKFLOW.create({ id: `promote-${seq}-${verdict.sha.slice(0, 12)}`, params: this.ciParams(world.id, verdict.sha) });
-    // Every other live world is now judged against the new canon. A world built before the fact is behind;
-    // refreshed onto the new canon, a world that still loses it contradicts it: that is the conflict.
+    await this.env.PROMOTE_WORKFLOW.create({ id: `promote-${seq}-${verdict.sha.slice(0, 12)}`, params: this.ciParams(attempt.id, verdict.sha) });
+    // Every other live attempt is now judged against the new canon. An attempt built before the fact is behind;
+    // refreshed onto the new canon, an attempt that still loses it contradicts it: that is the conflict.
     this.setMeta("rejudge", "1");
     await this.ctx.storage.setAlarm(Date.now() + 1_000);
     this.broadcast();
-    return { canonSeq: seq, worldId: world.id, sha: verdict.sha };
+    return { canonSeq: seq, attemptId: attempt.id, sha: verdict.sha };
   }
 
   async promoted(seq: number, ok: boolean) {
@@ -367,20 +367,20 @@ export class Referee extends DurableObject<Env> {
     this.broadcast();
   }
 
-  // One alarm, two jobs: re-judging live worlds after canon moves, and checking canon's facts on production hourly.
+  // One alarm, two jobs: re-judging live attempts after canon moves, and checking canon's facts on production hourly.
   async alarm() {
     // An alarm set before the production check existed was a re-judge.
     if (this.meta("rejudge") === "1" || this.meta("prodCheckAt") === null) {
       this.setMeta("rejudge", "0");
       const live = this.rows(`SELECT * FROM claims WHERE status IN (${LIVE.map(() => "?").join(",")})`, ...LIVE).map(toClaim);
       for (const claim of live) {
-        const world = this.world(claim.worldId);
-        if (world?.headSha && world.previewUrl) await this.evaluate(world, world.headSha, world.previewUrl);
+        const attempt = this.attempt(claim.attemptId);
+        if (attempt?.headSha && attempt.previewUrl) await this.evaluate(attempt, attempt.headSha, attempt.previewUrl);
       }
     }
     const canon = this.currentCanon();
     if (canon && Date.now() >= Number(this.meta("prodCheckAt") ?? 0)) {
-      // While an accepted world is still deploying, production runs the old canon: wait for promoted().
+      // While an accepted attempt is still deploying, production runs the old canon: wait for promoted().
       const deploying = canon.accepted_fact !== null && canon.deployed === 0;
       if (!deploying) await this.checkCanonOnProduction();
       this.setMeta("prodCheckAt", String(Date.now() + (deploying ? 5 * 60_000 : PRODUCTION_CHECK_EVERY_MS)));
@@ -416,36 +416,36 @@ export class Referee extends DurableObject<Env> {
   why(factId: string) {
     const fact = this.fact(factId);
     if (!fact) throw new ProtocolError(404, "no such fact");
-    // A fact's history is the worlds that tried to make it true, plus the worlds that broke it
+    // A fact's history is the attempts that tried to make it true, plus the attempts that broke it
     // while it was canon. Each trial links the Preview of the exact commit judged, not the
-    // world's latest one, so a rejected attempt stays viewable as it was.
+    // attempt's latest one, so a rejected attempt stays viewable as it was.
     const canonSince = fact.acceptedAt ?? Number.MAX_SAFE_INTEGER;
     const canonUntil = fact.retiredAt ?? Number.MAX_SAFE_INTEGER;
     const trials = this.rows(
-      `SELECT r.world_id, r.sha, r.held, r.detail, r.at,
+      `SELECT r.attempt_id, r.sha, r.held, r.detail, r.at,
               COALESCE(NULLIF(json_extract(v.json, '$.previewUrl'), ''), w.preview_url) AS preview_url,
               c.agent, c.why, c.status, c.fact_id AS claimed_fact, w.created_at AS forked_at,
               f.replaces AS claim_replaces
          FROM results r
-         JOIN worlds w ON w.id = r.world_id
+         JOIN attempts w ON w.id = r.attempt_id
          LEFT JOIN claims c ON c.id = w.claim_id
          LEFT JOIN facts f ON f.id = c.fact_id
-         LEFT JOIN verdicts v ON v.world_id = r.world_id AND v.sha = r.sha
+         LEFT JOIN verdicts v ON v.attempt_id = r.attempt_id AND v.sha = r.sha
         WHERE r.fact_id = ? AND (c.fact_id = ? OR (r.at >= ? AND r.at <= ?))
         ORDER BY r.at DESC`,
       factId, factId, canonSince, canonUntil,
     );
-    // Each failed trial is an attempt (the world claimed this fact), a revision (the world replaces
+    // Each failed trial is an attempt (the attempt claimed this fact), a revision (the attempt replaces
     // it on purpose), a contradiction (forked after the fact was canon and still broke it), or behind
     // (built before the fact existed, so it simply lacks the code).
     const kindOf = (t: Row) =>
       t.claimed_fact === factId ? "attempt"
         : t.claim_replaces === factId ? "revision"
           : (t.forked_at as number) >= canonSince ? "contradiction" : "behind";
-    const claimFor = (worldId: string | null) => (worldId ? (this.rows(`SELECT * FROM claims WHERE world_id = ?`, worldId).map(toClaim)[0] ?? null) : null);
-    const madeTrueBy = fact.madeTrueBy ? { world: this.world(fact.madeTrueBy), claim: claimFor(fact.madeTrueBy) } : null;
+    const claimFor = (attemptId: string | null) => (attemptId ? (this.rows(`SELECT * FROM claims WHERE attempt_id = ?`, attemptId).map(toClaim)[0] ?? null) : null);
+    const madeTrueBy = fact.madeTrueBy ? { attempt: this.attempt(fact.madeTrueBy), claim: claimFor(fact.madeTrueBy) } : null;
     const replacement = this.rows(`SELECT * FROM facts WHERE replaces = ? AND status = 'canon'`, factId).map(toFact)[0] ?? null;
-    const retiredBy = fact.retiredBy ? { world: this.world(fact.retiredBy), claim: claimFor(fact.retiredBy), replacement } : null;
+    const retiredBy = fact.retiredBy ? { attempt: this.attempt(fact.retiredBy), claim: claimFor(fact.retiredBy), replacement } : null;
     // proposedBy holds the id of the claim that first proposed the fact.
     const proposer = fact.proposedBy ? (this.rows(`SELECT * FROM claims WHERE id = ?`, fact.proposedBy).map(toClaim)[0] ?? null) : null;
     return {
@@ -503,7 +503,7 @@ export class Referee extends DurableObject<Env> {
 
   // ---- Internals ---------------------------------------------------------------------
 
-  /** With autoAccept "backlog", the first world that keeps canon and makes a backlog fact true lands on its own. */
+  /** With autoAccept "backlog", the first attempt that keeps canon and makes a backlog fact true lands on its own. */
   private async autopilot(claimId: string | null, verdict: Verdict) {
     if (!claimId || verdict.outcome !== "ready" || this.autoAccept() !== "backlog") return;
     const claim = this.claim(claimId);
@@ -512,18 +512,18 @@ export class Referee extends DurableObject<Env> {
     try {
       await this.accept(claim.id);
     } catch {
-      // another world won the race, or canon moved: the re-judge decides what happens next
+      // another attempt won the race, or canon moved: the re-judge decides what happens next
     }
   }
 
-  private async evaluate(world: World, sha: string, previewUrl: string, forced?: CheckResult, commands?: Record<string, CheckResult>): Promise<Verdict> {
+  private async evaluate(attempt: Attempt, sha: string, previewUrl: string, forced?: CheckResult, commands?: Record<string, CheckResult>): Promise<Verdict> {
     const canonSeq = (this.currentCanon()?.seq as number | undefined) ?? 0;
     const facts = this.rows(`SELECT * FROM facts WHERE status IN ('canon', 'proposed')`).map(toFact);
-    const claim = world.claimId ? this.claim(world.claimId) : null;
+    const claim = attempt.claimId ? this.claim(attempt.claimId) : null;
     const claimedFact = claim ? this.fact(claim.factId) : null;
     // A revision may break the canon fact it replaces; that is the point of it.
     const retiring = claimedFact?.replaces && facts.some((f) => f.id === claimedFact.replaces && f.status === "canon") ? claimedFact.replaces : null;
-    const changed = forced ? null : await this.changedPaths(world, sha);
+    const changed = forced ? null : await this.changedPaths(attempt, sha);
 
     const results = new Map<string, CheckResult>();
     const skipped: string[] = [];
@@ -534,7 +534,7 @@ export class Referee extends DurableObject<Env> {
         // Random inputs are seeded by the commit and the fact: the same commit always gets the same inputs.
         if (f.check.kind === "probe") return results.set(f.id, await runCheck(f.check, previewUrl, `${sha}:${f.id}`));
         // Command facts ran in CI for this commit; a re-judge reuses that result (same commit, same answer).
-        const ran = commands?.[f.id] ?? this.storedResult(world.id, sha, f.id);
+        const ran = commands?.[f.id] ?? this.storedResult(attempt.id, sha, f.id);
         if (ran) results.set(f.id, ran);
         else skipped.push(f.id);
       }),
@@ -543,24 +543,24 @@ export class Referee extends DurableObject<Env> {
     const now = Date.now();
     for (const [factId, r] of results) {
       this.sql.exec(
-        `INSERT OR REPLACE INTO results (world_id, sha, fact_id, held, detail, at) VALUES (?, ?, ?, ?, ?, ?)`,
-        world.id, sha, factId, r.held ? 1 : 0, r.detail, now,
+        `INSERT OR REPLACE INTO results (attempt_id, sha, fact_id, held, detail, at) VALUES (?, ?, ?, ?, ?, ?)`,
+        attempt.id, sha, factId, r.held ? 1 : 0, r.detail, now,
       );
     }
     const canonFacts = facts.filter((f) => f.status === "canon");
     const judged = canonFacts.filter((f) => results.has(f.id) && f.id !== retiring);
     const failed = judged.filter((f) => !results.get(f.id)!.held).map((f) => ({ fact: f, detail: results.get(f.id)!.detail }));
-    // Breaking a fact that was canon when this world forked is a contradiction. Failing a fact
-    // accepted after the fork only means the world is behind: it predates that code. Whether its
+    // Breaking a fact that was canon when this attempt forked is a contradiction. Failing a fact
+    // accepted after the fork only means the attempt is behind: it predates that code. Whether its
     // own change truly conflicts shows once it is refreshed onto the current canon.
-    const lost = failed.filter((x) => (x.fact.acceptedAt ?? 0) <= world.createdAt).map((x) => ({ factId: x.fact.id, detail: x.detail }));
-    const stale = failed.filter((x) => (x.fact.acceptedAt ?? 0) > world.createdAt).map((x) => ({ factId: x.fact.id, detail: x.detail }));
-    const ledger: Ledger = forced ? { status: "ok", detail: "not read: build failed" } : await this.checkLedger(world, sha, claimedFact, canonFacts, retiring);
+    const lost = failed.filter((x) => (x.fact.acceptedAt ?? 0) <= attempt.createdAt).map((x) => ({ factId: x.fact.id, detail: x.detail }));
+    const stale = failed.filter((x) => (x.fact.acceptedAt ?? 0) > attempt.createdAt).map((x) => ({ factId: x.fact.id, detail: x.detail }));
+    const ledger: Ledger = forced ? { status: "ok", detail: "not read: build failed" } : await this.checkLedger(attempt, sha, claimedFact, canonFacts, retiring);
     if (ledger.status === "tampered") lost.push({ factId: "canon.json", detail: ledger.detail });
     const claimed = claim ? results.get(claim.factId) : undefined;
     const behind = stale.length > 0 || ledger.status === "behind";
     const verdict: Verdict = {
-      worldId: world.id,
+      attemptId: attempt.id,
       sha,
       previewUrl,
       canonSeq,
@@ -577,23 +577,23 @@ export class Referee extends DurableObject<Env> {
       ledger,
       judgedAt: now,
     };
-    this.sql.exec(`INSERT OR REPLACE INTO verdicts (world_id, sha, json, at) VALUES (?, ?, ?, ?)`, world.id, sha, JSON.stringify(verdict), now);
-    // Re-read the claim: the checks above awaited the network, and meanwhile another world may have been
+    this.sql.exec(`INSERT OR REPLACE INTO verdicts (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, attempt.id, sha, JSON.stringify(verdict), now);
+    // Re-read the claim: the checks above awaited the network, and meanwhile another attempt may have been
     // accepted (superseding this claim). Never resurrect a settled claim with a stale status.
     const current = claim ? this.claim(claim.id) : null;
     if (current && LIVE.includes(current.status)) this.setClaimStatus(current.id, verdict.outcome as ClaimStatus);
     return verdict;
   }
 
-  /** Files this world changed since it forked from canon, from the two Git trees in Artifacts. null = unknown (judge every fact). */
-  private async changedPaths(world: World, sha: string): Promise<string[] | null> {
-    if (!world.baseSha || !world.claimId) return null;
-    const key = `${world.id}:${sha}`;
+  /** Files this attempt changed since it forked from canon, from the two Git trees in Artifacts. null = unknown (judge every fact). */
+  private async changedPaths(attempt: Attempt, sha: string): Promise<string[] | null> {
+    if (!attempt.baseSha || !attempt.claimId) return null;
+    const key = `${attempt.id}:${sha}`;
     if (this.changedCache.has(key)) return this.changedCache.get(key)!;
     let changed: string[] | null = null;
     try {
-      using repo = await this.env.ARTIFACTS.get(world.id);
-      const [base, head] = await Promise.all([repo.readCommit(world.baseSha), repo.readCommit(sha)]);
+      using repo = await this.env.ARTIFACTS.get(attempt.id);
+      const [base, head] = await Promise.all([repo.readCommit(attempt.baseSha), repo.readCommit(sha)]);
       if (base && head) changed = await diffTrees(repo, base.treeHash, head.treeHash);
     } catch {
       changed = null;
@@ -602,16 +602,16 @@ export class Referee extends DurableObject<Env> {
     return changed;
   }
 
-  private storedResult(worldId: string, sha: string, factId: string): CheckResult | null {
-    const row = this.rows(`SELECT held, detail FROM results WHERE world_id = ? AND sha = ? AND fact_id = ?`, worldId, sha, factId)[0];
+  private storedResult(attemptId: string, sha: string, factId: string): CheckResult | null {
+    const row = this.rows(`SELECT held, detail FROM results WHERE attempt_id = ? AND sha = ? AND fact_id = ?`, attemptId, sha, factId)[0];
     return row ? { held: row.held === 1, detail: row.detail as string, ms: 0 } : null;
   }
 
-  private async checkLedger(world: World, sha: string, claimed: Fact | null, canonFacts: Fact[], retiring: string | null): Promise<Ledger> {
-    const file = await this.readCanonFile(world.id, sha);
+  private async checkLedger(attempt: Attempt, sha: string, claimed: Fact | null, canonFacts: Fact[], retiring: string | null): Promise<Ledger> {
+    const file = await this.readCanonFile(attempt.id, sha);
     if (!file.ok) return { status: "tampered", detail: file.error };
     const retired = this.rows(`SELECT * FROM facts WHERE status = 'retired'`).map(toFact);
-    return compareLedger(file.facts, canonFacts, claimed, world.createdAt, { retiring, retired });
+    return compareLedger(file.facts, canonFacts, claimed, attempt.createdAt, { retiring, retired });
   }
 
   private async readCanonFile(repoName: string, sha: string): Promise<({ ok: true } & CanonFile) | { ok: false; error: string }> {
@@ -640,19 +640,19 @@ export class Referee extends DurableObject<Env> {
     );
   }
 
-  private async forkWorld(baseRepo: string, name: string, description: string) {
+  private async forkAttempt(baseRepo: string, name: string, description: string) {
     using base = await this.env.ARTIFACTS.get(baseRepo);
     const forked = await base.fork(name, { description, defaultBranchOnly: true });
     // Mint a fork-scoped write token with a known TTL. The fork may still be
     // materialising, so retry briefly before falling back to the fork's own token.
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let retry = 0; retry < 5; retry++) {
       try {
         using repo = await this.env.ARTIFACTS.get(name);
-        const t = await repo.createToken("write", WORLD_TOKEN_TTL_S);
+        const t = await repo.createToken("write", ATTEMPT_TOKEN_TTL_S);
         return { remote: forked.remote, token: t.plaintext, expiresAt: t.expiresAt };
       } catch (err) {
         if ((err as { code?: string }).code !== "FORK_IN_PROGRESS") throw err;
-        await sleep(500 * (attempt + 1));
+        await sleep(500 * (retry + 1));
       }
     }
     return { remote: forked.remote, token: forked.token, expiresAt: "" };
@@ -688,8 +688,8 @@ export class Referee extends DurableObject<Env> {
     return this.rows(`SELECT * FROM canon ORDER BY seq DESC LIMIT 1`)[0] ?? null;
   }
 
-  private latestVerdict(worldId: string): Verdict | null {
-    const row = this.rows(`SELECT json FROM verdicts WHERE world_id = ? ORDER BY at DESC LIMIT 1`, worldId)[0];
+  private latestVerdict(attemptId: string): Verdict | null {
+    const row = this.rows(`SELECT json FROM verdicts WHERE attempt_id = ? ORDER BY at DESC LIMIT 1`, attemptId)[0];
     return row ? (JSON.parse(row.json as string) as Verdict) : null;
   }
 
@@ -703,14 +703,14 @@ export class Referee extends DurableObject<Env> {
     return row ? toClaim(row) : null;
   }
 
-  private world(id: string): World | null {
-    const r = this.rows(`SELECT * FROM worlds WHERE id = ?`, id)[0];
+  private attempt(id: string): Attempt | null {
+    const r = this.rows(`SELECT * FROM attempts WHERE id = ?`, id)[0];
     if (!r) return null;
     return {
       id: r.id as string,
       claimId: r.claim_id as string | null,
       remote: r.remote as string,
-      baseWorld: r.base_world as string | null,
+      baseAttempt: r.base_attempt as string | null,
       baseSha: (r.base_sha as string | null) ?? null,
       headSha: r.head_sha as string | null,
       previewUrl: r.preview_url as string | null,
@@ -766,7 +766,7 @@ function toClaim(r: Row): Claim {
     agent: r.agent as string,
     factId: r.fact_id as string,
     why: r.why as string,
-    worldId: r.world_id as string,
+    attemptId: r.attempt_id as string,
     status: r.status as ClaimStatus,
     createdAt: r.created_at as number,
   };
@@ -807,7 +807,7 @@ function validateScope(scope: unknown) {
 
 // Waits until the Preview is deployed. 404 or no connection means "not deployed yet" (the
 // Workflow step retries). A Preview that keeps answering 5xx is deployed but broken: it is
-// judged as it is, so a crashing world gets a verdict instead of hanging.
+// judged as it is, so a crashing attempt gets a verdict instead of hanging.
 async function waitForPreview(origin: string) {
   const deadline = Date.now() + PREVIEW_READY_TIMEOUT_MS;
   let lastStatus = 0;

@@ -7,7 +7,7 @@
 ## The four moves
 
 1. Read canon: the facts that must stay true, the backlog of facts people want, and what other agents are doing.
-2. Claim the one fact you will make true. You get a world: a fork only you can push to.
+2. Claim the one fact you will make true. You get an attempt: a fork only you can push to.
 3. Push with plain Git. Every commit gets its own live preview.
 4. Read the verdict: facts kept, facts broken (with why), and whether your fact holds. READY means a person decides.
 

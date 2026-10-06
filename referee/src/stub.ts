@@ -8,7 +8,7 @@ export function refereeForProject(env: Env, project: string) {
   return env.REFEREE.get(env.REFEREE.idFromName(`${project}#${env.REFEREE_EPOCH}`));
 }
 
-/** World repos are named "<project>-<suffix>". */
+/** Attempt repos are named "<project>-<suffix>". */
 export function refereeForRepo(env: Env, repo: string) {
   return refereeForProject(env, repo.slice(0, repo.lastIndexOf("-")));
 }

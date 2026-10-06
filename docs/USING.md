@@ -54,9 +54,9 @@ Each check is one of two kinds:
 - **Probe:** HTTP requests against a live preview of each commit. `vars` draws random inputs from the commit's
   own hash, so an agent can't hard-code the answers, and the same commit always gets the same inputs.
 - **Command:** a shell command run on each commit's checkout in CI, such as a linter, a type-check or a test
-  suite. Call tools directly, not package scripts, so a world can't redefine what judges it.
+  suite. Call tools directly, not package scripts, so an attempt can't redefine what judges it.
 
-A `scope` list of file globs judges a fact only on worlds that change a matching file. The full format is in
+A `scope` list of file globs judges a fact only on attempts that change a matching file. The full format is in
 [PROTOCOL.md](../PROTOCOL.md).
 
 ### Keep check runs apart, and keep previews off your data
@@ -105,7 +105,7 @@ claude mcp add --transport http canon <your Canon URL>/p/myapp/mcp --header "Aut
 ```
 
 The agent then has `canon_read`, `canon_claim`, `canon_verdict`, `canon_refresh` and `canon_why`, and needs nothing
-else to know the protocol. Claiming returns the commands that clone its world and record the claim; it still pushes
+else to know the protocol. Claiming returns the commands that clone its attempt and record the claim; it still pushes
 with plain Git.
 
 Or use the CLI: put `cli/canon.mjs` on the agent's PATH as `canon`, set its environment, and give it
@@ -122,19 +122,19 @@ reads the verdict. [agents/run.sh](../agents/run.sh) starts several at once, eac
 ## 5. Review facts, not diffs
 
 READY cards on the board keep every canon fact and make their own fact true. Accepting one asks for the owner key
-once. It deploys that world to production, as a Worker named after the project at
+once. It deploys that attempt to production, as a Worker named after the project at
 `https://myapp.<subdomain>.workers.dev`. Your existing production Worker is untouched until you point your domain
 at that one.
 
-- **When canon moves,** worlds built before it are *behind*: `canon refresh` replays them onto the new canon.
+- **When canon moves,** attempts built before it are *behind*: `canon refresh` replays them onto the new canon.
 - **To change a rule on purpose,** an agent proposes a revision: a fact with `"replaces": "<id>"`. A person decides.
 - **For no human in the loop,** add `"backlog"` facts and `"policy": { "autoAccept": "backlog" }` to
-  `canon.json`. A world that makes a backlog fact true lands on its own. Facts agents invent still wait for a person.
+  `canon.json`. An attempt that makes a backlog fact true lands on its own. Facts agents invent still wait for a person.
 
 ## Limits today
 
-- **Apps:** only Workers apps built with npm, from the repo root. A world's own build runs in CI with your
+- **Apps:** only Workers apps built with npm, from the repo root. An attempt's own build runs in CI with your
   `CF_TOKEN` available to wrangler, so give the agent key only to agents you run.
-- **Pace:** one canon move at a time. Each accept sends the worlds in flight to refresh; batching, as in merge
+- **Pace:** one canon move at a time. Each accept sends the attempts in flight to refresh; batching, as in merge
   queues, is the next step.
-- **Previews:** Workers keep the newest 500 per Worker. Older worlds stay clonable from Artifacts.
+- **Previews:** Workers keep the newest 500 per Worker. Older attempts stay clonable from Artifacts.

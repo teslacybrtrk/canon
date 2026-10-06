@@ -212,7 +212,7 @@
       "sentence": "The toolchain, its settings and the deploy config only change by revision",
       "check": {
         "kind": "command",
-        "run": "printf '%s  %s\\n' 59a84695d901baa34c3e99fbdd740360528a175aac378dcf15ac29992af8dade biome.json a1ddb318478c949d6dea887eafb411b99e9cc602305330ff161315d6b33f9daa tsconfig.json 09fae007142ecda384682d56b4e2722c8aa8e6dfe0cc22cc4fc7ddcdc2b0d347 package.json a98b8cef882d0c67f22ca1da2934aa734385472ff9a1d2a8a9e8f30037cd40a3 package-lock.json df602571a7500dbfd99f0e9fde1528fd0ef7f0b8633de633a537d1e8dab7e2b8 wrangler.jsonc | sha256sum -c --quiet -"
+        "run": "printf '%s  %s\\n' 59a84695d901baa34c3e99fbdd740360528a175aac378dcf15ac29992af8dade biome.json a1ddb318478c949d6dea887eafb411b99e9cc602305330ff161315d6b33f9daa tsconfig.json 09fae007142ecda384682d56b4e2722c8aa8e6dfe0cc22cc4fc7ddcdc2b0d347 package.json a98b8cef882d0c67f22ca1da2934aa734385472ff9a1d2a8a9e8f30037cd40a3 package-lock.json dbd114c20ae919ab302e2c4aaa8c4de486e7ac43d9ecd5f85c86cf55f2ccb4ec wrangler.jsonc | sha256sum -c --quiet -"
       },
       "scope": [
         "biome.json",

@@ -17,7 +17,7 @@ const seed = JSON.parse(readFileSync(file, "utf8")).facts;
 const claimsDir = join(root, "agents", "claims");
 const claims = process.argv[3] ? [] : readdirSync(claimsDir).map((f) => JSON.parse(readFileSync(join(claimsDir, f), "utf8")));
 
-// Command facts run next to the canon.json, as the CI pipeline runs them on a world's checkout.
+// Command facts run next to the canon.json, as the CI pipeline runs them on an attempt's checkout.
 async function check(c: any) {
   if (c.kind !== "command") return runCheck(c, origin);
   try {

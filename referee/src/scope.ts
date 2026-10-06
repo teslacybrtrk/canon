@@ -1,4 +1,4 @@
-// Fact scopes: a scoped fact is judged only on worlds that change a matching file.
+// Fact scopes: a scoped fact is judged only on attempts that change a matching file.
 
 /** Glob to RegExp: `**` spans directories, `*` stays within one, `?` is one character. */
 export function globToRegExp(glob: string): RegExp {
@@ -15,7 +15,7 @@ export function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${re}$`);
 }
 
-/** Whether a scoped fact applies, given the paths a world changed. No scope, or unknown changes: it applies. */
+/** Whether a scoped fact applies, given the paths an attempt changed. No scope, or unknown changes: it applies. */
 export function inScope(scope: string[] | null, changed: string[] | null): boolean {
   if (!scope || scope.length === 0 || changed === null) return true;
   const patterns = scope.map(globToRegExp);

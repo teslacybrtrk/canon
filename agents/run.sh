@@ -12,7 +12,7 @@ export CANON_PROJECT="${CANON_PROJECT:-farmstand}"
 export PATH="$PWD/cli:$PATH"
 ROOT="$PWD"
 
-# Cheap by default. The two reservation racers get different models so their worlds differ.
+# Cheap by default. The two reservation racers get different models so their attempts differ.
 model_for() {
   case "$1" in
     agent-1-* | agent-2-*) echo sonnet ;; # agent-1 also writes a revision, the trickiest move

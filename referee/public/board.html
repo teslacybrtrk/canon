@@ -282,7 +282,7 @@
   .timeline li.broke::before { background: var(--broke); }
   .timeline li.note::before { background: var(--gold); }
   .timeline b { color: var(--ink); font-weight: 600; }
-  .timeline .world { font: 12px var(--mono); color: var(--muted); }
+  .timeline .attempt { font: 12px var(--mono); color: var(--muted); }
   .timeline .detail { display: block; margin-top: 3px; font: 12px/1.5 var(--mono); color: var(--broke); overflow-wrap: anywhere; }
   .timeline .links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 6px; font-size: 13px; }
   .why-foot { display: flex; align-items: center; gap: 12px; padding: 4px 24px 20px; color: var(--muted); font-size: 13px; }
@@ -521,7 +521,7 @@
   $("me").innerHTML = HAT(32);
   $("meavatar").innerHTML = HAT(40);
 
-  const cloneCmd = (worldId) => `git clone ${location.origin}/w/${worldId}.git`;
+  const cloneCmd = (attemptId) => `git clone ${location.origin}/a/${attemptId}.git`;
   const ago = (ms) => {
     const sec = Math.max(1, Math.round((Date.now() - ms) / 1000));
     return sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
@@ -549,12 +549,12 @@
 
     // The latest canon, the way a code host shows the last commit above the files.
     const c = s.canon;
-    const landed = c && s.claims.find((x) => x.status === "accepted" && x.worldId === c.worldId);
-    const landedAt = c && s.facts.filter((f) => f.madeTrueBy === c.worldId && f.acceptedAt).map((f) => f.acceptedAt)[0];
+    const landed = c && s.claims.find((x) => x.status === "accepted" && x.attemptId === c.attemptId);
+    const landedAt = c && s.facts.filter((f) => f.madeTrueBy === c.attemptId && f.acceptedAt).map((f) => f.acceptedAt)[0];
     $("commit").innerHTML = !c ? "No canon yet."
       : `${landed ? `${avatar(landed.agent)}<b>${esc(landed.agent)}</b><span class="msg">made “${esc(landed.sentence)}” canon</span>` : `${HAT(20)}<b>genesis</b><span class="msg">the seed facts from canon.json</span>`}
-         <span class="right"><span class="sha" title="${esc(c.worldId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${MOCK ? "<span>sample data</span>" : ""}</span>`;
-    $("cloneurl").value = c ? cloneCmd(c.worldId) : "";
+         <span class="right"><span class="sha" title="${esc(c.attemptId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${MOCK ? "<span>sample data</span>" : ""}</span>`;
+    $("cloneurl").value = c ? cloneCmd(c.attemptId) : "";
 
     // Canon's probe facts run against production every hour and after each deploy.
     const prod = s.production;
@@ -602,8 +602,8 @@
           <p class="reason">${esc(cl.why)}</p>
           <div class="pr-actions">
             ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
-            <button class="copy" data-copy="${esc(cloneCmd(cl.worldId))}" title="${esc(cloneCmd(cl.worldId))}">Clone attempt</button>
-            <span class="pr-meta wid">${esc(cl.worldId)}</span>
+            <button class="copy" data-copy="${esc(cloneCmd(cl.attemptId))}" title="${esc(cloneCmd(cl.attemptId))}">Clone attempt</button>
+            <span class="pr-meta wid">${esc(cl.attemptId)}</span>
             ${cl.status === "ready" ? `<button class="accept" data-accept="${esc(cl.id)}">Accept fact</button>` : ""}
           </div>
         </div>
@@ -789,17 +789,17 @@
     const status = f.status === "canon" ? "canon" : f.status === "retired" ? "retired" : "proposed";
     const c = f.check;
     // Latest result per attempt (rows arrive newest first).
-    const latest = [...new Map([...w.rejected].reverse().map((r) => [r.world_id, r])).values()];
+    const latest = [...new Map([...w.rejected].reverse().map((r) => [r.attempt_id, r])).values()];
     const failed = latest.filter((r) => r.kind !== "behind" && r.kind !== "revision");
     const behind = latest.filter((r) => r.kind === "behind");
-    const judged = new Set([...w.rejected, ...w.held].map((r) => r.world_id));
-    const kept = [...judged].filter((wid) => !latest.some((r) => r.world_id === wid)).length;
-    const links = (worldId, url) => `<div class="links">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">Preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(worldId))}" title="${esc(cloneCmd(worldId))}">Clone attempt</button></div>`;
+    const judged = new Set([...w.rejected, ...w.held].map((r) => r.attempt_id));
+    const kept = [...judged].filter((wid) => !latest.some((r) => r.attempt_id === wid)).length;
+    const links = (attemptId, url) => `<div class="links">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">Preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(attemptId))}" title="${esc(cloneCmd(attemptId))}">Clone attempt</button></div>`;
     const kindLabel = { attempt: "Tried and failed", contradiction: "Broke it after it became canon" };
     const groups = [...failed.reduce((map, r) => {
       const key = `${r.agent}|${r.kind}|${r.detail}`;
-      const g = map.get(key) ?? { agent: r.agent, kind: r.kind, detail: r.detail, worlds: [], last: r };
-      g.worlds.push(r.world_id);
+      const g = map.get(key) ?? { agent: r.agent, kind: r.kind, detail: r.detail, attempts: [], last: r };
+      g.attempts.push(r.attempt_id);
       g.last = r;
       return map.set(key, g);
     }, new Map()).values()];
@@ -820,13 +820,13 @@
         : f.origin === "backlog" ? `<li class="note"><b>Written by people</b> in the backlog, for an agent to make true.</li>`
         : `<li class="note"><b>${esc(w.proposer?.agent ?? m?.claim?.agent ?? "An agent")}</b> proposed it${(w.proposer ?? m?.claim)?.why ? `: “${esc((w.proposer ?? m.claim).why)}”` : "."}</li>`,
       w.replaces ? `<li class="note">A revision of “${esc(w.replaces.sentence)}”. The old rule was retired when this one was accepted.</li>` : "",
-      m ? `<li class="held"><b>Made true</b> in <span class="world">${esc(m.world?.id)}</span>${f.acceptedAt ? ` and accepted ${ago(f.acceptedAt)}` : ""}.${links(m.world?.id, m.world?.previewUrl)}</li>` : "",
+      m ? `<li class="held"><b>Made true</b> in <span class="attempt">${esc(m.attempt?.id)}</span>${f.acceptedAt ? ` and accepted ${ago(f.acceptedAt)}` : ""}.${links(m.attempt?.id, m.attempt?.previewUrl)}</li>` : "",
       w.retiredBy ? `<li class="note"><b>Retired</b> by ${esc(w.retiredBy.claim?.agent)}'s revision, replaced by “${esc(w.retiredBy.replacement?.sentence ?? "")}”: “${esc(w.retiredBy.claim?.why)}”</li>` : "",
       judged.size ? `<li class="${failed.length ? "broke" : "held"}">${status === "proposed" ? "Tried" : "Judged"} on <b>${judged.size} attempt${judged.size === 1 ? "" : "s"}</b> so far: ${[status === "proposed" ? `${kept} made it true` : `${kept} kept it`, failed.length ? `${failed.length} broke it` : "", behind.length ? `${behind.length} were built before it existed` : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")}.${status === "proposed" && kept ? " Waiting for a person to accept it." : ""}</li>` : "",
       // Repeats of the same failure by the same agent collapse into one entry; links go to the latest attempt.
-      ...groups.slice(0, 6).map((g) => `<li class="broke"><b>${kindLabel[g.kind] ?? "Failed it"}</b> · ${esc(g.agent ?? "")} ${g.worlds.length > 1 ? `<span class="world">${g.worlds.length} attempts</span>` : `<span class="world">${esc(g.last.world_id)}</span>`}<span class="detail">${esc(g.detail)}</span>${links(g.last.world_id, g.last.preview_url)}</li>`),
+      ...groups.slice(0, 6).map((g) => `<li class="broke"><b>${kindLabel[g.kind] ?? "Failed it"}</b> · ${esc(g.agent ?? "")} ${g.attempts.length > 1 ? `<span class="attempt">${g.attempts.length} attempts</span>` : `<span class="attempt">${esc(g.last.attempt_id)}</span>`}<span class="detail">${esc(g.detail)}</span>${links(g.last.attempt_id, g.last.preview_url)}</li>`),
       groups.length > 6 ? `<li class="broke">…and ${groups.length - 6} more.</li>` : "",
-      behind.length ? `<li class="note">Built before this fact existed: ${behind.map((r) => esc(r.agent ?? r.world_id)).join(", ")}. They refresh onto the new canon.</li>` : "",
+      behind.length ? `<li class="note">Built before this fact existed: ${behind.map((r) => esc(r.agent ?? r.attempt_id)).join(", ")}. They refresh onto the new canon.</li>` : "",
     ].join("");
 
     $("whybody").innerHTML = `

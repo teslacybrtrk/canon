@@ -1,7 +1,7 @@
-// The hero sky. The sun is canon; the moon is the judge. Worlds fork from the sun, fly to the
-// moon and orbit it while every fact is checked. A world that breaks a fact turns red, drops away
+// The hero sky. The sun is canon; the moon is the judge. Attempts fork from the sun, fly to the
+// moon and orbit it while every fact is checked. An attempt that breaks a fact turns red, drops away
 // and bursts; one that keeps them all flies home and merges into the sun (it glows a little brighter).
-// Drawn in vertical scanlines, like a halftone print. Click the sun to fork a world yourself.
+// Drawn in vertical scanlines, like a halftone print. Click the sun to fork an attempt yourself.
 (() => {
   const hero = document.querySelector(".hero");
   const canvas = document.getElementById("sky");
@@ -19,7 +19,7 @@
   const FLY = 2.6, HOLD = 0.8, BACK = 2.4, FADE = 1.4, DROP = 1.1, POP = 1.0, OMEGA = 1.3, GRAVITY = 110, SWELL = 2.2;
 
   let W = 0, H = 0, R = 250, VIS = 130, small = false;
-  let stars = [], embers = [], worlds = [], rings = [], moonRings = [];
+  let stars = [], embers = [], attempts = [], rings = [], moonRings = [];
   let flare = 0, swells = [], nextFork = 2.2, last = 0, clock = 0, raf = 0;
 
   const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2);
@@ -65,11 +65,11 @@
 
   function fork(fate, byHand = false) {
     const room = small ? 2 : 4;
-    const busy = new Set(worlds.filter((w) => !w.left).map((w) => w.slot));
+    const busy = new Set(attempts.filter((w) => !w.left).map((w) => w.slot));
     if (busy.size >= room + (byHand ? 1 : 0)) return;
     let slot = 0;
     while (busy.has(slot)) slot++;
-    worlds.push({
+    attempts.push({
       born: clock, slot, fate: fate ?? (Math.random() < 0.58 ? "merge" : "reject"),
       phiOut: rand(0.1, 0.65), phiBack: rand(-0.35, 0.45), a0: Math.PI + rand(-0.35, 0.25),
       lift: small ? rand(20, 50) : rand(40, 90), liftBack: small ? rand(25, 55) : rand(50, 100),
@@ -97,7 +97,7 @@
     const leave = at(judged + HOLD);
     const since = ts - judged - HOLD;
     if (w.fate === "reject") {
-      // A failed world drops out of orbit first, so the burst happens clear of the moon.
+      // A failed attempt drops out of orbit first, so the burst happens clear of the moon.
       const fall = (tt) => ({ x: leave.x + w.drift * tt, y: leave.y + 0.5 * GRAVITY * tt * tt });
       if (since < DROP) return { state: "drop", pos: fall(since), front: true, out, base: p0, u: since / DROP, faded: since / FADE };
       return { state: "pop", pos: fall(DROP), front: true, out, base: p0, u: (since - DROP) / POP, faded: since / FADE };
@@ -191,7 +191,7 @@
     }
   }
 
-  function drawWorld(w, p, c, size) {
+  function drawAttempt(w, p, c, size) {
     if (!p.pos) return;
     const far = p.front ? 1 : 0.55;
     const sz = size * (p.front ? 1 : 0.8);
@@ -242,7 +242,7 @@
       }
     }
 
-    const placed = worlds.map((w) => [w, place(w, s, m, clock - w.born)]);
+    const placed = attempts.map((w) => [w, place(w, s, m, clock - w.born)]);
     ctx.lineWidth = 1.3;
     ctx.setLineDash([3, 4]);
     ctx.lineDashOffset = -t * 9;
@@ -280,7 +280,7 @@
 
     const size = small ? 9 : 11;
     const orbiting = (p) => p.state === "check" || p.state === "pass" || p.state === "fail";
-    for (const [w, p] of placed) if (orbiting(p) && !p.front) drawWorld(w, p, c, size);
+    for (const [w, p] of placed) if (orbiting(p) && !p.front) drawAttempt(w, p, c, size);
     drawMoon(m, c, t, placed.some(([, p]) => p.state === "check"));
     for (const r of moonRings) {
       const u = (clock - r.at) / 1.2;
@@ -291,7 +291,7 @@
       ctx.arc(m.x, m.y, m.r + 3 + easeOut(u) * 16, 0, Math.PI * 2);
       ctx.stroke();
     }
-    for (const [w, p] of placed) if (!orbiting(p) || p.front) drawWorld(w, p, c, size);
+    for (const [w, p] of placed) if (!orbiting(p) || p.front) drawAttempt(w, p, c, size);
     ctx.globalAlpha = 1;
   }
 
@@ -306,7 +306,7 @@
     }
     const s = sun();
     const m = moon();
-    for (const w of worlds) {
+    for (const w of attempts) {
       const p = place(w, s, m, clock - w.born);
       if ((p.state === "drop" || p.state === "pop" || p.state === "home") && !w.left) {
         w.left = true;
@@ -331,7 +331,7 @@
         f.y += f.vy * dt;
       }
     }
-    worlds = worlds.filter((w) => {
+    attempts = attempts.filter((w) => {
       const since = clock - w.born - FLY - w.check - HOLD;
       return w.merged != null ? clock - w.merged < FADE : w.fate === "merge" || since < DROP + POP;
     });
@@ -364,7 +364,7 @@
     if (!still.matches) return;
     stop();
     clock = 6;
-    worlds = [];
+    attempts = [];
     embers = [];
     draw(clock);
   }
