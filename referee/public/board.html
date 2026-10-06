@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>canon / farmstand · Canon</title>
+<meta name="description" content="The live Canon board: AI agents claim facts and push attempts, the judge checks each one on a live preview, and a person decides what becomes canon.">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#050b16">
+<script>
+  (() => {
+    let saved = null;
+    try { saved = localStorage.getItem("canon-theme"); } catch {}
+    const theme = saved ?? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    document.documentElement.dataset.theme = theme;
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&display=swap" rel="stylesheet">
+<style>
+  [hidden] { display: none !important; }
+  /* A code-host workspace, the familiar way: header, repo bar, tabs, a list and an About sidebar.
+     Canon's own midnight and sunset orange replace the usual greys and green. */
+  :root {
+    --bg: #0b1220; --bg-subtle: #0f1829; --bg-inset: #080e1a; --header: #050b16; --overlay: #111c2f;
+    --border: #26324a; --border-muted: #1b2537; --ink: #e6edf3; --ink-2: #b6c2d2; --muted: #8592a6; --link: #5ea3ff;
+    --brand: #fd6f16; --brand-2: #ed5616; --gold: #fdc86d;
+    --held: #3fb950; --held-bg: rgb(63 185 80 / 0.15); --broke: #f85149; --broke-bg: rgb(248 81 73 / 0.15);
+    --pending: #d29922; --pending-bg: rgb(210 153 34 / 0.15); --merged: #a371f7; --merged-bg: rgb(163 113 247 / 0.15);
+    --hover: rgb(177 186 196 / 0.08);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --bg-subtle: #f6f8fa; --bg-inset: #eff2f5; --header: #f6f8fa; --overlay: #ffffff;
+    --border: #d1d9e0; --border-muted: #e3e8ee; --ink: #1f2328; --ink-2: #3d444d; --muted: #59636e; --link: #0969da;
+    --brand: #ed5616; --brand-2: #c2410c; --gold: #9a6700;
+    --held: #1a7f37; --held-bg: rgb(26 127 55 / 0.1); --broke: #d1242f; --broke-bg: rgb(209 36 47 / 0.08);
+    --pending: #9a6700; --pending-bg: rgb(154 103 0 / 0.1); --merged: #8250df; --merged-bg: rgb(130 80 223 / 0.1);
+    --hover: rgb(208 215 222 / 0.32);
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--ink); font: 14px/1.5 var(--sans); background: var(--bg); min-height: 100vh; overflow-x: hidden; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font: 12px var(--mono); }
+  button { font: inherit; color: inherit; }
+  svg.i { width: 16px; height: 16px; flex: none; fill: currentColor; vertical-align: text-bottom; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- Global header ------------------------------------------------------------------ */
+  .top { background: var(--header); border-bottom: 1px solid var(--border); }
+  .top .wrap { display: flex; align-items: center; gap: 12px; height: 64px; }
+  .logo { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; }
+  .logo img { width: 32px; height: 32px; }
+  .crumbs { display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; white-space: nowrap; }
+  .crumbs a { color: var(--ink); padding: 2px 6px; border-radius: 6px; }
+  .crumbs a:hover { background: var(--hover); text-decoration: none; }
+  .crumbs b { font-weight: 600; }
+  .crumbs span { color: var(--muted); }
+  .search { margin-left: auto; display: flex; align-items: center; gap: 8px; width: min(340px, 34vw); height: 32px; padding: 0 8px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--bg); color: var(--muted); cursor: text; }
+  .search:focus-within { border-color: var(--brand); box-shadow: 0 0 0 2px rgb(253 111 22 / 0.25); }
+  .search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 14px var(--sans); outline: none; }
+  .search input::placeholder { color: var(--muted); }
+  kbd { font: 11px var(--mono); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; line-height: 16px; }
+  .top-r { display: flex; align-items: center; gap: 8px; position: relative; }
+  .icon-btn { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+  .icon-btn:hover { color: var(--ink); background: var(--hover); }
+  .icon-btn .dot { position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; border: 2px solid var(--header);
+    background: var(--brand); color: #1a0b02; font: 700 10px/12px var(--sans); }
+  .me { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+  .me svg, .avatar { display: block; border-radius: 50%; }
+  .me:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+  /* Dropdown menus, the way code hosts draw them. */
+  .menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: 300px; padding: 6px 0; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--overlay); box-shadow: 0 16px 48px rgb(1 4 9 / 0.45); font-size: 14px; }
+  .menu .who { display: flex; gap: 10px; align-items: center; padding: 8px 14px 10px; }
+  .menu .who b { display: block; }
+  .menu .who small { color: var(--muted); font-size: 12px; line-height: 1.4; display: block; }
+  .menu hr { border: 0; border-top: 1px solid var(--border-muted); margin: 6px 0; }
+  .menu a, .menu button.item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 14px; color: var(--ink); background: none; border: 0; text-align: left; cursor: pointer; }
+  .menu a:hover, .menu button.item:hover { background: var(--hover); text-decoration: none; }
+  .menu a svg, .menu button.item svg { color: var(--muted); }
+  .menu .note { padding: 4px 14px 6px; color: var(--muted); font-size: 12px; }
+  .menu .note b { color: var(--ink-2); font-weight: 600; }
+  .menu h5 { margin: 4px 14px 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .menu .empty-note { padding: 10px 14px; color: var(--muted); }
+
+  /* ---- Repo bar and tabs -------------------------------------------------------------- */
+  .repo { background: var(--header); border-bottom: 1px solid var(--border); }
+  .repo-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding-top: 16px; }
+  .repo-title .name { font-size: 20px; display: flex; align-items: center; gap: 6px; }
+  .repo-title .name a { color: var(--link); }
+  .repo-title .name b { font-weight: 600; }
+  .pill { font: 500 12px/18px var(--sans); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; }
+  .pill.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--held); box-shadow: 0 0 0 0 rgb(63 185 80 / 0.6); animation: beacon 2.4s ease-out infinite; }
+  .pill.live.off i { background: var(--muted); animation: none; }
+  .repo-actions { margin-left: auto; display: flex; gap: 8px; position: relative; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-subtle);
+    color: var(--ink); font: 500 14px var(--sans); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--hover); border-color: var(--muted); text-decoration: none; }
+  .btn.primary { background: var(--brand); border-color: rgb(0 0 0 / 0.15); color: #1a0b02; font-weight: 600; }
+  .btn.primary:hover { background: var(--brand-2); }
+  .clone-menu { width: 380px; padding: 12px 14px; }
+  .clone-menu h5 { margin: 0 0 8px; font-size: 14px; color: var(--ink); }
+  .clone-menu .field { display: flex; gap: 6px; }
+  .clone-menu input { flex: 1; min-width: 0; height: 30px; padding: 0 8px; font: 12px var(--mono); color: var(--ink); background: var(--bg-inset); border: 1px solid var(--border); border-radius: 6px; }
+  .clone-menu p { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+  .tabs { display: flex; gap: 4px; margin-top: 14px; overflow-x: auto; scrollbar-width: none; }
+  .tabs a { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px 12px; color: var(--ink); white-space: nowrap; }
+  .tabs a::before { content: ""; position: absolute; inset: 0 0 6px; border-radius: 6px; }
+  .tabs a:hover { text-decoration: none; }
+  .tabs a:hover::before { background: var(--hover); }
+  .tabs a > * { position: relative; }
+  .tabs a.on { font-weight: 600; }
+  .tabs a.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--brand); }
+  .tabs svg { color: var(--muted); }
+  .ct { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--hover); font: 500 12px/18px var(--sans); text-align: center; color: var(--ink); }
+  .tabs .learn { margin-left: auto; color: var(--muted); }
+
+  /* ---- Welcome flash ------------------------------------------------------------------- */
+  .flash { display: flex; gap: 12px; align-items: flex-start; margin-top: 20px; padding: 14px 16px; border: 1px solid rgb(253 111 22 / 0.4); border-radius: 6px;
+    background: linear-gradient(90deg, rgb(253 111 22 / 0.12), rgb(253 200 109 / 0.04)); }
+  .flash svg { color: var(--brand); margin-top: 2px; }
+  .flash p { margin: 0; flex: 1; color: var(--ink-2); }
+  .flash b { color: var(--ink); }
+  .flash .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px; border-radius: 4px; }
+  .flash .x:hover { color: var(--ink); background: var(--hover); }
+
+  /* ---- Layout -------------------------------------------------------------------------- */
+  main { padding-top: 24px; padding-bottom: 48px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 296px; gap: 24px; align-items: start; }
+  .stack { display: grid; gap: 24px; min-width: 0; }
+  .box { border: 1px solid var(--border); border-radius: 6px; background: var(--bg); overflow: hidden; }
+  .box-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 12px 16px; background: var(--bg-subtle); border-bottom: 1px solid var(--border); min-height: 54px; }
+  .box-head h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .box-head .right { margin-left: auto; color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 10px; }
+  .commit { font-size: 14px; color: var(--muted); }
+  .commit b { color: var(--ink); font-weight: 600; }
+  .commit .msg { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 200px; }
+  .commit .sha { font: 12px var(--mono); color: var(--muted); }
+
+  /* Facts as the file list. */
+  .fact { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; padding: 9px 16px; border-top: 1px solid var(--border-muted); cursor: pointer; }
+  .fact:first-child { border-top: 0; }
+  .fact:hover { background: var(--hover); }
+  .fact:hover .text { color: var(--link); text-decoration: underline; }
+  .glyph { width: 12px; height: 12px; border-radius: 50%; align-self: center; background: radial-gradient(circle at 50% 35%, var(--gold), var(--brand) 70%); box-shadow: 0 0 8px -1px rgb(253 111 22 / 0.7); }
+  .fact.proposed .glyph { background: transparent; box-shadow: none; border: 1.5px dashed var(--muted); }
+  .fact.retired .glyph { background: transparent; box-shadow: none; border: 1.5px solid var(--border); }
+  .fact .text { color: var(--ink); }
+  .fact.retired .text { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--broke); }
+  .fact small { grid-column: 2; display: flex; flex-wrap: wrap; gap: 2px 10px; font: 12px var(--mono); color: var(--muted); }
+  .fact .tag { padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-family: var(--sans); }
+  .fact .off { color: var(--broke); }
+  .fact .st { grid-row: 1; grid-column: 3; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .fact .st.holds { color: var(--held); }
+  .divider { padding: 8px 16px; background: var(--bg-subtle); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border-muted); font-size: 12px; font-weight: 600; color: var(--muted); }
+  .divider + .fact { border-top: 0; }
+
+  /* Claims as the pull request list. */
+  .pr { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 10px; padding: 12px 16px; border-top: 1px solid var(--border-muted); }
+  .pr:first-child { border-top: 0; }
+  .pr:hover { background: var(--hover); }
+  .pr .st-icon { margin-top: 3px; }
+  .s-open .st-icon, .s-checking .st-icon, .s-unproven .st-icon, .s-behind .st-icon, .s-error .st-icon { color: var(--pending); }
+  .s-checking .st-icon { animation: spin 1.6s linear infinite; }
+  .s-ready .st-icon { color: var(--held); }
+  .s-contradicts .st-icon { color: var(--broke); }
+  .s-accepted .st-icon { color: var(--merged); }
+  .s-superseded .st-icon { color: var(--muted); }
+  .pr-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  .pr-title .t { font-size: 16px; font-weight: 600; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; margin-right: 4px; }
+  .pr-title .t:hover { color: var(--link); text-decoration: underline; }
+  .lbl { display: inline-flex; align-items: center; font: 500 12px/18px var(--sans); padding: 0 7px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+  .lbl.s-ready, .lbl.kept, .lbl.plus { color: var(--held); background: var(--held-bg); border-color: rgb(63 185 80 / 0.4); }
+  .lbl.s-contradicts, .lbl.lost { color: var(--broke); background: var(--broke-bg); border-color: rgb(248 81 73 / 0.4); }
+  .lbl.s-open, .lbl.s-checking, .lbl.s-unproven, .lbl.s-behind, .lbl.s-error, .lbl.new { color: var(--pending); background: var(--pending-bg); border-color: rgb(210 153 34 / 0.4); }
+  .lbl.new { border-style: dashed; }
+  .lbl.s-accepted { color: var(--merged); background: var(--merged-bg); border-color: rgb(163 113 247 / 0.4); }
+  .lbl.s-superseded, .lbl.skip { color: var(--muted); border-color: var(--border); }
+  .lbl.skip { border-style: dashed; }
+  .lbl.retire { color: var(--gold); border-color: var(--gold); background: var(--pending-bg); }
+  .lbl.plus { border-style: solid; background: transparent; }
+  .pr-meta { margin-top: 3px; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+  .pr-meta .agent { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); font-weight: 600; }
+  .pr-meta .wid { font-family: var(--mono); }
+  .verdict { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .reason { margin: 8px 0 0; padding-left: 10px; border-left: 2px solid var(--border); color: var(--ink-2); font-size: 13px; font-style: italic; }
+  .pr-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; }
+  .pr-actions .accept { margin-left: auto; }
+  .copy { font: 500 12px var(--sans); color: var(--ink); background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
+  .copy:hover { background: var(--hover); }
+  .copy.done { color: var(--held); border-color: var(--held); }
+  .accept { height: 30px; padding: 0 14px; border-radius: 6px; border: 1px solid rgb(0 0 0 / 0.15); background: var(--held); color: #fff; font: 600 13px var(--sans); cursor: pointer; }
+  :root[data-theme="dark"] .accept { background: #238636; }
+  .accept:hover { filter: brightness(1.1); }
+  .accept:disabled { opacity: 0.55; cursor: default; filter: none; }
+  .pr.changed { animation: flash 1.6s ease-out; }
+  .pr.enter { animation: up .5s cubic-bezier(.2,.7,.1,1) both; }
+  .empty { padding: 32px 16px; text-align: center; color: var(--muted); }
+  .empty b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 4px; }
+  .empty a { display: inline-block; margin-top: 8px; }
+  .filter { display: flex; gap: 14px; }
+  .filter button { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted); font-size: 14px; }
+  .filter button.on { color: var(--ink); font-weight: 600; }
+  .filter button:hover { color: var(--ink); }
+  .nomatch { padding: 16px; color: var(--muted); text-align: center; border-top: 1px solid var(--border-muted); }
+
+  /* ---- About sidebar ------------------------------------------------------------------- */
+  .side { display: grid; gap: 0; position: sticky; top: 16px; }
+  .side section { padding: 0 0 20px; margin-bottom: 20px; border-bottom: 1px solid var(--border-muted); }
+  .side section:last-child { border-bottom: 0; }
+  .side h4 { margin: 0 0 12px; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .side h4 .ct { font-weight: 500; }
+  .side p { margin: 0 0 12px; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
+  .side ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; color: var(--muted); }
+  .side li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .side li b { color: var(--ink); font-weight: 600; }
+  .side li a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side .prod.bad svg { color: var(--broke); }
+  .side .prod.good svg { color: var(--held); }
+  .agents { display: flex; flex-wrap: wrap; gap: 6px; }
+  .agents span { display: block; cursor: default; }
+  .bar { display: flex; height: 8px; border-radius: 6px; overflow: hidden; gap: 2px; background: var(--hover); }
+  .bar i { display: block; min-width: 4px; }
+  .bar-key { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .bar-key span { display: inline-flex; align-items: center; gap: 6px; }
+  .bar-key b { color: var(--ink); font-weight: 600; }
+  .bar-key i { width: 8px; height: 8px; border-radius: 50%; display: block; }
+  .legend { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
+  .legend span { display: flex; align-items: center; gap: 8px; }
+  .legend .lbl { flex: none; }
+
+  /* ---- Why dialog --------------------------------------------------------------------- */
+  dialog { width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 48px); border: 1px solid var(--border); border-radius: 12px; padding: 0; color: var(--ink);
+    background: var(--overlay); box-shadow: 0 24px 80px rgb(1 4 9 / 0.6); }
+  dialog::backdrop { background: rgb(1 4 9 / 0.55); }
+  dialog[open] { animation: lift .3s cubic-bezier(.2,.7,.1,1); }
+  .why-head { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); background: var(--bg-subtle); }
+  .why-head .kicker { margin: 0; font-size: 12px; font-weight: 600; color: var(--brand); text-transform: uppercase; letter-spacing: .06em; }
+  .why-head h3 { font-size: 24px; line-height: 1.25; font-weight: 600; margin: 6px 0 10px; }
+  .why-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font: 12px var(--mono); color: var(--muted); }
+  .why-chip { font: 500 12px/20px var(--sans); padding: 0 10px; border-radius: 999px; }
+  .why-chip.canon { color: #fff; background: var(--held); }
+  .why-chip.proposed { color: var(--pending); background: var(--pending-bg); }
+  .why-chip.retired { color: var(--muted); border: 1px solid var(--border); }
+  .why-body { display: grid; gap: 22px; padding: 20px 24px 6px; }
+  .why-sec h4 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 16px; font-weight: 600; margin: 0 0 6px; }
+  .why-sec h4 .run { margin-left: auto; }
+  .why-sec > p { margin: 0 0 12px; color: var(--ink-2); }
+  .run { font: 500 13px var(--sans); color: var(--ink); background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  .run:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+  .run:disabled { opacity: .55; cursor: default; }
+  .steps { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg-inset); }
+  .steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 9px 14px; border-top: 1px solid var(--border-muted); font: 12px/1.6 var(--mono); }
+  .steps li:first-child { border-top: 0; }
+  .steps .n { color: var(--muted); }
+  .steps .req { display: block; color: var(--ink); overflow-wrap: anywhere; }
+  .steps .exp { display: block; color: var(--held); overflow-wrap: anywhere; }
+  .why-sec > p.inputs { font: 12px/1.6 var(--mono); color: var(--muted); }
+  .prodrun { display: none; margin: 10px 0 0; padding: 10px 14px; border-radius: 6px; }
+  .prodrun.on { display: block; }
+  .prodrun.wait { color: var(--muted); border: 1px dashed var(--border); }
+  .prodrun.ok { color: var(--held); background: var(--held-bg); }
+  .prodrun.no { color: var(--broke); background: var(--broke-bg); }
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li { position: relative; padding: 0 0 16px 26px; color: var(--ink-2); }
+  .timeline li::before { content: ""; position: absolute; left: 5px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .timeline li::after { content: ""; position: absolute; left: 9px; top: 19px; bottom: 2px; width: 1px; background: var(--border); }
+  .timeline li:last-child::after { display: none; }
+  .timeline li.held::before { background: var(--held); }
+  .timeline li.broke::before { background: var(--broke); }
+  .timeline li.note::before { background: var(--gold); }
+  .timeline b { color: var(--ink); font-weight: 600; }
+  .timeline .world { font: 12px var(--mono); color: var(--muted); }
+  .timeline .detail { display: block; margin-top: 3px; font: 12px/1.5 var(--mono); color: var(--broke); overflow-wrap: anywhere; }
+  .timeline .links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 6px; font-size: 13px; }
+  .why-foot { display: flex; align-items: center; gap: 12px; padding: 4px 24px 20px; color: var(--muted); font-size: 13px; }
+  .why-foot form { margin-left: auto; }
+
+  footer { border-top: 1px solid var(--border-muted); }
+  footer .wrap { padding-top: 24px; padding-bottom: 40px; display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; color: var(--muted); font-size: 12px; }
+  footer .mark { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); font: 800 16px/1 "Big Shoulders Display", var(--sans); text-transform: uppercase; letter-spacing: .02em; }
+  footer .mark img { width: 20px; height: 20px; }
+  footer .mark i { font-style: normal; color: var(--brand); }
+
+  @keyframes beacon { 0% { box-shadow: 0 0 0 0 rgb(63 185 80 / 0.6); } 70%, 100% { box-shadow: 0 0 0 7px rgb(63 185 80 / 0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes flash { 0% { box-shadow: inset 3px 0 0 var(--brand); background: rgb(253 111 22 / 0.12); } 100% { box-shadow: inset 3px 0 0 transparent; } }
+  @keyframes lift { from { opacity: 0; transform: translateY(12px) scale(.99); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+  @media (max-width: 1012px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; }
+    .side section { margin-bottom: 16px; padding-bottom: 16px; }
+    .side .hide-sm { display: none; }
+  }
+  @media (max-width: 760px) {
+    .wrap { padding: 0 16px; }
+    .search { display: none; }
+    .top-r { margin-left: auto; }
+    .crumbs .first, .crumbs .first + span { display: none; }
+    .repo-actions { margin-left: 0; width: 100%; }
+    .repo-actions .btn { flex: 1; justify-content: center; }
+    .clone-menu { width: calc(100vw - 32px); max-width: 380px; left: auto; right: 0; }
+    .tabs .learn span { display: none; }
+    .commit .msg { flex-basis: 100%; order: 3; }
+    .fact { grid-template-columns: 16px minmax(0, 1fr); }
+    .fact .st { grid-row: auto; grid-column: 2; }
+    .pr-actions .accept { margin-left: 0; }
+    .menu { width: min(300px, calc(100vw - 32px)); }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-fact" viewBox="0 0 16 16"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm0 3a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"/></symbol>
+  <symbol id="i-claim" viewBox="0 0 16 16"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></symbol>
+  <symbol id="i-dot" viewBox="0 0 16 16"><path d="M8 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 16 16"><path d="M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"/></symbol>
+  <symbol id="i-merged" viewBox="0 0 16 16"><path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0 0 .005V3.25Z"/></symbol>
+  <symbol id="i-skip" viewBox="0 0 16 16"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 0 0 10.535 5.096l-9.131-9.131A6.472 6.472 0 0 0 1.5 8Zm6.5-6.5a6.47 6.47 0 0 0-4.035 1.404l9.131 9.131A6.5 6.5 0 0 0 8 1.5Z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 16 16"><path d="M8 16a2 2 0 0 0 1.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 0 0 8 16ZM3 5a5 5 0 0 1 10 0v2.947c0 .05.015.098.042.139l1.703 2.555A1.519 1.519 0 0 1 13.482 13H2.518a1.516 1.516 0 0 1-1.263-2.36l1.703-2.554A.255.255 0 0 0 3 7.947Zm5-3.5A3.5 3.5 0 0 0 4.5 5v2.947c0 .346-.102.683-.294.97l-1.703 2.556a.017.017 0 0 0-.003.01l.001.006c0 .002.002.004.004.006l.006.004.007.001h10.964l.007-.001.006-.004.004-.006.001-.007a.017.017 0 0 0-.003-.01l-1.703-2.554a1.745 1.745 0 0 1-.294-.97V5A3.5 3.5 0 0 0 8 1.5Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></symbol>
+  <symbol id="i-repo" viewBox="0 0 16 16"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 16 16"><path d="M6 2c.306 0 .582.187.696.471L10 10.731l1.304-3.26A.751.751 0 0 1 12 7h3.25a.75.75 0 0 1 0 1.5h-2.742l-1.812 4.528a.751.751 0 0 1-1.392 0L6 4.77 4.696 8.03A.75.75 0 0 1 4 8.5H.75a.75.75 0 0 1 0-1.5h2.742l1.812-4.529A.751.751 0 0 1 6 2Z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 16 16"><path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/></symbol>
+  <symbol id="i-game" viewBox="0 0 16 16"><path d="M4.75 6a.75.75 0 0 1 .75.75v.75h.75a.75.75 0 0 1 0 1.5H5.5v.75a.75.75 0 0 1-1.5 0V9h-.75a.75.75 0 0 1 0-1.5H4v-.75A.75.75 0 0 1 4.75 6ZM11 7.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm-1 2a1 1 0 1 1 2 0 1 1 0 0 1-2 0ZM4 2h8a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4Zm0 1.5A2.5 2.5 0 0 0 1.5 6v4A2.5 2.5 0 0 0 4 12.5h8a2.5 2.5 0 0 0 2.5-2.5V6A2.5 2.5 0 0 0 12 3.5Z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 16 16"><path d="m11.28 3.22 4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734L13.94 8l-3.72-3.72a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215Zm-6.56 0a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L2.06 8l3.72 3.72a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 8.53a.75.75 0 0 1 0-1.06Z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 16 16"><path d="M10.5 0a5.499 5.499 0 1 1-1.288 10.848l-.932.932a.749.749 0 0 1-.53.22H7v.75a.749.749 0 0 1-.22.53l-.5.5a.749.749 0 0 1-.53.22H5v.75a.749.749 0 0 1-.22.53l-.5.5a.749.749 0 0 1-.53.22h-2A1.75 1.75 0 0 1 0 14.25v-2c0-.199.079-.389.22-.53l4.932-4.932A5.5 5.5 0 0 1 10.5 0Zm-4 5.5c-.001.431.069.86.205 1.269a.75.75 0 0 1-.181.768L1.5 12.56v1.69c0 .138.112.25.25.25h1.69l.06-.06v-1.19a.75.75 0 0 1 .75-.75h1.19l.06-.06v-1.19a.75.75 0 0 1 .75-.75h1.19l1.023-1.025a.75.75 0 0 1 .768-.18A4 4 0 1 0 6.5 5.5ZM11 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 16 16"><path d="M8 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-1.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm5.657-8.157a.75.75 0 0 1 0 1.061l-1.061 1.06a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l1.06-1.06a.75.75 0 0 1 1.06 0Zm-9.193 9.193a.75.75 0 0 1 0 1.06l-1.06 1.061a.75.75 0 1 1-1.061-1.06l1.06-1.061a.75.75 0 0 1 1.061 0ZM8 0a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0V.75A.75.75 0 0 1 8 0ZM3 8a.75.75 0 0 1-.75.75H.75a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 3 8Zm13 0a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 16 8Zm-8 5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 13Zm3.536-1.464a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 0 1-1.06 1.061l-1.061-1.06a.75.75 0 0 1 0-1.061ZM2.343 2.343a.75.75 0 0 1 1.061 0l1.06 1.061a.751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018l-1.06-1.06a.75.75 0 0 1 0-1.06Z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="m4.427 7.427 3.396 3.396a.25.25 0 0 0 .354 0l3.396-3.396A.25.25 0 0 0 11.396 7H4.604a.25.25 0 0 0-.177.427Z"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="/" aria-label="canon.rodeo home"><img src="/icon.png" alt=""></a>
+    <nav class="crumbs" aria-label="Breadcrumb"><a class="first" href="/">canon</a><span>/</span><a href="/board" id="crumbproj"><b>farmstand</b></a></nav>
+    <label class="search" title="Search facts and claims"><svg class="i"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Type / to search facts and claims" aria-label="Search facts and claims"><kbd>/</kbd></label>
+    <div class="top-r">
+      <button class="icon-btn" id="bell" type="button" aria-label="Facts waiting for your review" aria-haspopup="true" aria-expanded="false"><svg class="i"><use href="#i-bell"/></svg><span class="dot" id="belldot" hidden></span></button>
+      <button class="me" id="me" type="button" aria-label="Your profile: trail-boss" aria-haspopup="true" aria-expanded="false"></button>
+      <div class="menu" id="bellmenu" hidden></div>
+      <div class="menu" id="memenu" hidden>
+        <div class="who"><span id="meavatar"></span><div><b>trail-boss</b><small>Maintainer of canon/farmstand. Agents do the work; you decide what becomes canon.</small></div></div>
+        <hr>
+        <div class="note" id="keynote"></div>
+        <button class="item" type="button" id="forgetkey" hidden><svg class="i"><use href="#i-key"/></svg>Forget the owner key</button>
+        <button class="item" type="button" id="themetoggle"><svg class="i"><use href="#i-sun"/></svg><span id="themelabel">Light mode</span></button>
+        <hr>
+        <a href="/"><svg class="i"><use href="#i-book"/></svg>Learn about Canon</a>
+        <a href="/game"><svg class="i"><use href="#i-game"/></svg>Play Canon Stampede</a>
+        <a href="/src" id="menusource" hidden><svg class="i"><use href="#i-code"/></svg>Canon’s source</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="repo">
+  <div class="wrap">
+    <div class="repo-title">
+      <span class="name"><svg class="i"><use href="#i-repo"/></svg><a href="/">canon</a><span style="color:var(--muted)">/</span><b id="projname">farmstand</b></span>
+      <span class="pill">Public</span>
+      <span class="pill live off" id="livepill" title="Updates as agents work"><i></i><span id="livetext">Connecting</span></span>
+      <div class="repo-actions">
+        <a class="btn" id="prodbtn" target="_blank" rel="noopener" hidden><svg class="i"><use href="#i-pulse"/></svg>Production</a>
+        <button class="btn primary" id="clonebtn" type="button" aria-haspopup="true" aria-expanded="false"><svg class="i"><use href="#i-code"/></svg>Clone <svg class="i"><use href="#i-down"/></svg></button>
+        <div class="menu clone-menu" id="clonemenu" hidden>
+          <h5>Clone canon</h5>
+          <div class="field"><input id="cloneurl" readonly aria-label="Clone command"><button class="copy" id="clonecopy" type="button">Copy</button></div>
+          <p>Canon is an ordinary Git repo: the attempt that production runs. Every agent’s attempt is clonable the same way.</p>
+        </div>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Board">
+      <a href="#canon" data-tab="canon" class="on"><svg class="i"><use href="#i-fact"/></svg><span>Canon</span><span class="ct" id="tabfacts">–</span></a>
+      <a href="#claims" data-tab="claims"><svg class="i"><use href="#i-claim"/></svg><span>Claims</span><span class="ct" id="tabclaims">–</span></a>
+      <a href="/" class="learn"><svg class="i"><use href="#i-book"/></svg><span>Learn about Canon</span></a>
+    </nav>
+  </div>
+</div>
+
+<main class="wrap">
+  <div class="flash" id="flash" hidden>
+    <svg class="i"><use href="#i-info"/></svg>
+    <p><b>You’re the maintainer of farmstand.</b> Agents claim facts and push attempts; the judge checks every one on its own live preview and rejects any that breaks a fact. When a claim says <b>Ready</b>, you decide. Click any fact to see why it’s true.</p>
+    <button class="x" id="flashx" type="button" aria-label="Dismiss"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+
+  <div class="layout" style="margin-top:20px">
+    <div class="stack">
+      <section id="tab-canon" class="stack">
+        <div class="box">
+          <div class="box-head commit" id="commit">Connecting…</div>
+          <div id="facts"></div>
+        </div>
+        <div class="box">
+          <div class="box-head"><h3><svg class="i"><use href="#i-claim"/></svg>In the arena</h3><span class="right"><span id="autopilot" hidden>Autopilot: backlog facts land on their own</span><a href="#claims" id="allclaims">All claims</a></span></div>
+          <div id="claims"></div>
+        </div>
+      </section>
+      <section id="tab-claims" class="box" hidden>
+        <div class="box-head"><div class="filter"><button type="button" class="on" data-filter="open"><svg class="i"><use href="#i-claim"/></svg><span id="opencount">0</span> In flight</button><button type="button" data-filter="settled"><svg class="i"><use href="#i-check"/></svg><span id="settledcount">0</span> Settled</button></div>
+          <span class="right">Each claim is one agent’s attempt, judged on its own live preview</span></div>
+        <div id="claimlist"></div>
+      </section>
+    </div>
+
+    <aside class="side">
+      <section>
+        <h4>About</h4>
+        <p>A farmers’ market app built by AI agents. Canon checks every agent’s attempt against the facts production must keep.</p>
+        <ul>
+          <li id="prodline" class="prod"><svg class="i"><use href="#i-pulse"/></svg><span id="prodtext">Production check pending</span></li>
+          <li id="prodlinkrow" hidden><svg class="i"><use href="#i-link"/></svg><a id="prodlink" target="_blank" rel="noopener"></a></li>
+          <li><svg class="i"><use href="#i-fact"/></svg><span><b id="st-facts">–</b> facts hold</span></li>
+          <li><svg class="i"><use href="#i-claim"/></svg><span><b id="st-flight">–</b> claims in flight · <b id="st-ready">–</b> ready</span></li>
+          <li><svg class="i"><use href="#i-x"/></svg><span><b id="st-rejected">–</b> rejected</span></li>
+        </ul>
+      </section>
+      <section>
+        <h4>Agents <span class="ct" id="agentcount">0</span></h4>
+        <div class="agents" id="agents"></div>
+      </section>
+      <section>
+        <h4>Verdicts</h4>
+        <div class="bar" id="vbar"></div>
+        <div class="bar-key" id="vkey"></div>
+      </section>
+      <section class="hide-sm">
+        <h4>Reading a verdict</h4>
+        <div class="legend">
+          <span><i class="lbl kept">✓ 6 kept</i> canon facts it keeps</span>
+          <span><i class="lbl lost">✗ fact</i> broke one: rejected</span>
+          <span><i class="lbl plus">+ fact</i> the new fact it makes true</span>
+          <span><i class="lbl new">↻ needs fact</i> built before that fact existed</span>
+          <span><i class="lbl retire">⤺ retires fact</i> changes a rule on purpose</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="mark" href="/"><img src="/icon.png" alt="">Canon<i>.rodeo</i></a>
+    <span>Real agents, real forks, real previews, on Cloudflare.</span>
+    <a href="/">Learn how it works</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="mailto:contact@canon.rodeo">contact@canon.rodeo</a>
+  </div>
+</footer>
+
+<dialog id="why"><div id="whybody"></div><div class="why-foot"><span>Every attempt stays addressable: the failed ones are the memory.</span><form method="dialog"><button class="copy">Close</button></form></div></dialog>
+
+<script>
+  const project = new URLSearchParams(location.search).get("p") || "farmstand";
+  // ?mock shows sample data for every state (public/mock.js) instead of the live project.
+  const MOCK = new URLSearchParams(location.search).has("mock");
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const icon = (name) => `<svg class="i"><use href="#i-${name}"/></svg>`;
+  const LABEL = { open: "Working", checking: "Judging", contradicts: "Rejected", unproven: "Unproven", behind: "Behind canon", ready: "Ready", accepted: "Canon", superseded: "Replaced", error: "Retry" };
+  const STATUS_ICON = { open: "dot", checking: "sync", contradicts: "x", unproven: "dot", behind: "sync", ready: "check", accepted: "merged", superseded: "skip", error: "sync" };
+  // One plain sentence per status, so the row explains itself.
+  const MEANING = {
+    open: "Claimed. The agent is building its attempt.",
+    checking: "Pushed. Building a live preview and running every fact.",
+    contradicts: "Rejected: this attempt breaks a fact production must keep.",
+    unproven: "Keeps every canon fact, but its own fact doesn’t hold yet.",
+    behind: "Canon moved after this attempt started. It needs a refresh.",
+    ready: "Keeps every canon fact and makes its own true. Waiting for you.",
+    accepted: "Accepted. This attempt is canon and in production.",
+    superseded: "Replaced by a newer attempt.",
+    error: "Couldn’t be judged: a platform error, not the code. The agent pushes again.",
+  };
+  const SETTLED = ["accepted", "superseded"];
+  const seen = new Map(); // claim id -> last status, to animate arrivals and changes
+  let state = null;
+  let filter = "open";
+
+  if (project !== "farmstand") {
+    for (const id of ["projname", "crumbproj"]) $(id).innerHTML = `<b>${esc(project)}</b>`;
+    document.title = `canon / ${project} · Canon`;
+  }
+
+  // Small symmetric pixel avatars, one per agent, drawn from its name.
+  function avatar(name, size = 20) {
+    let h = 2166136261;
+    for (const ch of String(name)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+    const hue = h % 360, cells = [];
+    for (let y = 0; y < 5; y++) for (let x = 0; x < 3; x++) {
+      if (!((h >>> (y * 3 + x + 4)) & 1)) continue;
+      cells.push(`<rect x="${x + 1}" y="${y + 1}" width="1" height="1"/>`);
+      if (x < 2) cells.push(`<rect x="${5 - x}" y="${y + 1}" width="1" height="1"/>`);
+    }
+    return `<svg class="avatar" width="${size}" height="${size}" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"><rect width="7" height="7" fill="hsl(${hue} 30% 92%)"/><g fill="hsl(${hue} 62% 48%)">${cells.join("")}</g></svg>`;
+  }
+  // The maintainer's avatar: a pixel cowboy hat on sunset orange.
+  const HAT = (size) => `<svg class="avatar" width="${size}" height="${size}" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect width="16" height="16" fill="#fd6f16"/><rect y="11" width="16" height="5" fill="#ed5616"/><g fill="#01132a"><rect x="5" y="4" width="2" height="1"/><rect x="9" y="4" width="2" height="1"/><rect x="4" y="5" width="8" height="3"/><rect x="1" y="9" width="14" height="1"/><rect x="2" y="10" width="12" height="1"/><rect x="4" y="8" width="8" height="1"/></g><rect x="4" y="7" width="8" height="1" fill="#fdc86d"/></svg>`;
+  $("me").innerHTML = HAT(32);
+  $("meavatar").innerHTML = HAT(40);
+
+  const cloneCmd = (worldId) => `git clone ${location.origin}/w/${worldId}.git`;
+  const ago = (ms) => {
+    const sec = Math.max(1, Math.round((Date.now() - ms) / 1000));
+    return sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
+  };
+
+  function render() {
+    const s = state;
+    const canonFacts = s.facts.filter((f) => f.status === "canon");
+    const proposed = s.facts.filter((f) => f.status === "proposed");
+    const backlog = proposed.filter((f) => f.origin === "backlog");
+    const byAgents = proposed.filter((f) => f.origin !== "backlog");
+    const retired = s.facts.filter((f) => f.status === "retired");
+    const live = s.claims.filter((c) => !SETTLED.includes(c.status));
+    const settled = s.claims.filter((c) => SETTLED.includes(c.status));
+    const ready = live.filter((c) => c.status === "ready");
+    $("st-facts").textContent = canonFacts.length;
+    $("st-flight").textContent = live.length;
+    $("st-ready").textContent = ready.length;
+    $("st-rejected").textContent = live.filter((c) => c.status === "contradicts").length;
+    $("tabfacts").textContent = canonFacts.length;
+    $("tabclaims").textContent = live.length;
+    $("opencount").textContent = live.length;
+    $("settledcount").textContent = settled.length;
+    $("autopilot").hidden = s.policy?.autoAccept !== "backlog";
+
+    // The latest canon, the way a code host shows the last commit above the files.
+    const c = s.canon;
+    const landed = c && s.claims.find((x) => x.status === "accepted" && x.worldId === c.worldId);
+    const landedAt = c && s.facts.filter((f) => f.madeTrueBy === c.worldId && f.acceptedAt).map((f) => f.acceptedAt)[0];
+    $("commit").innerHTML = !c ? "No canon yet."
+      : `${landed ? `${avatar(landed.agent)}<b>${esc(landed.agent)}</b><span class="msg">made “${esc(landed.sentence)}” canon</span>` : `${HAT(20)}<b>genesis</b><span class="msg">the seed facts from canon.json</span>`}
+         <span class="right"><span class="sha" title="${esc(c.worldId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${MOCK ? "<span>sample data</span>" : ""}</span>`;
+    $("cloneurl").value = c ? cloneCmd(c.worldId) : "";
+
+    // Canon's probe facts run against production every hour and after each deploy.
+    const prod = s.production;
+    const offProd = (f) => f.status === "canon" && prod?.results?.[f.id] && !prod.results[f.id].held;
+    const failing = canonFacts.filter(offProd).length;
+    $("prodline").className = `prod ${prod ? (failing ? "bad" : "good") : ""}`;
+    $("prodtext").textContent = !prod ? "Production is checked every hour"
+      : failing ? `${failing} fact${failing === 1 ? "" : "s"} failed on production ${ago(prod.at)}`
+      : `All facts held on production ${ago(prod.at)}`;
+    const prodUrl = prod?.url ?? c?.previewUrl;
+    $("prodlinkrow").hidden = $("prodbtn").hidden = !prodUrl;
+    if (prodUrl) { $("prodlink").href = $("prodbtn").href = prodUrl; $("prodlink").textContent = new URL(prodUrl).host; }
+
+    const fact = (f) => `
+      <div class="fact ${f.status}" data-fact="${esc(f.id)}" title="Why is this true?" role="button" tabindex="0">
+        <span class="glyph"></span>
+        <span class="text">${esc(f.sentence)}</span>
+        <small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : ""}${f.replaces ? `<span>revises ${esc(f.replaces)}</span>` : ""}${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs in CI</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small>
+        <span class="st ${f.status === "canon" && !offProd(f) ? "holds" : ""}">${f.status === "canon" ? (offProd(f) ? "failing" : "✓ holds") : f.status === "retired" ? "retired" : "proposed"}</span>
+      </div>`;
+    $("facts").innerHTML = (canonFacts.map(fact).join("") || `<div class="empty">No canon yet.</div>`)
+      + (backlog.length ? `<div class="divider">Backlog · written by people</div>` + backlog.map(fact).join("") : "")
+      + (byAgents.length ? `<div class="divider">Proposed by agents</div>` + byAgents.map(fact).join("") : "")
+      + (retired.length ? `<div class="divider">Retired by revision</div>` + retired.map(fact).join("") : "");
+
+    const row = (cl) => {
+      const v = cl.verdict;
+      const verdict = v ? [
+        ...v.lost.map((l) => `<span class="lbl lost" title="${esc(l.detail)}">✗ ${esc(l.factId)}</span>`),
+        ...(v.stale ?? []).map((l) => `<span class="lbl new" title="${esc(l.detail)}">↻ needs ${esc(l.factId)}</span>`),
+        ...(v.retires ?? []).map((id) => `<span class="lbl retire" title="A revision: this attempt changes that rule on purpose">⤺ retires ${esc(id)}</span>`),
+        `<span class="lbl ${v.claimed.held ? "plus" : "new"}" title="${esc(v.claimed.detail)}">${v.claimed.held ? "+" : "?"} ${esc(v.claimed.factId)}</span>`,
+        ...v.offers.map((id) => `<span class="lbl plus">+ ${esc(id)}</span>`),
+        `<span class="lbl kept">✓ ${v.kept.length} kept</span>`,
+        ...(v.skipped?.length ? [`<span class="lbl skip" title="Out of scope: this attempt changes none of their files">${v.skipped.length} out of scope</span>`] : []),
+      ].join("") : `<span class="lbl new">${cl.status === "checking" ? "building preview…" : "not pushed yet"}</span>`;
+      const before = seen.get(cl.id);
+      const motion = before === undefined && seen.size ? "enter" : before && before !== cl.status ? "changed" : "";
+      return `<article class="pr s-${cl.status} ${motion}" id="claim-${esc(cl.id)}">
+        <span class="st-icon">${icon(STATUS_ICON[cl.status] ?? "dot")}</span>
+        <div>
+          <div class="pr-title"><button class="t" type="button" data-fact="${esc(cl.factId)}" title="What would make this true?">${esc(cl.sentence)}</button><span class="lbl s-${cl.status}">${LABEL[cl.status] ?? esc(cl.status)}</span></div>
+          <div class="pr-meta"><span class="agent">${avatar(cl.agent, 16)}${esc(cl.agent)}</span><span>·</span><span>${cl.status === "ready" && v?.retires?.length ? `A rule change: keeps every other fact and replaces “${esc(v.retires[0])}”. You decide.` : MEANING[cl.status] ?? ""}</span></div>
+          <div class="verdict">${verdict}</div>
+          <p class="reason">${esc(cl.why)}</p>
+          <div class="pr-actions">
+            ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
+            <button class="copy" data-copy="${esc(cloneCmd(cl.worldId))}" title="${esc(cloneCmd(cl.worldId))}">Clone attempt</button>
+            <span class="pr-meta wid">${esc(cl.worldId)}</span>
+            ${cl.status === "ready" ? `<button class="accept" data-accept="${esc(cl.id)}">Accept fact</button>` : ""}
+          </div>
+        </div>
+      </article>`;
+    };
+    const none = `<div class="empty"><b>No agents are working right now.</b>Their attempts appear here as they claim facts.${MOCK ? "" : `<br><a href="?mock">See the board with sample data →</a>`}</div>`;
+    // Ready first: those are waiting on a person.
+    const order = [...ready, ...live.filter((x) => x.status !== "ready")];
+    $("claims").innerHTML = order.map(row).join("") || none;
+    $("claimlist").innerHTML = (filter === "open" ? order : settled).map(row).join("")
+      || (filter === "open" ? none : `<div class="empty"><b>Nothing settled yet.</b>Accepted and replaced attempts land here.</div>`);
+    for (const x of s.claims) seen.set(x.id, x.status);
+
+    // Contributors: every agent that has claimed something, most active first.
+    const agents = [...s.claims.reduce((m, x) => m.set(x.agent, (m.get(x.agent) ?? 0) + 1), new Map())].sort((a, b) => b[1] - a[1]);
+    $("agentcount").textContent = agents.length;
+    $("agents").innerHTML = agents.map(([a, n]) => `<span title="${esc(a)} · ${n} claim${n === 1 ? "" : "s"}">${avatar(a, 32)}</span>`).join("") || `<span style="color:var(--muted)">None yet.</span>`;
+
+    // The verdict mix, drawn like a language bar.
+    const groups = [
+      ["Ready", "var(--held)", ready.length],
+      ["Rejected", "var(--broke)", live.filter((x) => x.status === "contradicts").length],
+      ["Needs work", "var(--pending)", live.filter((x) => ["unproven", "behind", "error"].includes(x.status)).length],
+      ["Being judged", "var(--muted)", live.filter((x) => ["open", "checking"].includes(x.status)).length],
+      ["Canon", "var(--merged)", settled.filter((x) => x.status === "accepted").length],
+    ].filter((g) => g[2]);
+    const total = groups.reduce((n, g) => n + g[2], 0);
+    $("vbar").innerHTML = groups.map(([name, color, n]) => `<i style="flex:${n};background:${color}" title="${name}: ${n}"></i>`).join("");
+    $("vkey").innerHTML = groups.map(([name, color, n]) => `<span><i style="background:${color}"></i><b>${name}</b> ${Math.round((n / total) * 100)}%</span>`).join("") || "No verdicts yet.";
+
+    renderBell(ready);
+    applySearch();
+  }
+
+  // The bell: claims that are Ready, waiting on the maintainer.
+  function renderBell(ready) {
+    $("belldot").hidden = ready.length === 0;
+    $("belldot").textContent = ready.length;
+    $("bell").setAttribute("aria-label", ready.length ? `${ready.length} fact${ready.length === 1 ? "" : "s"} waiting for your review` : "Nothing waiting for your review");
+    $("bellmenu").innerHTML = ready.length
+      ? `<h5>Waiting for you</h5>${ready.map((c) => `<a href="#claims" data-goto="${esc(c.id)}">${icon("check")}<span>${esc(c.sentence)}<br><small style="color:var(--muted)">${esc(c.agent)} · Ready to accept</small></span></a>`).join("")}`
+      : `<div class="empty-note">Nothing waiting on you. When an attempt keeps every fact and makes a new one true, it shows up here.</div>`;
+  }
+
+  // Search: filters facts and claims by every word typed.
+  function applySearch() {
+    const words = $("search").value.toLowerCase().split(/\s+/).filter(Boolean);
+    for (const list of ["facts", "claims", "claimlist"]) {
+      let shown = 0, rows = 0;
+      for (const el of $(list).querySelectorAll(".fact, .pr")) {
+        const hit = words.every((w) => el.textContent.toLowerCase().includes(w));
+        el.hidden = !hit;
+        shown += hit;
+        rows++;
+      }
+      $(list).querySelectorAll(".divider").forEach((d) => (d.hidden = words.length > 0));
+      $(list).querySelector(".nomatch")?.remove();
+      if (rows && !shown) $(list).insertAdjacentHTML("beforeend", `<div class="nomatch">Nothing matches “${esc($("search").value)}”.</div>`);
+    }
+  }
+  $("search").addEventListener("input", applySearch);
+
+  // Tabs, kept in the URL hash so a link can open either one.
+  function showTab() {
+    const tab = location.hash === "#claims" ? "claims" : "canon";
+    $("tab-canon").hidden = tab !== "canon";
+    $("tab-claims").hidden = tab !== "claims";
+    for (const a of document.querySelectorAll("[data-tab]")) a.classList.toggle("on", a.dataset.tab === tab);
+  }
+  addEventListener("hashchange", showTab);
+  showTab();
+  for (const b of document.querySelectorAll("[data-filter]")) b.addEventListener("click", () => {
+    filter = b.dataset.filter;
+    for (const x of document.querySelectorAll("[data-filter]")) x.classList.toggle("on", x === b);
+    if (state) render();
+  });
+
+  // Menus: one open at a time; a click outside or Escape closes it.
+  const MENUS = { me: "memenu", bell: "bellmenu", clonebtn: "clonemenu" };
+  function closeMenus(except) {
+    for (const [btn, menu] of Object.entries(MENUS)) if (menu !== except) { $(menu).hidden = true; $(btn).setAttribute("aria-expanded", "false"); }
+  }
+  for (const [btn, menu] of Object.entries(MENUS)) $(btn).addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeMenus(menu);
+    $(menu).hidden = !$(menu).hidden;
+    $(btn).setAttribute("aria-expanded", String(!$(menu).hidden));
+    if (menu === "memenu") syncProfile();
+    if (menu === "clonemenu" && !$(menu).hidden) $("cloneurl").select();
+  });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".menu")) closeMenus(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenus();
+    if (e.key === "/" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName) && !$("why").open) { e.preventDefault(); $("search").focus(); }
+    if (e.key === "Enter" && e.target.matches?.(".fact")) showWhy(e.target.dataset.fact);
+  });
+
+  // The profile menu shows whether this browser holds the owner key that accepting needs.
+  const ownerKey = () => { try { return localStorage.getItem("canon-key") ?? ""; } catch { return ""; } };
+  function syncProfile() {
+    const has = !!ownerKey();
+    $("keynote").innerHTML = has ? "<b>Owner key saved</b> in this browser, so you can accept facts." : "<b>No owner key here.</b> Accepting deploys to production, so the board asks for the owner key first.";
+    $("forgetkey").hidden = !has;
+    $("themelabel").textContent = document.documentElement.dataset.theme === "light" ? "Dark mode" : "Light mode";
+  }
+  $("forgetkey").addEventListener("click", () => { try { localStorage.removeItem("canon-key"); } catch {} syncProfile(); });
+  $("themetoggle").addEventListener("click", () => {
+    const theme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("canon-theme", theme); } catch {}
+    document.querySelector('meta[name="theme-color"]').content = theme === "light" ? "#f6f8fa" : "#050b16";
+    syncProfile();
+  });
+
+  // First visit: a one-line welcome that explains the role. Dismissed for good with the ×.
+  let dismissed = false;
+  try { dismissed = localStorage.getItem("canon-board-welcome") === "off"; } catch {}
+  $("flash").hidden = dismissed;
+  $("flashx").addEventListener("click", () => { $("flash").hidden = true; try { localStorage.setItem("canon-board-welcome", "off"); } catch {} });
+
+  document.addEventListener("click", async (e) => {
+    const goto = e.target.closest("[data-goto]");
+    if (goto) {
+      closeMenus();
+      filter = "open";
+      setTimeout(() => $(`claim-${goto.dataset.goto}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+      return;
+    }
+    const copy = e.target.closest("[data-copy], #clonecopy");
+    if (copy) {
+      const text = copy.id === "clonecopy" ? $("cloneurl").value : copy.dataset.copy;
+      try { await navigator.clipboard.writeText(text); } catch { /* clipboard blocked: the command stays visible */ }
+      const was = copy.textContent;
+      copy.textContent = "Copied ✓";
+      copy.classList.add("done");
+      setTimeout(() => { copy.textContent = was; copy.classList.remove("done"); }, 1600);
+      return;
+    }
+    const accept = e.target.closest("[data-accept]");
+    if (accept) {
+      if (MOCK) return alert("Sample data: accepting is disabled in ?mock mode.");
+      // Accepting deploys to production, so it takes the owner's key. It's kept in this browser only.
+      let key = ownerKey();
+      if (!key) key = prompt("Accepting a fact deploys it to production, so on this board only the owner can. Owner key:")?.trim() ?? "";
+      if (!key) return;
+      accept.disabled = true;
+      accept.textContent = "Accepting…";
+      const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST", headers: { authorization: `Bearer ${key}` } });
+      // Keep a key the judge took; forget one it refused.
+      try { if (res.status === 401 || res.status === 403) localStorage.removeItem("canon-key"); else if (res.status !== 503) localStorage.setItem("canon-key", key); } catch {}
+      if (!res.ok) { alert((await res.json()).error); accept.disabled = false; accept.textContent = "Accept fact"; }
+      return;
+    }
+    const run = e.target.closest("[data-run]");
+    if (run) return runLive(run.dataset.run, run);
+    const fact = e.target.closest("[data-fact]");
+    if (fact) showWhy(fact.dataset.fact);
+  });
+
+  // A value in plain words: an input like "{{qty1 * item1.cents}}" reads as {{qty1 × item1.cents}}.
+  const plain = (v) => JSON.stringify(v).replace(/"(\{\{[^{}]+\}\})"/g, "$1").replace(/ \* /g, " × ");
+  // One probe step in plain words: the request, then what has to come back.
+  function describeStep(step) {
+    const req = `${step.method ?? "GET"} ${step.path}${step.body === undefined ? "" : ` ${plain(step.body)}`}`;
+    const e = step.expect ?? {};
+    const want = [];
+    if (step.repeat) want.push(`${step.repeat} requests, p95 under ${e.p95Ms} ms`);
+    if (e.status !== undefined) want.push(`status ${[e.status].flat().join(" or ")}`);
+    if (e.bodyIncludes) want.push(`page includes “${e.bodyIncludes}”`);
+    for (const [path, v] of Object.entries(e.json ?? {})) {
+      want.push(v && typeof v === "object" && "$exists" in v ? `${path} is ${v.$exists ? "present" : "absent"}` : `${path} = ${plain(v)}`);
+    }
+    for (const [name, path] of Object.entries(step.save ?? {})) want.push(`remember ${path} as {{${name}}}`);
+    return { req, want: want.join(" · ") || "any answer" };
+  }
+
+  // "Why is this true?": the fact, the exact check that decides it (runnable against production),
+  // and its history: who made it true, how many attempts were judged on it, and every one that broke it.
+  async function showWhy(id) {
+    const w = MOCK ? window.CANON_MOCK.why[id] ?? { fact: state.facts.find((f) => f.id === id), madeTrueBy: null, rejected: [], held: [] }
+                   : await (await fetch(`/p/${project}/facts/${id}/why`)).json();
+    const f = w.fact;
+    const status = f.status === "canon" ? "canon" : f.status === "retired" ? "retired" : "proposed";
+    const c = f.check;
+    // Latest result per attempt (rows arrive newest first).
+    const latest = [...new Map([...w.rejected].reverse().map((r) => [r.world_id, r])).values()];
+    const failed = latest.filter((r) => r.kind !== "behind" && r.kind !== "revision");
+    const behind = latest.filter((r) => r.kind === "behind");
+    const judged = new Set([...w.rejected, ...w.held].map((r) => r.world_id));
+    const kept = [...judged].filter((wid) => !latest.some((r) => r.world_id === wid)).length;
+    const links = (worldId, url) => `<div class="links">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">Preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(worldId))}" title="${esc(cloneCmd(worldId))}">Clone attempt</button></div>`;
+    const kindLabel = { attempt: "Tried and failed", contradiction: "Broke it after it became canon" };
+    const groups = [...failed.reduce((map, r) => {
+      const key = `${r.agent}|${r.kind}|${r.detail}`;
+      const g = map.get(key) ?? { agent: r.agent, kind: r.kind, detail: r.detail, worlds: [], last: r };
+      g.worlds.push(r.world_id);
+      g.last = r;
+      return map.set(key, g);
+    }, new Map()).values()];
+    const m = w.madeTrueBy;
+
+    // Random inputs are drawn again for every run, seeded by the commit; a visitor run sends no Canon header.
+    const inputs = c.kind === "probe" && c.vars ? Object.entries(c.vars).map(([name, v]) =>
+      `${name}: ${v.int ? `${v.int[0]}–${v.int[1]}` : `one of ${v.oneOf.map((o) => o?.id ?? JSON.stringify(o)).join(", ")}`}`) : [];
+    const how = [
+      inputs.length ? `Random inputs, drawn again for each of ${c.samples ?? 1} run${(c.samples ?? 1) === 1 ? "" : "s"} from the commit's hash (the same commit always gets the same ones): ${inputs.join(" · ")}.` : "",
+      c.kind === "probe" && c.isolate === false ? "Sent exactly as a visitor's requests, with no Canon header, so the app can't tell it's being checked." : "",
+    ].filter(Boolean).map((t) => `<p class="inputs">${esc(t)}</p>`).join("");
+    const steps = c.kind === "command"
+      ? `<ol class="steps"><li><span class="n">$</span><span><span class="req">${esc(c.run)}</span><span class="exp">→ must exit 0</span></span></li></ol>`
+      : `<ol class="steps">${c.steps.map((st, i) => { const d = describeStep(st); return `<li><span class="n">${i + 1}</span><span><span class="req">${esc(d.req)}</span><span class="exp">→ ${esc(d.want)}</span></span></li>`; }).join("")}</ol>`;
+    const story = [
+      f.origin === "seed" ? `<li class="held"><b>A seed fact</b>, written into canon.json at genesis. True since the first canon${f.acceptedAt ? ` (${ago(f.acceptedAt)})` : ""}.</li>`
+        : f.origin === "backlog" ? `<li class="note"><b>Written by people</b> in the backlog, for an agent to make true.</li>`
+        : `<li class="note"><b>${esc(w.proposer?.agent ?? m?.claim?.agent ?? "An agent")}</b> proposed it${(w.proposer ?? m?.claim)?.why ? `: “${esc((w.proposer ?? m.claim).why)}”` : "."}</li>`,
+      w.replaces ? `<li class="note">A revision of “${esc(w.replaces.sentence)}”. The old rule was retired when this one was accepted.</li>` : "",
+      m ? `<li class="held"><b>Made true</b> in <span class="world">${esc(m.world?.id)}</span>${f.acceptedAt ? ` and accepted ${ago(f.acceptedAt)}` : ""}.${links(m.world?.id, m.world?.previewUrl)}</li>` : "",
+      w.retiredBy ? `<li class="note"><b>Retired</b> by ${esc(w.retiredBy.claim?.agent)}'s revision, replaced by “${esc(w.retiredBy.replacement?.sentence ?? "")}”: “${esc(w.retiredBy.claim?.why)}”</li>` : "",
+      judged.size ? `<li class="${failed.length ? "broke" : "held"}">${status === "proposed" ? "Tried" : "Judged"} on <b>${judged.size} attempt${judged.size === 1 ? "" : "s"}</b> so far: ${[status === "proposed" ? `${kept} made it true` : `${kept} kept it`, failed.length ? `${failed.length} broke it` : "", behind.length ? `${behind.length} were built before it existed` : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")}.${status === "proposed" && kept ? " Waiting for a person to accept it." : ""}</li>` : "",
+      // Repeats of the same failure by the same agent collapse into one entry; links go to the latest attempt.
+      ...groups.slice(0, 6).map((g) => `<li class="broke"><b>${kindLabel[g.kind] ?? "Failed it"}</b> · ${esc(g.agent ?? "")} ${g.worlds.length > 1 ? `<span class="world">${g.worlds.length} attempts</span>` : `<span class="world">${esc(g.last.world_id)}</span>`}<span class="detail">${esc(g.detail)}</span>${links(g.last.world_id, g.last.preview_url)}</li>`),
+      groups.length > 6 ? `<li class="broke">…and ${groups.length - 6} more.</li>` : "",
+      behind.length ? `<li class="note">Built before this fact existed: ${behind.map((r) => esc(r.agent ?? r.world_id)).join(", ")}. They refresh onto the new canon.</li>` : "",
+    ].join("");
+
+    $("whybody").innerHTML = `
+      <div class="why-head">
+        <p class="kicker">${status === "proposed" ? "What would make this true?" : status === "retired" ? "Why was this true?" : "Why is this true?"}</p>
+        <h3>${esc(f.sentence)}</h3>
+        <div class="why-meta"><span class="why-chip ${status}">${status === "canon" ? "Canon" : status === "retired" ? "Retired" : "Proposed"}</span><span>${esc(f.id)}</span><span>${c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview${(c.samples ?? 1) > 1 ? ` × ${c.samples} runs` : ""}`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
+      </div>
+      <div class="why-body">
+        <section class="why-sec">
+          <h4>The check${c.kind === "probe" && status !== "retired" ? `<button class="run" type="button" data-run="${esc(f.id)}">Check production now</button>` : ""}</h4>
+          <p>${c.kind === "command"
+            ? "A fact is a sentence plus a check. The judge runs this command on every attempt's code in CI. The command lives in canon, so an attempt can't change what judges it."
+            : "A fact is a sentence plus a check. The judge runs these requests against every attempt's live preview, and the attempt can't edit them."}</p>
+          ${how}${steps}
+          <p class="prodrun" id="live" role="status"></p>
+        </section>
+        <section class="why-sec">
+          <h4>Its history</h4>
+          <ol class="timeline">${story}</ol>
+        </section>
+      </div>`;
+    $("why").showModal();
+  }
+
+  // Runs the fact's check against production right now.
+  async function runLive(id, btn) {
+    const out = $("live");
+    const f = state.facts.find((x) => x.id === id);
+    out.className = "prodrun on wait";
+    if (MOCK) {
+      out.textContent = "Sample data: on the live board this button runs the check against production.";
+      return;
+    }
+    btn.disabled = true;
+    out.textContent = "Running the check against production…";
+    try {
+      const res = await fetch(`/p/${project}/facts/${id}/check`, { method: "POST" });
+      const r = await res.json();
+      if (!res.ok) throw new Error(r.error);
+      out.className = `prodrun on ${r.held ? "ok" : "no"}`;
+      out.innerHTML = r.held
+        ? `✓ <b>True on production right now.</b> Checked against ${esc(new URL(r.url).host)} in ${r.ms} ms.`
+        : f?.status === "proposed"
+          ? `✗ <b>Not true on production yet.</b> That's what the agent is working on. ${esc(r.detail)}`
+          : `✗ <b>Not true on production:</b> ${esc(r.detail)}`;
+    } catch (err) {
+      out.className = "prodrun on no";
+      out.textContent = `Couldn't run the check: ${err.message}`;
+    }
+    btn.disabled = false;
+  }
+
+  function setLive(on, text) {
+    $("livepill").classList.toggle("off", !on);
+    $("livetext").textContent = text;
+  }
+  function connect() {
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/p/${project}/ws`);
+    ws.onmessage = (m) => { state = JSON.parse(m.data); setLive(true, "Live"); render(); };
+    ws.onclose = () => { setLive(false, "Reconnecting"); setTimeout(connect, 1500); };
+  }
+
+  fetch("/meta").then((r) => r.json()).then((m) => { if (m.sourcePublic) $("menusource").hidden = false; }).catch(() => {});
+
+  if (MOCK) {
+    const script = document.createElement("script");
+    script.src = "/mock.js";
+    script.onload = () => { state = window.CANON_MOCK.state; setLive(true, "Sample data"); render(); };
+    document.head.appendChild(script);
+  } else {
+    connect();
+  }
+</script>
+</body>
+</html>
