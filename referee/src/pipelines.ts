@@ -109,6 +109,55 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   }
 }
 
+// Started by the judge when canon moved under an attempt. The judge already declared a new attempt from the current
+// canon for the same agent and fact; this re-applies the old attempt's change there and pushes it (what `canon refresh`
+// does on an agent's machine). The push event then judges it like any other. A text conflict goes back to the agent.
+export class RefreshAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
+  protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
+    const { repo } = event.payload;
+    const referee = refereeForRepo(this.env, repo);
+    const env = await step.do("refresh job", async () => {
+      const job = await referee.refreshJob(repo);
+      return job ? (Object.fromEntries(Object.entries(job)) as Record<string, string>) : null;
+    });
+    if (!env) return;
+    let outcome: "pushed" | "conflict" | "failed" = "failed";
+    let detail = "";
+    try {
+      const ran = await ci.runner({ name: "re-apply", command: REFRESH_SCRIPT, env, config: { retries: { limit: 1, delay: 15_000 }, timeout: 5 * 60_000 } });
+      const out = typeof ran.logs.stdout === "string" ? ran.logs.stdout : "";
+      if (out.includes("CANON_REFRESH_PUSHED")) outcome = "pushed";
+      else if (out.includes("CANON_REFRESH_CONFLICT")) {
+        outcome = "conflict";
+        detail = `in ${out.slice(out.indexOf("CANON_REFRESH_CONFLICT") + 22).trim().split(/\s+/).join(", ") || "the change"}`;
+      }
+    } catch (err) {
+      detail = isCiRunnerFailure(err) ? err.message : String(err);
+    }
+    await step.do("record refresh", () => referee.refreshed(repo, outcome, detail));
+  }
+}
+
+// Runs in the CI container. The URLs carry short-lived tokens: read for the old attempt, write for the new one.
+const REFRESH_SCRIPT = [
+  `set -e`,
+  `rm -rf /tmp/canon-refresh && git init -q /tmp/canon-refresh && cd /tmp/canon-refresh`,
+  `git config user.name "$AGENT" && git config user.email "$AGENT@canon.local"`,
+  // The old attempt's change: everything since it forked, except canon.json (the judge writes that one).
+  `git fetch -q "$OLD_URL" "$OLD_HEAD"`,
+  `git diff --binary "$OLD_BASE" "$OLD_HEAD" -- . ':(exclude)canon.json' > /tmp/canon-refresh.patch`,
+  `git fetch -q "$NEW_URL" main && git checkout -q -B main FETCH_HEAD`,
+  `printf %s "$CANON_JSON" | base64 -d > canon.json`,
+  `T="--trailer Canon-Fact:$FACT --trailer Canon-Claim:$CLAIM --trailer Canon-Agent:$AGENT"`,
+  `git commit -q -a -m "canon: claim \"$FACT\"" $T`,
+  `if [ -s /tmp/canon-refresh.patch ]; then`,
+  `  if ! git apply --3way /tmp/canon-refresh.patch >/dev/null 2>&1; then echo CANON_REFRESH_CONFLICT $(git diff --name-only --diff-filter=U); exit 0; fi`,
+  `  git add -A && git commit -q -m "Re-apply $OLD_ID on canon $CANON_SEQ" $T`,
+  `fi`,
+  `git push -q "$NEW_URL" HEAD:main 2>&1 | sed 's#//x:[^@]*@#//x:***@#g'`,
+  `git ls-remote "$NEW_URL" refs/heads/main | grep -q "$(git rev-parse HEAD)" && echo CANON_REFRESH_PUSHED`,
+].join("\n");
+
 // `wrangler preview --json` prints { preview: { urls }, deployment: { urls } }. The Preview is
 // already per commit, so its stable URL is the one to keep.
 function previewUrlFrom(logs: CiRunnerResult["logs"]): string | null {

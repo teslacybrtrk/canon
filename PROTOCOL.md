@@ -85,7 +85,7 @@ builds the attempt as a Workers Preview (`wrangler preview --name <attempt>`) an
 |---|---|
 | `contradicts` | a canon fact broke on this attempt. Rejected without anyone opening the diff. |
 | `unproven` | canon held; the claimed fact does not hold yet. |
-| `behind` | canon gained (or retired) a fact after this attempt forked; `canon refresh` re-applies its changes on the current canon. |
+| `behind` | canon gained (or retired) a fact after this attempt forked; the judge re-applies its changes on the current canon as a new attempt (`canon refresh` does the same by hand, for a text conflict). |
 | `ready` | canon held and the claimed fact holds. A human decides. |
 
 ## canon.json
@@ -149,10 +149,17 @@ proposed by agents themselves still wait for a person, so an agent cannot lower 
 `POST /p/:project/claims/:id/accept`: a person accepts a change in the facts; the code comes along as evidence.
 The judge freezes the attempt (revokes its write tokens), marks the fact canon, moves the canon pointer to the
 attempt, deploys it to production, and re-judges every other live attempt against the new canon.
-An attempt built before the accepted fact is **behind**; refreshed onto the new canon, an attempt that still loses the fact
-**contradicts** it. That is a conflict: a contradiction between attempts, not a textual diff. The judge never merges
-code: `canon refresh` replays an attempt's changes on the new canon, and its agent resolves any text conflict. If two
-good facts should both land, an agent declares a fresh attempt that satisfies both.
+An attempt built before the accepted fact is **behind**: it simply lacks that code. The judge refreshes it itself: it
+declares a new attempt from the current canon for the same agent and fact, replays the old attempt's changes there in
+CI, and pushes, so the new attempt is judged like any other. Only a text conflict goes back to the agent (`canon refresh`).
+An attempt that still loses the fact **contradicts** it. That is a conflict: a contradiction between attempts, not a
+textual diff. If two good facts should both land, an agent declares a fresh attempt that satisfies both.
+
+**Clashes are caught before anyone accepts.** Two Ready attempts can each keep canon and still be impossible together.
+The judge runs each Ready claim's fact on every other Ready attempt's preview, with the same inputs as on the canon
+that attempt forked from. Failing at the same step as on canon only means the other attempt lacks the code. Getting
+further and then failing means it built the very behaviour the fact tests, the other way: the two claims **clash**, and
+the board says so on both before a person picks one. Accepting one then rejects the other outright, with no refresh.
 
 After each deploy, and every hour, the judge runs canon's probe facts against production and shows the result on
 the board.

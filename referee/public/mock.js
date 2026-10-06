@@ -20,6 +20,19 @@
   });
   const claim = (id, agent, factId, sentence, status, why, attemptId, v) => ({ id, agent, factId, sentence, status, why, attemptId, createdAt: now, verdict: v });
 
+  // agent-2 refuses a second booking of a stall; agent-3 lets two vendors share one. Each fact gets further on the
+  // other's attempt than on canon (the bookings endpoint exists there), then fails.
+  const STALLS = [
+    { owner: "c-2", other: "c-10", factId: "no-double-booking", detail: "step 2: POST /api/reservations returned 201, expected 409" },
+    { owner: "c-10", other: "c-2", factId: "stalls-can-be-shared", detail: "step 2: POST /api/reservations returned 409, expected 201" },
+  ];
+  const WHO = { "c-2": ["agent-2", "farmstand-p2q8zz", "no-double-booking"], "c-10": ["agent-3", "farmstand-k8s2co", "stalls-can-be-shared"] };
+  const CLASH = (me) => STALLS.filter((x) => x.owner === me || x.other === me).map((x) => {
+    const other = x.owner === me ? x.other : x.owner;
+    const [agent, attemptId, factId] = WHO[other];
+    return { with: { claimId: other, agent, attemptId, factId }, factId: x.factId, breaks: x.owner === me ? "mine" : "theirs", detail: x.detail };
+  });
+
   window.CANON_MOCK = {
     state: {
       project: "farmstand",
@@ -39,6 +52,7 @@
         fact("bulk-discount", "Buying 10 or more of one item takes 10% off that line", "proposed"),
         fact("no-double-booking", "A stall cannot be double-booked", "proposed"),
         fact("search-by-name", "Shoppers can search products by name", "proposed"),
+        fact("stalls-can-be-shared", "Two vendors can share a stall on the same market day", "proposed"),
         fact("stall-hours", "Every stall shows its opening hours", "proposed", { origin: "backlog" }),
         fact("price-with-bulk-discount", "The basket charges the listed price, with 10% off any line of 10 or more", "proposed", { origin: "agent", replaces: "price-is-listed" }),
         fact("free-delivery", "Orders over $50 ship free", "retired", { retiredBy: "farmstand-x1y2z3", retiredAt: now }),
@@ -48,8 +62,10 @@
           verdict("farmstand-dkw3cr", DISCOUNT, "contradicts", { factId: "bulk-discount", held: true, detail: "ok" }, [{ factId: "price-is-listed", detail: "step 2: totalCents is 4320, expected 4800" }])),
         claim("c-9", "agent-1", "price-with-bulk-discount", "The basket charges the listed price, with 10% off any line of 10 or more", "ready", "The business is changing its pricing rule for wholesale buyers", "farmstand-r3v1s0",
           { ...verdict("farmstand-r3v1s0", DISCOUNT, "ready", { factId: "price-with-bulk-discount", held: true, detail: "ok" }), kept: KEPT.filter((k) => k !== "price-is-listed"), retires: ["price-is-listed"] }),
-        claim("c-2", "agent-2", "no-double-booking", "A stall cannot be double-booked", "ready", "Vendors keep fighting over stall 1", "farmstand-p2q8zz",
-          verdict("farmstand-p2q8zz", SOLD_OUT, "ready", { factId: "no-double-booking", held: true, detail: "ok" })),
+        { ...claim("c-2", "agent-2", "no-double-booking", "A stall cannot be double-booked", "ready", "Vendors keep fighting over stall 1", "farmstand-p2q8zz",
+          verdict("farmstand-p2q8zz", SOLD_OUT, "ready", { factId: "no-double-booking", held: true, detail: "ok" })), clashes: CLASH("c-2") },
+        { ...claim("c-10", "agent-3", "stalls-can-be-shared", "Two vendors can share a stall on the same market day", "ready", "Market manager wants co-op stalls where two small vendors share one stall", "farmstand-k8s2co",
+          verdict("farmstand-k8s2co", SOLD_OUT, "ready", { factId: "stalls-can-be-shared", held: true, detail: "ok" })), clashes: CLASH("c-10") },
         claim("c-3", "agent-3", "no-double-booking", "A stall cannot be double-booked", "unproven", "Joining the reservation race", "farmstand-m4n1aa",
           verdict("farmstand-m4n1aa", SOLD_OUT, "unproven", { factId: "no-double-booking", held: false, detail: "step 2: POST /api/reservations returned 201, expected 409" })),
         claim("c-4", "agent-5", "search-by-name", "Shoppers can search products by name", "behind", "Shoppers want to find eggs fast", "farmstand-9tw8ex",

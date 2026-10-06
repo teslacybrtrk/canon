@@ -13,7 +13,8 @@ the facts, and the accepted attempt becomes canon.
 
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
 - **Conflicts**: a conflict is a contradiction between attempts. Overlapping edits that keep the facts are fine (the
-  agent resolves any text conflict when it refreshes onto canon). A clean merge that breaks a fact is not.
+  judge replays an attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that
+  breaks a fact is not. Two Ready attempts that can't both land are flagged as a clash before anyone accepts either.
 - **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check.
 - **Why**: the fact chain. Every fact links to the attempt that made it true and to the attempts that failed it.
   Failed attempts stay clonable, so they remain the project's memory.
@@ -60,7 +61,8 @@ agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image str
 3. **Start five agents**: `./agents/run.sh`. Claims appear on the board, then verdicts.
 4. **Accept a fact** on the board (it asks for the owner key once). The attempt becomes canon and production updates.
    Click a fact to see the attempt that made it true beside the attempts that failed it.
-   After an accept, `./agents/refresh.sh agent-3 agent-4 agent-5` lets attempts that are now behind rebase themselves.
+   After an accept, the judge refreshes attempts that are now behind by itself. If one hits a text conflict,
+   `./agents/refresh.sh agent-3` has its agent resolve it.
 5. **Autopilot** (optional): a second project whose `canon.json` carries a backlog of facts written by people and
    `"autoAccept": "backlog"`. Agents land facts with no human click:
    ```sh

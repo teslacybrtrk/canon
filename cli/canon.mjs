@@ -172,6 +172,20 @@ async function verdict() {
       : `No verdict for ${head.slice(0, 8)}: it is not pushed. Run \`git push origin main\` first.`);
     process.exit(3);
   }
+  // Canon moved and the judge re-applied this attempt on the current canon: follow it to the new attempt.
+  for (let hops = 0; v.refreshedAs && hops < 5; hops++) {
+    console.log(`Canon moved after ${v.attemptId} forked; the judge re-applied your change on the current canon as attempt ${v.refreshedAs}.`);
+    const id = v.refreshedAs;
+    for (;;) {
+      v = await api("GET", `/attempts/${id}/verdict`, undefined, true);
+      if (v.outcome !== "pending" || Date.now() >= deadline) break;
+      await new Promise((r) => setTimeout(r, 5_000));
+    }
+    if (v.outcome === "pending") {
+      console.log(`Still judging ${id} (the preview is building). Run \`canon verdict --wait\` again.`);
+      process.exit(3);
+    }
+  }
   console.log(`VERDICT ${v.outcome.toUpperCase()}  attempt ${v.attemptId} @ ${v.sha.slice(0, 8)}`);
   if (v.outcome === "error") {
     console.log(`\n${v.claimed.detail}\nThis is not about your code. Push again (an empty commit is fine: git commit --allow-empty -m retry && git push origin main), then canon verdict --wait.`);
@@ -185,14 +199,24 @@ async function verdict() {
   if (v.skipped?.length) console.log(`  skipped  ${v.skipped.join(", ")} (out of scope: you changed none of their files)`);
   console.log(`  claimed  ${v.claimed.factId}: ${v.claimed.held ? "holds" : v.claimed.detail}`);
   for (const id of v.offers) console.log(`  offers   ${id}`);
-  if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.`);
+  for (const c of v.clashes ?? []) {
+    console.log(c.breaks === "mine"
+      ? `  CLASH    ${c.with.agent}'s attempt ${c.with.attemptId} breaks your fact: ${c.detail}`
+      : `  CLASH    your attempt breaks ${c.with.agent}'s fact ${c.factId}: ${c.detail}`);
+  }
+  if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.${v.clashes?.length ? " Your attempt and the one it clashes with can't both land: accepting one rejects the other." : ""}`);
   if (v.outcome === "contradicts") {
     const lostIds = v.lost.map((l) => l.factId).filter((id) => id !== "canon.json");
     console.log(`\nThis attempt contradicts canon. Make the lost facts hold again and push.`);
     if (lostIds.length) console.log(`If your goal is to change ${lostIds.join(", ")} on purpose, this attempt cannot land. Propose a revision instead:\n  canon claim --fact <revision.json> --why "<why the rule changes>"\n(a fact file with "replaces": "${lostIds[0]}"). That gives you a new attempt; implement the change there.`);
   }
   if (v.outcome === "unproven") console.log(`\nCanon held, but your fact does not hold yet. Fix and push again.`);
-  if (v.outcome === "behind") console.log(`\nCanon moved after this attempt forked. Run: canon refresh`);
+  if (v.outcome === "behind") {
+    const conflict = (await api("GET", "/canon")).claims.find((c) => c.attemptId === v.attemptId)?.refresh?.startsWith("conflict");
+    console.log(conflict
+      ? `\nCanon moved after this attempt forked, and your change conflicts with the new canon's code. Run: canon refresh (then resolve the conflict)`
+      : `\nCanon moved after this attempt forked. The judge is re-applying your change on the current canon; run \`canon verdict --wait\` again in a minute.`);
+  }
   process.exit(v.outcome === "ready" ? 0 : 2);
 }
 

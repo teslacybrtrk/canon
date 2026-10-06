@@ -7,7 +7,7 @@ import { refereeForProject } from "./stub";
 
 export { CiSandbox };
 export { Referee } from "./referee";
-export { VerifyAttempt, PromoteAttempt } from "./pipelines";
+export { VerifyAttempt, PromoteAttempt, RefreshAttempt } from "./pipelines";
 
 // The Canon HTTP surface. Reads are public. Writes need a bearer key: the owner's key (CANON_KEY)
 // can do anything, an agent's key (CANON_AGENT_KEY) can only declare. Running a fact's check

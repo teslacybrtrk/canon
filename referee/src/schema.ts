@@ -8,6 +8,8 @@ export const UPGRADES = [
   `ALTER TABLE facts ADD COLUMN retired_by TEXT`,
   `ALTER TABLE facts ADD COLUMN retired_at INTEGER`,
   `ALTER TABLE attempts ADD COLUMN base_sha TEXT`,
+  `ALTER TABLE claims ADD COLUMN refreshed_from TEXT`,
+  `ALTER TABLE claims ADD COLUMN refresh TEXT`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];
@@ -53,7 +55,9 @@ CREATE TABLE IF NOT EXISTS claims (
   why        TEXT NOT NULL,
   attempt_id   TEXT NOT NULL REFERENCES attempts(id),
   status     TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  refreshed_from TEXT,                 -- claim id: the behind claim the judge re-applied as this one
+  refresh    TEXT                      -- the judge's refresh of this claim: started | conflict: ... | failed
 );
 
 -- The fact chain: every time a fact was checked against an attempt.
@@ -73,6 +77,16 @@ CREATE TABLE IF NOT EXISTS verdicts (
   json     TEXT NOT NULL,
   at       INTEGER NOT NULL,
   PRIMARY KEY (attempt_id, sha)
+);
+
+-- Two Ready claims that can't both land: other_claim_id's attempt breaks claim_id's fact (see Referee.findClashes).
+CREATE TABLE IF NOT EXISTS clashes (
+  claim_id       TEXT NOT NULL,
+  other_claim_id TEXT NOT NULL,
+  fact_id        TEXT NOT NULL,
+  detail         TEXT NOT NULL,
+  at             INTEGER NOT NULL,
+  PRIMARY KEY (claim_id, other_claim_id)
 );
 
 -- Canon pointer history. The highest seq is current. Promotion appends a row.

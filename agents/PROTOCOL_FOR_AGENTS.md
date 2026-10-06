@@ -25,9 +25,10 @@ Use the `canon` command for the protocol and plain `git` for code.
      whether the rule changes. If your fact cannot coexist with canon and no revision is intended, stop and say so.
    - Facts with "runs:" are commands (lint, type-check, tests) run on your commit; fix what they report.
    - UNPROVEN: canon held but your fact does not. Fix and push again.
-   - BEHIND: another fact became canon after you forked. Run `canon refresh` inside your attempt: it makes a
-     fresh attempt from the current canon with your changes re-applied. cd into it, resolve any conflict,
-     push, and read the verdict again.
+   - BEHIND: another fact became canon after you forked. The judge re-applies your change on the current
+     canon by itself: run `canon verdict --wait` again and it follows your change to the new attempt. Only if
+     it says your change conflicts, run `canon refresh` inside your attempt: it makes a fresh attempt from the
+     current canon with your changes re-applied. cd into it, resolve the conflict, push, and read the verdict again.
    - ERROR: the platform could not judge your push (not your code). Push again, then read the verdict.
    - READY: stop. A human decides whether your fact becomes canon.
 

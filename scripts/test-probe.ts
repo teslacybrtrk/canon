@@ -2,7 +2,7 @@
 // A transient 5xx is retried with a fresh run; a real failure is reported on the first try.
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
-import { runCheck, templateNames } from "../referee/src/probe.ts";
+import { progress, runCheck, templateNames } from "../referee/src/probe.ts";
 
 let hits = 0;
 let failFirst = 0;
@@ -124,3 +124,30 @@ console.log("ok  isolate: false            -> sent like a visitor, with no x-can
 assert.deepEqual(templateNames(listed.steps), ["a", "qa", "b", "qb", "qa", "a", "qb", "b"]);
 console.log("ok  templateNames             -> the inputs a check uses, for validation");
 shop.close();
+
+// Clashes: "a stall cannot be double-booked" on canon (no bookings yet), on an attempt that lacks bookings, and on
+// one that built bookings the other way (two vendors may share a stall). Only the last gets further, then fails.
+const market = (bookings: "none" | "shared") =>
+  createServer((req, res) => {
+    if (bookings === "none" || req.url !== "/api/reservations") return void res.writeHead(404).end();
+    res.writeHead(201, { "content-type": "application/json" }).end("{}");
+  });
+const noDoubleBooking = {
+  kind: "probe" as const,
+  steps: [
+    { method: "POST", path: "/api/reservations", body: { stallId: 1, date: "2026-11-07", name: "Ada" }, expect: { status: 201 } },
+    { method: "POST", path: "/api/reservations", body: { stallId: 1, date: "2026-11-07", name: "Bo" }, expect: { status: 409 } },
+  ],
+};
+const [canonApp, lacking, shared] = [market("none"), market("none"), market("shared")];
+const at = async (srv: ReturnType<typeof market>) => {
+  await new Promise<void>((r) => srv.listen(0, r));
+  return runCheck(noDoubleBooking, `http://127.0.0.1:${(srv.address() as { port: number }).port}`, "seed");
+};
+const [onCanon, onLacking, onShared] = [await at(canonApp), await at(lacking), await at(shared)];
+assert.equal(progress(onLacking.detail), progress(onCanon.detail));
+assert.ok(progress(onShared.detail) > progress(onCanon.detail), `${onShared.detail} vs ${onCanon.detail}`);
+assert.ok(progress("sample 2, step 1: x") > progress("step 3: y"));
+assert.equal(progress("build failed: x"), 0);
+console.log(`ok  clash rule                -> lacking the code fails where canon does; building it the other way gets further (${onShared.detail})`);
+for (const srv of [canonApp, lacking, shared]) srv.close();

@@ -3,7 +3,7 @@ import type { CiParams, CloudflareArtifacts } from "@cloudflare/ci";
 import type { Env } from "./env";
 import type { Novelty } from "./commands";
 import { compareLedger } from "./ledger";
-import { runCheck, templateNames } from "./probe";
+import { progress, runCheck, templateNames } from "./probe";
 import {
   ProtocolError,
   errorStatus,
@@ -11,6 +11,7 @@ import {
   type CanonState,
   type Check,
   type CheckResult,
+  type Clash,
   type Claim,
   type ClaimStatus,
   type DeclareRequest,
@@ -94,7 +95,7 @@ export class Referee extends DurableObject<Env> {
     const sentences = new Map(facts.map((f) => [f.id, f.sentence]));
     const claims = this.rows(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 200`).map((r) => {
       const claim = toClaim(r);
-      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict: this.latestVerdict(claim.attemptId) };
+      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict: this.latestVerdict(claim.attemptId), clashes: this.clashesFor(claim.id) };
     });
     return {
       project: this.meta("project") ?? "",
@@ -274,6 +275,7 @@ export class Referee extends DurableObject<Env> {
     }
     this.broadcast();
     await this.autopilot(attempt.claimId, verdict);
+    await this.followUp(attempt.claimId, verdict);
     return verdict;
   }
 
@@ -310,7 +312,11 @@ export class Referee extends DurableObject<Env> {
 
   async verdict(attemptId: string): Promise<Verdict | null> {
     await this.catchUp(attemptId);
-    return this.latestVerdict(attemptId);
+    const verdict = this.latestVerdict(attemptId);
+    const claimId = this.attempt(attemptId)?.claimId;
+    if (!verdict || !claimId) return verdict;
+    const next = this.rows(`SELECT attempt_id FROM claims WHERE refreshed_from = ?`, claimId)[0]?.attempt_id as string | undefined;
+    return { ...verdict, clashes: this.clashesFor(claimId), ...(next ? { refreshedAs: next } : {}) };
   }
 
   /**
@@ -397,16 +403,21 @@ export class Referee extends DurableObject<Env> {
     if (this.meta("rejudge") === "1" || this.meta("prodCheckAt") === null) {
       this.setMeta("rejudge", "0");
       const live = this.rows(`SELECT * FROM claims WHERE status IN (${LIVE.map(() => "?").join(",")})`, ...LIVE).map(toClaim);
+      const judged: Array<[string, Verdict]> = [];
       for (const claim of live) {
         const attempt = this.attempt(claim.attemptId);
-        if (attempt?.headSha && attempt.previewUrl) await this.evaluate(attempt, attempt.headSha, attempt.previewUrl);
+        if (attempt?.headSha && attempt.previewUrl) judged.push([claim.id, await this.evaluate(attempt, attempt.headSha, attempt.previewUrl)]);
       }
+      this.broadcast();
+      for (const [claimId, verdict] of judged) await this.followUp(claimId, verdict);
     }
     const canon = this.currentCanon();
     if (canon && Date.now() >= Number(this.meta("prodCheckAt") ?? 0)) {
       // While an accepted attempt is still deploying, production runs the old canon: wait for promoted().
       const deploying = canon.accepted_fact !== null && canon.deployed === 0;
       if (!deploying) await this.checkCanonOnProduction();
+      // Previews don't change, but the set of Ready claims does: recheck their clashes on the same schedule.
+      for (const r of this.rows(`SELECT id FROM claims WHERE status = 'ready'`)) await this.findClashes(r.id as string).catch(() => {});
       this.setMeta("prodCheckAt", String(Date.now() + (deploying ? 5 * 60_000 : PRODUCTION_CHECK_EVERY_MS)));
     }
     this.broadcast();
@@ -525,6 +536,138 @@ export class Referee extends DurableObject<Env> {
     }
   }
 
+  // ---- After a verdict: clashes and refreshes ------------------------------------------
+
+  /** A Ready claim is checked against the other Ready claims; a claim that fell behind is refreshed by the judge. */
+  private async followUp(claimId: string | null, verdict: Verdict) {
+    if (!claimId) return;
+    try {
+      if (verdict.outcome === "ready") await this.findClashes(claimId);
+      if (verdict.outcome === "behind") await this.autoRefresh(claimId);
+    } catch {
+      // Best effort: the verdict stands either way.
+    }
+    this.broadcast();
+  }
+
+  /**
+   * Did an attempt build the very behaviour a fact tests, the other way? `there` is the fact's result on the attempt;
+   * the same check, with the same inputs, runs on the canon the attempt forked from. Failing at the same step only
+   * means the attempt lacks that code. Getting further and then failing means it changed that behaviour differently.
+   */
+  private async interferes(fact: Fact, there: CheckResult, forkedFrom: string, seed: string): Promise<string | null> {
+    if (fact.check.kind !== "probe" || there.held) return null;
+    const before = await runCheck(fact.check, forkedFrom, seed);
+    // A platform hiccup on the old Preview proves nothing.
+    if (before.held || /failed:|returned 5\d\d/.test(before.detail)) return null;
+    if (progress(there.detail) <= progress(before.detail)) return null;
+    return `${there.detail} (on the canon it forked from, the check stopped earlier: ${before.detail})`;
+  }
+
+  /**
+   * Two Ready claims can each keep canon and still be impossible together. Before anyone accepts either, each one's
+   * fact runs on the other's preview: if the other attempt built that behaviour the other way, they clash, and
+   * accepting one rejects the other. A plain text conflict is not a clash; the judge's refresh handles those.
+   */
+  private async findClashes(claimId: string) {
+    const claim = this.claim(claimId);
+    if (claim?.status !== "ready") return;
+    const mine = this.attempt(claim.attemptId);
+    const others = this.rows(`SELECT * FROM claims WHERE status = 'ready' AND id != ? AND fact_id != ?`, claim.id, claim.factId).map(toClaim);
+    const found: Array<{ claimId: string; otherId: string; factId: string; detail: string }> = [];
+    const probe = async (owner: Claim, on: Attempt | null, otherId: string) => {
+      const fact = this.fact(owner.factId);
+      const forkedFrom = on?.baseAttempt ? this.attempt(on.baseAttempt)?.previewUrl : null;
+      if (fact?.check.kind !== "probe" || !on?.previewUrl || !forkedFrom) return;
+      const seed = `${on.headSha}:${fact.id}`;
+      const detail = await this.interferes(fact, await runCheck(fact.check, on.previewUrl, seed), forkedFrom, seed);
+      if (detail) found.push({ claimId: owner.id, otherId, factId: fact.id, detail });
+    };
+    await Promise.all(others.flatMap((other) => [probe(claim, this.attempt(other.attemptId), other.id), probe(other, mine, claim.id)]));
+    this.sql.exec(`DELETE FROM clashes WHERE claim_id = ? OR other_claim_id = ?`, claim.id, claim.id);
+    for (const f of found) {
+      this.sql.exec(`INSERT OR REPLACE INTO clashes (claim_id, other_claim_id, fact_id, detail, at) VALUES (?, ?, ?, ?, ?)`, f.claimId, f.otherId, f.factId, f.detail, Date.now());
+    }
+  }
+
+  /** The clashes between this claim and other claims, while both are Ready. */
+  private clashesFor(claimId: string): Clash[] {
+    if (this.claim(claimId)?.status !== "ready") return [];
+    return this.rows(`SELECT * FROM clashes WHERE claim_id = ? OR other_claim_id = ?`, claimId, claimId).flatMap((r) => {
+      const mine = r.claim_id === claimId;
+      const other = this.claim((mine ? r.other_claim_id : r.claim_id) as string);
+      if (other?.status !== "ready") return [];
+      return [{ with: { claimId: other.id, agent: other.agent, attemptId: other.attemptId, factId: other.factId }, factId: r.fact_id as string, breaks: mine ? "mine" : "theirs", detail: r.detail as string } satisfies Clash];
+    });
+  }
+
+  /**
+   * An attempt that is behind only lacks code canon gained after it forked. The judge re-applies its change on the
+   * current canon as a new attempt (the same move as `canon refresh`) and pushes it, so the agent does nothing.
+   * Only a text conflict goes back to the agent.
+   */
+  private async autoRefresh(claimId: string) {
+    const claim = this.claim(claimId);
+    const old = claim ? this.attempt(claim.attemptId) : null;
+    if (claim?.status !== "behind" || claim.refresh || !old?.headSha || !old.baseSha) return;
+    this.sql.exec(`UPDATE claims SET refresh = 'started' WHERE id = ?`, claim.id);
+    let fresh: Declared | null = null;
+    try {
+      const canon = this.currentCanon()!;
+      const why = `${claim.why.replace(/ \(refreshed onto canon \d+\)$/, "")} (refreshed onto canon ${canon.seq})`;
+      fresh = await this.declare({ agent: claim.agent, why, join: claim.factId, replaces: claim.id });
+      this.sql.exec(`UPDATE claims SET refreshed_from = ? WHERE id = ?`, claim.id, fresh.claim.id);
+      await this.env.REFRESH_WORKFLOW.create({ id: `refresh-${fresh.attempt.id}`, params: this.ciParams(fresh.attempt.id, canon.sha as string) });
+    } catch (err) {
+      if (fresh) await this.refreshed(fresh.attempt.id, "failed", String(err));
+      else this.sql.exec(`UPDATE claims SET refresh = 'failed' WHERE id = ?`, claim.id);
+    }
+  }
+
+  /** What the refresh Workflow needs: where to read the old change, where to push it, and the new canon.json. */
+  async refreshJob(attemptId: string): Promise<Record<string, string> | null> {
+    const attempt = this.attempt(attemptId);
+    const claim = attempt?.claimId ? this.claim(attempt.claimId) : null;
+    const from = claim?.refreshedFrom ? this.claim(claim.refreshedFrom) : null;
+    const old = from ? this.attempt(from.attemptId) : null;
+    // Already pushed (a retried Workflow) or not a refresh: nothing to do.
+    if (!attempt || !claim || attempt.headSha || !old?.headSha || !old.baseSha) return null;
+    const url = async (a: Attempt, scope: "read" | "write") => {
+      using repo = await this.env.ARTIFACTS.get(a.id);
+      const token = await repo.createToken(scope, 15 * 60);
+      const u = new URL(a.remote);
+      u.username = "x";
+      u.password = token.plaintext;
+      return u.toString();
+    };
+    return {
+        NEW_URL: await url(attempt, "write"),
+        OLD_URL: await url(old, "read"),
+        OLD_ID: old.id,
+        OLD_BASE: old.baseSha,
+        OLD_HEAD: old.headSha,
+        CANON_JSON: base64(new TextEncoder().encode(await this.attemptLedger(attemptId))),
+        CANON_SEQ: String(this.currentCanon()?.seq ?? ""),
+        AGENT: claim.agent,
+        FACT: claim.factId,
+        CLAIM: claim.id,
+    };
+  }
+
+  /** The refresh Workflow's result. Pushed: the push event takes it from here. Otherwise the old claim goes back to its agent. */
+  async refreshed(attemptId: string, outcome: "pushed" | "conflict" | "failed", detail: string) {
+    if (outcome === "pushed") return;
+    const attempt = this.attempt(attemptId);
+    const claim = attempt?.claimId ? this.claim(attempt.claimId) : null;
+    if (!attempt || !claim?.refreshedFrom || attempt.headSha) return;
+    // Nothing was pushed, so the new attempt never existed as far as anyone can tell.
+    this.sql.exec(`DELETE FROM claims WHERE id = ?`, claim.id);
+    this.sql.exec(`DELETE FROM attempts WHERE id = ?`, attempt.id);
+    const note = outcome === "conflict" ? `conflict: ${detail.replace(/\s+/g, " ").trim().slice(0, 200)}` : "failed";
+    this.sql.exec(`UPDATE claims SET status = 'behind', refresh = ? WHERE id = ? AND status = 'superseded'`, note, claim.refreshedFrom);
+    this.broadcast();
+  }
+
   // ---- Internals ---------------------------------------------------------------------
 
   /** With autoAccept "backlog", the first attempt that keeps canon and makes a backlog fact true lands on its own. */
@@ -574,11 +717,23 @@ export class Referee extends DurableObject<Env> {
     const canonFacts = facts.filter((f) => f.status === "canon");
     const judged = canonFacts.filter((f) => results.has(f.id) && f.id !== retiring);
     const failed = judged.filter((f) => !results.get(f.id)!.held).map((f) => ({ fact: f, detail: results.get(f.id)!.detail }));
-    // Breaking a fact that was canon when this attempt forked is a contradiction. Failing a fact
-    // accepted after the fork only means the attempt is behind: it predates that code. Whether its
-    // own change truly conflicts shows once it is refreshed onto the current canon.
-    const lost = failed.filter((x) => (x.fact.acceptedAt ?? 0) <= attempt.createdAt).map((x) => ({ factId: x.fact.id, detail: x.detail }));
-    const stale = failed.filter((x) => (x.fact.acceptedAt ?? 0) > attempt.createdAt).map((x) => ({ factId: x.fact.id, detail: x.detail }));
+    // Breaking a fact that was canon when this attempt forked is a contradiction. Failing a fact accepted after
+    // the fork usually only means the attempt is behind: it predates that code, and the judge refreshes it onto
+    // the current canon. But an attempt that built the very behaviour the fact tests, the other way, contradicts
+    // it outright: no refresh can make both true.
+    const newer = (x: { fact: Fact }) => (x.fact.acceptedAt ?? 0) > attempt.createdAt;
+    const forkedFrom = attempt.baseAttempt ? (this.attempt(attempt.baseAttempt)?.previewUrl ?? null) : null;
+    const opposed = new Map<string, string>();
+    if (forkedFrom && !forced) {
+      await Promise.all(
+        failed.filter(newer).map(async (x) => {
+          const detail = await this.interferes(x.fact, results.get(x.fact.id)!, forkedFrom, `${sha}:${x.fact.id}`);
+          if (detail) opposed.set(x.fact.id, detail);
+        }),
+      );
+    }
+    const lost = failed.filter((x) => !newer(x) || opposed.has(x.fact.id)).map((x) => ({ factId: x.fact.id, detail: opposed.get(x.fact.id) ?? x.detail }));
+    const stale = failed.filter((x) => newer(x) && !opposed.has(x.fact.id)).map((x) => ({ factId: x.fact.id, detail: x.detail }));
     const ledger: Ledger = forced ? { status: "ok", detail: "not read: build failed" } : await this.checkLedger(attempt, sha, claimedFact, canonFacts, retiring);
     if (ledger.status === "tampered") lost.push({ factId: "canon.json", detail: ledger.detail });
     const claimed = claim ? results.get(claim.factId) : undefined;
@@ -793,6 +948,8 @@ function toClaim(r: Row): Claim {
     attemptId: r.attempt_id as string,
     status: r.status as ClaimStatus,
     createdAt: r.created_at as number,
+    refreshedFrom: (r.refreshed_from as string | null) ?? null,
+    refresh: (r.refresh as string | null) ?? null,
   };
 }
 

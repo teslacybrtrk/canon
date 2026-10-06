@@ -20,7 +20,7 @@ export type ClaimStatus =
   | "contradicts" // a canon fact broke on this attempt (rejected without reading the diff)
   | "unproven" //    canon held, but the claimed fact does not hold yet
   | "ready" //       canon held and the claimed fact holds; waiting on a human
-  | "behind" //      canon gained a fact after this attempt forked; `canon refresh` onto the current canon
+  | "behind" //      canon gained a fact after this attempt forked; the judge re-applies it on the current canon
   | "accepted" //    a human accepted the fact; this attempt is canon
   | "superseded" // another attempt made the same fact true first
   | "error"; //      could not be judged: a platform error, not the code (push again)
@@ -120,6 +120,18 @@ export interface Claim {
   attemptId: string;
   status: ClaimStatus;
   createdAt: number;
+  refreshedFrom: string | null; // the behind claim the judge re-applied on the current canon as this one
+  // How the judge's own refresh of this claim went, when it was behind: started, or why the agent must refresh it.
+  refresh: string | null;
+}
+
+// Two Ready claims that can't both land. `factId` failed on the other attempt's preview at a later step than on the
+// canon that attempt forked from: the other attempt changed the very behaviour the fact tests, the other way.
+export interface Clash {
+  with: { claimId: string; agent: string; attemptId: string; factId: string };
+  factId: string; // the fact that breaks
+  breaks: "mine" | "theirs"; // whose fact breaks on whose attempt
+  detail: string;
 }
 
 export interface Attempt {
@@ -140,7 +152,7 @@ export interface CanonState {
   project: string;
   canon: { attemptId: string; sha: string; seq: number; previewUrl: string | null } | null;
   facts: Fact[]; // canon + proposed
-  claims: Array<Claim & { sentence: string; verdict: Verdict | null }>;
+  claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[] }>;
   policy: { autoAccept: "off" | "backlog" };
   // The last time every canon probe fact ran against production (hourly, and after each deploy).
   production: { at: number; url: string; results: Record<string, { held: boolean; detail: string }> } | null;
@@ -195,6 +207,9 @@ export interface Verdict {
   offers: string[]; // other proposed facts this attempt happens to make true
   ledger: Ledger; // the attempt's canon.json against canon
   judgedAt: number;
+  // Added when the verdict is read (GET /attempts/:id/verdict), not stored with it:
+  refreshedAs?: string; // canon moved, and the judge re-applied this attempt on the current canon as this attempt
+  clashes?: Clash[];
 }
 
 // Errors lose their class crossing the Durable Object RPC boundary, so the HTTP

@@ -126,7 +126,8 @@ once. It deploys that attempt to production, as a Worker named after the project
 `https://myapp.<subdomain>.workers.dev`. Your existing production Worker is untouched until you point your domain
 at that one.
 
-- **When canon moves,** attempts built before it are *behind*: `canon refresh` replays them onto the new canon.
+- **When canon moves,** attempts built before it are *behind*: the judge replays them onto the new canon itself.
+  Only a text conflict goes back to the agent, who runs `canon refresh`.
 - **To change a rule on purpose,** an agent proposes a revision: a fact with `"replaces": "<id>"`. A person decides.
 - **For no human in the loop,** add `"backlog"` facts and `"policy": { "autoAccept": "backlog" }` to
   `canon.json`. An attempt that makes a backlog fact true lands on its own. Facts agents invent still wait for a person.

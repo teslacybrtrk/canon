@@ -128,6 +128,7 @@ async function call(name: string, args: Args, referee: Referee, project: string)
     const state = (await referee.read()) as CanonState;
     const old = state.claims.find((c) => c.attemptId === need("attempt"));
     if (!old) fail(`no claim for attempt "${args.attempt}"`);
+    if (old!.status === "superseded") fail(`attempt ${old!.attemptId} was already refreshed or replaced; call canon_verdict on it to find the newer attempt`);
     if (old!.verdict?.outcome !== "behind") fail(`refresh is only for an attempt that is BEHIND; this one is ${old!.verdict?.outcome ?? old!.status}`);
     const declared = await referee.declare({ agent: need("agent"), why: `${old!.why} (refreshed onto canon ${state.canon?.seq})`, join: old!.factId, replaces: old!.id });
     return start(referee, project, declared.claim, declared.attempt, need("agent"), old!.attemptId);
@@ -196,10 +197,19 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
     if ((v && (!sha || v.sha.startsWith(sha) || sha.startsWith(v.sha))) || Date.now() >= deadline) break;
     await new Promise((r) => setTimeout(r, 5_000));
   }
+  // Canon moved and the judge re-applied this attempt on the current canon: report the newer attempt instead.
+  const moved: string[] = [];
+  for (let hops = 0; v?.refreshedAs && hops < 5; hops++) {
+    moved.push(`Canon moved after ${v.attemptId} forked; the judge re-applied your change on the current canon as attempt ${v.refreshedAs}.`);
+    const next = (await referee.verdict(v.refreshedAs)) as Verdict | null;
+    if (!next) return [...moved, `Its preview is still building. Call canon_verdict with attempt "${v.refreshedAs}" in a minute.`].join("\n");
+    v = next;
+    sha = null;
+  }
   if (!v || (sha && !v.sha.startsWith(sha) && !sha.startsWith(v.sha))) {
     return `No verdict${sha ? ` for ${sha.slice(0, 8)}` : ""} yet: the preview is still building (about a minute after a push), or the commit isn't pushed. Call canon_verdict again.`;
   }
-  const out = [`VERDICT ${v.outcome.toUpperCase()}: attempt ${v.attemptId} @ ${v.sha.slice(0, 8)}`];
+  const out = [...moved, `VERDICT ${v.outcome.toUpperCase()}: attempt ${v.attemptId} @ ${v.sha.slice(0, 8)}`];
   if (v.outcome === "error") return [...out, v.claimed.detail, "This is not about your code. Push again (an empty commit is fine), then call canon_verdict."].join("\n");
   if (v.previewUrl) out.push(`preview ${v.previewUrl}`);
   for (const id of v.kept) out.push(`  kept     ${id}`);
@@ -207,11 +217,17 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
   for (const l of v.stale ?? []) out.push(`  NEWER    ${l.factId} became canon after you forked: ${l.detail}`);
   for (const id of v.retires ?? []) out.push(`  RETIRES  ${id} (your claim revises this rule on purpose; a person decides)`);
   out.push(`  claimed  ${v.claimed.factId}: ${v.claimed.held ? "holds" : v.claimed.detail}`);
+  for (const c of v.clashes ?? []) {
+    out.push(c.breaks === "mine" ? `  CLASH    ${c.with.agent}'s attempt ${c.with.attemptId} breaks your fact: ${c.detail}` : `  CLASH    your attempt breaks ${c.with.agent}'s fact ${c.factId}: ${c.detail}`);
+  }
+  const conflict = v.outcome === "behind" && ((await referee.read()) as CanonState).claims.find((c) => c.attemptId === v.attemptId)?.refresh?.startsWith("conflict");
   const next = {
     ready: `Ready. Stop here: a person decides whether "${v.claimed.factId}" becomes canon.`,
     contradicts: "This attempt contradicts canon. Make the lost facts hold again and push. To change one of them on purpose, claim a revision instead (a fact with \"replaces\").",
     unproven: "Canon held, but your fact doesn't hold yet. Fix it and push again.",
-    behind: "Canon moved after this attempt forked. Call canon_refresh.",
+    behind: conflict
+      ? "Canon moved after this attempt forked, and your change conflicts with the new canon's code. Call canon_refresh, then resolve the conflict."
+      : "Canon moved after this attempt forked. The judge re-applies your change on the current canon by itself; call canon_verdict again in a minute.",
   }[v.outcome as string];
   if (next) out.push("", next);
   return out.join("\n");

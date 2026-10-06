@@ -21,7 +21,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&display=swap" rel="stylesheet">
 <style>
   [hidden] { display: none !important; }
-  /* A code-host workspace, the familiar way: header, repo bar, tabs, a list and an About sidebar.
+  /* A cloud dashboard workspace: top bar with an account switcher, page header, tabs, a list and an About sidebar.
      Canon's own midnight and sunset orange replace the usual greys and green. */
   :root {
     --bg: #0b1220; --bg-subtle: #0f1829; --bg-inset: #080e1a; --header: #050b16; --overlay: #111c2f;
@@ -51,28 +51,37 @@
   svg.i { width: 16px; height: 16px; flex: none; fill: currentColor; vertical-align: text-bottom; }
   .wrap { margin: 0 auto; padding: 0 32px; }
 
-  /* ---- Global header ------------------------------------------------------------------ */
-  .top { background: var(--header); border-bottom: 1px solid var(--border); }
-  .top .wrap { display: flex; align-items: center; gap: 12px; height: 64px; }
-  .logo { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; }
-  .logo img { width: 32px; height: 32px; }
-  .crumbs { display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; white-space: nowrap; }
-  .crumbs a { color: var(--ink); padding: 2px 6px; border-radius: 6px; }
-  .crumbs a:hover { background: var(--hover); text-decoration: none; }
-  .crumbs b { font-weight: 600; }
-  .crumbs span { color: var(--muted); }
-  .search { margin-left: auto; display: flex; align-items: center; gap: 8px; width: min(340px, 34vw); height: 32px; padding: 0 8px; border: 1px solid var(--border);
-    border-radius: 6px; background: var(--bg); color: var(--muted); cursor: text; }
-  .search:focus-within { border-color: var(--brand); box-shadow: 0 0 0 2px rgb(253 111 22 / 0.25); }
+  /* ---- Global header: a cloud dashboard's top bar --------------------------------------- */
+  .top { background: var(--header); border-bottom: 1px solid var(--border); position: relative; z-index: 20; }
+  .top .wrap { display: flex; align-items: center; gap: 6px; height: 56px; }
+  .logo { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 2px; margin-right: 4px; border-radius: 8px; color: var(--ink); font: 800 19px/1 "Big Shoulders Display", var(--sans); letter-spacing: 0.02em; text-transform: uppercase; }
+  .logo:hover { text-decoration: none; background: var(--hover); }
+  .logo img { width: 28px; height: 28px; }
+  .bar { width: 1px; height: 24px; background: var(--border); margin: 0 6px 0 2px; }
+  .acct { position: relative; }
+  .account { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: 600 14px var(--sans); cursor: pointer; white-space: nowrap; }
+  .account:hover, .account[aria-expanded="true"] { background: var(--hover); }
+  .account .chev { color: var(--muted); }
+  .acct .menu { left: 0; right: auto; width: 280px; }
+  .menu a.proj { justify-content: space-between; }
+  .menu a.proj small { color: var(--muted); font-size: 12px; }
+  .menu a.proj.on { font-weight: 600; }
+  .menu a.proj.on::after { content: "✓"; color: var(--brand); }
+  .search { margin-left: 10px; display: flex; align-items: center; gap: 8px; width: min(380px, 32vw); height: 34px; padding: 0 10px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--bg-inset); color: var(--muted); cursor: text; }
+  .search:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px rgb(253 111 22 / 0.2); background: var(--bg); }
   .search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 14px var(--sans); outline: none; }
   .search input::placeholder { color: var(--muted); }
   kbd { font: 11px var(--mono); color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; line-height: 16px; }
-  .top-r { display: flex; align-items: center; gap: 8px; position: relative; }
-  .icon-btn { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
-  .icon-btn:hover { color: var(--ink); background: var(--hover); }
-  .icon-btn .dot { position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; border: 2px solid var(--header);
+  .top-r { margin-left: auto; display: flex; align-items: center; gap: 4px; position: relative; }
+  .top-link { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border-radius: 8px; color: var(--ink-2); font-weight: 500; }
+  .top-link:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
+  .top-link svg { color: var(--muted); }
+  .icon-btn { position: relative; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); cursor: pointer; }
+  .icon-btn:hover, .icon-btn[aria-expanded="true"] { color: var(--ink); background: var(--hover); }
+  .icon-btn .dot { position: absolute; top: 1px; right: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; border: 2px solid var(--header);
     background: var(--brand); color: #1a0b02; font: 700 10px/12px var(--sans); }
-  .me { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+  .me { width: 32px; height: 32px; margin-left: 6px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
   .me svg, .avatar { display: block; border-radius: 50%; }
   .me:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
@@ -91,11 +100,16 @@
   .menu h5 { margin: 4px 14px 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
   .menu .empty-note { padding: 10px 14px; color: var(--muted); }
 
-  /* ---- Repo bar and tabs -------------------------------------------------------------- */
-  .repo { background: var(--header); border-bottom: 1px solid var(--border); }
-  .repo-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding-top: 16px; }
-  .repo-title .name { font-size: 20px; display: flex; align-items: center; gap: 6px; }
-  .repo-title .name a { color: var(--link); }
+  /* ---- Page header: breadcrumb, title, tabs ------------------------------------------- */
+  .repo { background: var(--bg); border-bottom: 1px solid var(--border); }
+  .crumbs { display: flex; align-items: center; gap: 6px; padding-top: 18px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .crumbs a { color: var(--muted); }
+  .crumbs a:hover { color: var(--link); }
+  .crumbs span.sep { opacity: 0.6; }
+  .repo-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding-top: 6px; }
+  .repo-title .name { margin: 0; font: 600 26px/1.2 var(--sans); letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+  .repo-title .name .mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, var(--brand), var(--gold)); color: #1a0b02; }
+  .repo-title .name .mark svg { width: 18px; height: 18px; }
   .repo-title .name b { font-weight: 600; }
   .pill { font: 500 12px/18px var(--sans); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; }
   .pill.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--held); box-shadow: 0 0 0 0 rgb(63 185 80 / 0.6); animation: beacon 2.4s ease-out infinite; }
@@ -111,17 +125,17 @@
   .clone-menu .field { display: flex; gap: 6px; }
   .clone-menu input { flex: 1; min-width: 0; height: 30px; padding: 0 8px; font: 12px var(--mono); color: var(--ink); background: var(--bg-inset); border: 1px solid var(--border); border-radius: 6px; }
   .clone-menu p { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
-  .tabs { display: flex; gap: 4px; margin-top: 14px; overflow-x: auto; scrollbar-width: none; }
-  .tabs a { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px 12px; color: var(--ink); white-space: nowrap; }
-  .tabs a::before { content: ""; position: absolute; inset: 0 0 6px; border-radius: 6px; }
+  .tabs { display: flex; gap: 8px; margin-top: 16px; overflow-x: auto; scrollbar-width: none; }
+  .tabs a { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 6px 4px 12px; color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .tabs a.on { color: var(--ink); }
+  .tabs a::before { content: ""; position: absolute; inset: 0 -6px 6px; border-radius: 6px; }
   .tabs a:hover { text-decoration: none; }
   .tabs a:hover::before { background: var(--hover); }
   .tabs a > * { position: relative; }
   .tabs a.on { font-weight: 600; }
   .tabs a.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--brand); }
-  .tabs svg { color: var(--muted); }
+  .tabs svg { display: none; }
   .ct { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--hover); font: 500 12px/18px var(--sans); text-align: center; color: var(--ink); }
-  .tabs .learn { margin-left: auto; color: var(--muted); }
 
   /* ---- Welcome flash ------------------------------------------------------------------- */
   .flash { display: flex; gap: 12px; align-items: flex-start; margin-top: 20px; padding: 14px 16px; border: 1px solid rgb(253 111 22 / 0.4); border-radius: 6px;
@@ -198,6 +212,9 @@
   .reason { margin: 8px 0 0; padding-left: 10px; border-left: 2px solid var(--border); color: var(--ink-2); font-size: 13px; font-style: italic; }
   .pr-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; }
   .pr-actions .accept { margin-left: auto; }
+  .clash { margin-top: 8px; padding: 8px 10px; border: 1px solid rgb(248 81 73 / 0.4); border-left: 3px solid var(--broke); border-radius: 6px; background: var(--broke-bg); font-size: 13px; color: var(--ink-2); }
+  .clash b { color: var(--broke); }
+  .clash code { font: 12px var(--mono); }
   .copy { font: 500 12px var(--sans); color: var(--ink); background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
   .copy:hover { background: var(--hover); }
   .copy.done { color: var(--held); border-color: var(--held); }
@@ -315,11 +332,10 @@
     .wrap { padding: 0 16px; }
     .search { display: none; }
     .top-r { margin-left: auto; }
-    .crumbs .first, .crumbs .first + span { display: none; }
+    .bar, .logo span, .top-link span { display: none; }
     .repo-actions { margin-left: 0; width: 100%; }
     .repo-actions .btn { flex: 1; justify-content: center; }
     .clone-menu { width: calc(100vw - 32px); max-width: 380px; left: auto; right: 0; }
-    .tabs .learn span { display: none; }
     .commit .msg { flex-basis: 100%; order: 3; }
     .fact { grid-template-columns: 16px minmax(0, 1fr); }
     .fact .st { grid-row: auto; grid-column: 2; }
@@ -354,10 +370,19 @@
 
 <header class="top">
   <div class="wrap">
-    <a class="logo" href="/" aria-label="canon.rodeo home"><img src="/icon.png" alt=""></a>
-    <nav class="crumbs" aria-label="Breadcrumb"><a class="first" href="/">canon</a><span>/</span><a href="/board" id="crumbproj"><b>farmstand</b></a></nav>
-    <label class="search" title="Search facts and claims"><svg class="i"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Type / to search facts and claims" aria-label="Search facts and claims"><kbd>/</kbd></label>
+    <a class="logo" href="/" aria-label="canon.rodeo home"><img src="/icon.png" alt=""><span>Canon</span></a>
+    <span class="bar" aria-hidden="true"></span>
+    <div class="acct">
+      <button class="account" id="account" type="button" aria-haspopup="true" aria-expanded="false" title="Switch project">trail-boss’s Account<svg class="i chev"><use href="#i-down"/></svg></button>
+      <div class="menu" id="acctmenu" hidden>
+        <h5>Projects</h5>
+        <a class="proj" href="/board?p=farmstand" data-proj="farmstand"><span>farmstand<br><small>Five agents, a person accepts</small></span></a>
+        <a class="proj" href="/board?p=rodeo" data-proj="rodeo"><span>rodeo<br><small>Autopilot: backlog facts land on their own</small></span></a>
+      </div>
+    </div>
+    <label class="search" title="Search facts and claims"><svg class="i"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Go to a fact or claim…" aria-label="Search facts and claims"><kbd>/</kbd></label>
     <div class="top-r">
+      <a class="top-link" href="/"><svg class="i"><use href="#i-book"/></svg><span>Docs</span></a>
       <button class="icon-btn" id="bell" type="button" aria-label="Facts waiting for your review" aria-haspopup="true" aria-expanded="false"><svg class="i"><use href="#i-bell"/></svg><span class="dot" id="belldot" hidden></span></button>
       <button class="me" id="me" type="button" aria-label="Your profile: trail-boss" aria-haspopup="true" aria-expanded="false"></button>
       <div class="menu" id="bellmenu" hidden></div>
@@ -378,8 +403,9 @@
 
 <div class="repo">
   <div class="wrap">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Canon</a><span class="sep">/</span><a href="/board">Projects</a><span class="sep">/</span><span id="crumbproj">farmstand</span></nav>
     <div class="repo-title">
-      <span class="name"><svg class="i"><use href="#i-repo"/></svg><a href="/">canon</a><span style="color:var(--muted)">/</span><b id="projname">farmstand</b></span>
+      <h1 class="name"><span class="mark"><svg class="i"><use href="#i-fact"/></svg></span><b id="projname">farmstand</b></h1>
       <span class="pill">Public</span>
       <span class="pill live off" id="livepill" title="Updates as agents work"><i></i><span id="livetext">Connecting</span></span>
       <div class="repo-actions">
@@ -395,7 +421,6 @@
     <nav class="tabs" aria-label="Board">
       <a href="#canon" data-tab="canon" class="on"><svg class="i"><use href="#i-fact"/></svg><span>Canon</span><span class="ct" id="tabfacts">–</span></a>
       <a href="#claims" data-tab="claims"><svg class="i"><use href="#i-claim"/></svg><span>Claims</span><span class="ct" id="tabclaims">–</span></a>
-      <a href="/" class="learn"><svg class="i"><use href="#i-book"/></svg><span>Learn about Canon</span></a>
     </nav>
   </div>
 </div>
@@ -488,7 +513,7 @@
     checking: "Pushed. Building a live preview and running every fact.",
     contradicts: "Rejected: this attempt breaks a fact production must keep.",
     unproven: "Keeps every canon fact, but its own fact doesn’t hold yet.",
-    behind: "Canon moved after this attempt started. It needs a refresh.",
+    behind: "Canon moved after this attempt started. The judge is re-applying it on the new canon.",
     ready: "Keeps every canon fact and makes its own true. Waiting for you.",
     accepted: "Accepted. This attempt is canon and in production.",
     superseded: "Replaced by a newer attempt.",
@@ -500,7 +525,8 @@
   let filter = "open";
 
   if (project !== "farmstand") {
-    for (const id of ["projname", "crumbproj"]) $(id).innerHTML = `<b>${esc(project)}</b>`;
+    $("projname").textContent = $("crumbproj").textContent = project;
+    for (const a of document.querySelectorAll("[data-proj]")) a.classList.toggle("on", a.dataset.proj === project);
     document.title = `canon / ${project} · Canon`;
   }
 
@@ -580,6 +606,27 @@
       + (byAgents.length ? `<div class="divider">Proposed by agents</div>` + byAgents.map(fact).join("") : "")
       + (retired.length ? `<div class="divider">Retired by revision</div>` + retired.map(fact).join("") : "");
 
+    const refreshedBy = new Map(s.claims.filter((x) => x.refreshedFrom).map((x) => [x.refreshedFrom, x]));
+    // Why the row is in its state, in one sentence.
+    const meaning = (cl, v) => {
+      if (cl.status === "ready" && v?.retires?.length) return `A rule change: keeps every other fact and replaces “${esc(v.retires[0])}”. You decide.`;
+      if (cl.status === "behind" && cl.refresh?.startsWith("conflict")) return `Canon moved, and this change conflicts with the new code (${esc(cl.refresh.slice(10))}). Its agent resolves it.`;
+      if (cl.status === "superseded" && refreshedBy.has(cl.id)) return `Canon moved; the judge re-applied this change on the new canon as ${esc(refreshedBy.get(cl.id).attemptId)}.`;
+      if (cl.refreshedFrom && ["open", "checking"].includes(cl.status)) return "The judge re-applied this change on the new canon. Judging it again.";
+      return MEANING[cl.status] ?? "";
+    };
+    // Two Ready attempts that can't both land, shown on both before anyone accepts either.
+    const clashNote = (cl) => {
+      const byOther = new Map();
+      for (const c of cl.clashes ?? []) byOther.set(c.with.claimId, [...(byOther.get(c.with.claimId) ?? []), c]);
+      return [...byOther.values()].map((cs) => {
+        const w = cs[0].with;
+        const other = s.claims.find((x) => x.id === w.claimId);
+        const tip = cs.map((c) => `${c.breaks === "mine" ? `This fact on ${w.agent}’s attempt` : `“${other?.sentence ?? c.factId}” on this attempt`}: ${c.detail}`).join("\n");
+        return `<div class="clash" title="${esc(tip)}"><b>Clashes with ${esc(w.agent)}’s “${esc(other?.sentence ?? w.factId)}”.</b> Both keep canon, but they built the same behaviour opposite ways: ${cs.length > 1 ? "each fact gets further on the other’s attempt than on canon, then fails" : "one fact gets further on the other’s attempt than on canon, then fails"}. Accepting either rejects the other.</div>`;
+      }).join("");
+    };
+
     const row = (cl) => {
       const v = cl.verdict;
       const verdict = v ? [
@@ -597,8 +644,9 @@
         <span class="st-icon">${icon(STATUS_ICON[cl.status] ?? "dot")}</span>
         <div>
           <div class="pr-title"><button class="t" type="button" data-fact="${esc(cl.factId)}" title="What would make this true?">${esc(cl.sentence)}</button><span class="lbl s-${cl.status}">${LABEL[cl.status] ?? esc(cl.status)}</span></div>
-          <div class="pr-meta"><span class="agent">${avatar(cl.agent, 16)}${esc(cl.agent)}</span><span>·</span><span>${cl.status === "ready" && v?.retires?.length ? `A rule change: keeps every other fact and replaces “${esc(v.retires[0])}”. You decide.` : MEANING[cl.status] ?? ""}</span></div>
+          <div class="pr-meta"><span class="agent">${avatar(cl.agent, 16)}${esc(cl.agent)}</span><span>·</span><span>${meaning(cl, v)}</span></div>
           <div class="verdict">${verdict}</div>
+          ${cl.status === "ready" ? clashNote(cl) : ""}
           <p class="reason">${esc(cl.why)}</p>
           <div class="pr-actions">
             ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
@@ -682,7 +730,7 @@
   });
 
   // Menus: one open at a time; a click outside or Escape closes it.
-  const MENUS = { me: "memenu", bell: "bellmenu", clonebtn: "clonemenu" };
+  const MENUS = { me: "memenu", bell: "bellmenu", clonebtn: "clonemenu", account: "acctmenu" };
   function closeMenus(except) {
     for (const [btn, menu] of Object.entries(MENUS)) if (menu !== except) { $(menu).hidden = true; $(btn).setAttribute("aria-expanded", "false"); }
   }
@@ -749,6 +797,9 @@
       let key = ownerKey();
       if (!key) key = prompt("Accepting a fact deploys it to production, so on this board only the owner can. Owner key:")?.trim() ?? "";
       if (!key) return;
+      const cl = state.claims.find((x) => x.id === accept.dataset.accept);
+      const rivals = [...new Set((cl?.clashes ?? []).map((c) => c.with.agent))];
+      if (rivals.length && !confirm(`This attempt clashes with ${rivals.join(" and ")}’s: they can’t both be true. Accepting it rejects theirs. Accept?`)) return;
       accept.disabled = true;
       accept.textContent = "Accepting…";
       const res = await fetch(`/p/${project}/claims/${accept.dataset.accept}/accept`, { method: "POST", headers: { authorization: `Bearer ${key}` } });

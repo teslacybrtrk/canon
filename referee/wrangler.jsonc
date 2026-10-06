@@ -46,7 +46,8 @@
   },
   "workflows": [
     { "name": "canon-verify", "binding": "CI_WORKFLOW", "class_name": "VerifyAttempt" },
-    { "name": "canon-promote", "binding": "PROMOTE_WORKFLOW", "class_name": "PromoteAttempt" }
+    { "name": "canon-promote", "binding": "PROMOTE_WORKFLOW", "class_name": "PromoteAttempt" },
+    { "name": "canon-refresh", "binding": "REFRESH_WORKFLOW", "class_name": "RefreshAttempt" }
   ],
   "r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "canon-ci-snapshots" }],
 

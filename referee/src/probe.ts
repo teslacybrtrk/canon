@@ -9,6 +9,12 @@ const RETRY_DELAY_MS = 1_500;
 
 type StepFailure = { message: string; transient: boolean };
 
+/** How far a failing check got, from its detail: "sample 2, step 3: ..." is further than "step 1: ...". */
+export function progress(detail: string): number {
+  const m = detail.match(/^(?:sample (\d+), )?step (\d+):/);
+  return m ? Number(m[1] ?? 1) * 1000 + Number(m[2]) : 0;
+}
+
 /**
  * Runs one check against an origin. Its random inputs are drawn from `seed`: the referee passes the
  * commit and the fact, so the same commit always gets the same inputs. Without a seed they are fresh.
