@@ -206,16 +206,9 @@
       <p><b>In this herd, 1 in 3 is broken, and they all look the same.</b> Land on one and production breaks.</p>
       <div class="pace" role="radiogroup" aria-label="Speed"><span>Speed</span>${Object.entries(PACES).map(([k, p]) =>
         `<button type="button" role="radio" data-pace="${k}" aria-checked="${k === pace}">${p.label}</button>`).join("")}</div>
-      <div class="pace" role="radiogroup" aria-label="Music"><span>Music</span>${[{ id: "off", label: "Off" }, ...(music.tracks ?? [])].map((x) =>
-        `<button type="button" role="radio" data-track="${x.id}" aria-checked="${x.id === "off" ? !music.on : music.on && music.track === x.id}" title="${x.id === "off" ? "M turns it on or off" : "Plays a preview"}">${x.label}</button>`).join("")}</div>`,
+      <div class="pace"><span>Music</span><button type="button" role="switch" data-music aria-checked="${music.on}" title="M turns it on or off">${music.on ? "On" : "Off"}</button></div>`,
     [{ label: "Start round 1", primary: true, run: () => { music.start(); begin("git"); } }]);
-    for (const b of el("card").querySelectorAll("[data-track]")) {
-      b.addEventListener("click", () => {
-        if (b.dataset.track === "off") music.set(false);
-        else music.use?.(b.dataset.track);
-        syncMusic();
-      });
-    }
+    el("card").querySelector("[data-music]").addEventListener("click", () => toggleMusic());
     for (const b of el("card").querySelectorAll("[data-pace]")) {
       b.addEventListener("click", () => {
         pace = b.dataset.pace;
@@ -226,15 +219,11 @@
   }
 
   // Music is on by default; browsers only allow sound after a click, so it starts with round 1.
-  const music = window.stampedeMusic ?? { on: false, track: "", tracks: [], start() {}, set() {}, use() {} };
+  const music = window.stampedeMusic ?? { on: false, start() {}, set() {} };
   function toggleMusic() {
     music.set(!music.on);
-    syncMusic();
-  }
-  function syncMusic() {
-    for (const b of el("card").querySelectorAll("[data-track]")) {
-      b.setAttribute("aria-checked", String(b.dataset.track === "off" ? !music.on : music.on && music.track === b.dataset.track));
-    }
+    const b = el("card").querySelector("[data-music]");
+    if (b) { b.setAttribute("aria-checked", String(music.on)); b.textContent = music.on ? "On" : "Off"; }
   }
 
   function begin(m) {
