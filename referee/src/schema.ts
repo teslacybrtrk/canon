@@ -13,6 +13,8 @@ export const UPGRADES = [
   `ALTER TABLE claims ADD COLUMN decline_reason TEXT`,
   `ALTER TABLE facts ADD COLUMN declined_at INTEGER`,
   `ALTER TABLE facts ADD COLUMN decline_reason TEXT`,
+  `ALTER TABLE facts ADD COLUMN accepted_how TEXT`,
+  `ALTER TABLE claims ADD COLUMN auto_wait TEXT`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];

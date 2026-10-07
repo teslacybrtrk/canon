@@ -148,6 +148,25 @@ Attempts that still carry the old fact are behind and refresh. Without a revisio
 attempt that keeps every canon fact and makes a backlog fact true is accepted automatically; the rest re-judge and refresh. Facts
 proposed by agents themselves still wait for a person, so an agent cannot lower the bar by inventing an easy rule.
 
+### No person in the loop: the charter
+
+```json
+"policy": { "autoAccept": "charter",
+            "charter": { "locked": ["price-is-listed"], "priority": ["no-double-booking", "stalls-can-be-shared"] } }
+```
+
+People write the charter once; after that, every Ready fact lands or waits by its rules, and no model chooses:
+
+| Case | Lands when |
+|---|---|
+| A backlog fact people wrote | it's Ready (as with `"backlog"`) |
+| A fact an agent proposed | a **different** agent also has a Ready attempt that makes it true: the proposer can't be the only proof |
+| A rule change (`replaces`) | as above, unless the charter `locked` the rule it replaces: only a person changes a locked rule |
+| Two Ready facts that clash | only the one listed first in `priority` (or else the earlier-proposed one); the other waits, then is rejected once the winner is canon |
+
+Every automatic accept records why (`acceptedHow` on the fact: "the charter: made true independently by agent-2 and
+agent-10; it wins the clash with …"), and a Ready claim that waits says why (`autoWait`). Both show on the board.
+
 ## Review and promotion
 
 `POST /p/:project/claims/:id/accept`: a person accepts a change in the facts; the code comes along as evidence.

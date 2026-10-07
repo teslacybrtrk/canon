@@ -458,6 +458,10 @@
     }
   ],
   "policy": {
-    "autoAccept": "backlog"
+    "autoAccept": "charter",
+    "charter": {
+      "locked": ["price-is-listed"],
+      "priority": ["no-double-booking"]
+    }
   }
 }

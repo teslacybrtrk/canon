@@ -143,6 +143,11 @@
   .flash svg { color: var(--brand); margin-top: 2px; }
   .flash p { margin: 0; flex: 1; color: var(--ink-2); }
   .flash .demo-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+  .seg b { padding: 0 8px 0 6px; font-size: 12px; color: var(--ink); }
+  .seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: 500 12px var(--sans); cursor: pointer; transition: background .2s, color .2s; }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-checked="true"] { background: var(--brand); color: #1a0b02; font-weight: 600; }
   .switch { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 600; cursor: pointer; user-select: none; }
   .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
   .switch i { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--border); transition: background .25s; }
@@ -603,7 +608,7 @@
           <div id="facts"></div>
         </div>
         <div class="box">
-          <div class="box-head"><h3><svg class="i"><use href="#i-claim"/></svg>In the arena</h3><span class="right"><span id="autopilot" hidden>Autopilot: backlog facts land on their own</span><label class="switch" id="autoswitch" hidden title="People write the facts; agents land them. A Ready attempt on a backlog fact lands with no click."><input type="checkbox" id="autotoggle"><i aria-hidden="true"></i>Autopilot</label><a href="#claims" id="allclaims">All claims</a></span></div>
+          <div class="box-head"><h3><svg class="i"><use href="#i-claim"/></svg>In the arena</h3><span class="right"><span id="autopilot" hidden>Autopilot: backlog facts land on their own</span><span class="seg" id="autoswitch" hidden role="radiogroup" aria-label="Autopilot"><b>Autopilot</b><button type="button" role="radio" data-auto="off" title="A person accepts every fact">Off</button><button type="button" role="radio" data-auto="backlog" title="Facts people wrote land on their own">Backlog</button><button type="button" role="radio" data-auto="charter" title="Everything lands by the charter’s rules: a second agent confirms facts agents propose, locked rules stay with a person, and the charter’s priorities settle clashes">Full</button></span><a href="#claims" id="allclaims">All claims</a></span></div>
           <div id="claims"></div>
         </div>
       </section>
@@ -763,10 +768,11 @@
     $("tabclaims").textContent = live.length;
     $("opencount").textContent = live.length;
     $("settledcount").textContent = settled.length;
-    const autopilot = s.policy?.autoAccept === "backlog";
+    const autopilot = s.policy?.autoAccept === "backlog" || s.policy?.autoAccept === "charter";
     $("autopilot").hidden = !autopilot || MOCK;
+    $("autopilot").textContent = s.policy?.autoAccept === "charter" ? "Autopilot: everything lands by the charter’s rules" : "Autopilot: backlog facts land on their own";
     $("autoswitch").hidden = !MOCK;
-    $("autotoggle").checked = autopilot;
+    for (const b of document.querySelectorAll("[data-auto]")) b.setAttribute("aria-checked", String(b.dataset.auto === (s.policy?.autoAccept ?? "off")));
     // The words follow the project: on autopilot, people wrote the facts and nobody clicks Accept.
     if (!MOCK) $("flashtext").innerHTML = autopilot
       ? `<b>${esc(project)} runs on autopilot.</b> People wrote a backlog of facts; agents claim them and push attempts, and the judge checks every one on its own live preview. The first attempt that keeps every fact and makes a backlog fact true lands on its own. Click any fact to see why it’s true.`
@@ -884,7 +890,13 @@
       const you = (t) => `<p class="next you"><b>Next: you.</b> ${t}</p>`;
       const them = (who, t) => `<p class="next"><b>Next: ${who}.</b> ${t}</p>`;
       switch (cl.status) {
-        case "ready": return you(v?.retires?.length ? "Accept the rule change, or decline it." : "Accept it, or decline.");
+        case "ready": {
+          // Under autopilot, say why this one isn't landing on its own.
+          const d = MOCK ? demoDecide(cl) : cl.autoWait ? { wait: cl.autoWait } : null;
+          if (d?.wait === "confirm" || /second agent/.test(d?.wait ?? "")) return them("another agent", "The charter lands it once a second agent makes it true independently.");
+          if (d?.wait) return you(`Autopilot won’t land this: ${d.wait}. Accept it, or decline.`);
+          return you(v?.retires?.length ? "Accept the rule change, or decline it." : "Accept it, or decline.");
+        }
         case "open": return them("the agent", "It’s writing the change.");
         case "checking": return them("the judge", cl.refreshedFrom ? "It’s checking the re-applied attempt on a live preview." : "It’s building a live preview and running every fact on it.");
         case "unproven": return them("the agent", "It makes its own fact hold and pushes again. Nothing for you.");
@@ -1134,7 +1146,7 @@
     $("intro").hidden = false;
     $("activity").hidden = false;
     setInterval(() => drawLog(), 15_000);
-    $("autotoggle").addEventListener("change", (e) => setAutopilot(e.target.checked));
+    for (const b of document.querySelectorAll("[data-auto]")) b.addEventListener("click", () => setAutopilot(b.dataset.auto));
     $("modelink").hidden = true;
     document.title = "Demo · Canon";
   }
@@ -1261,6 +1273,7 @@
         : `<li class="note"><b>${esc(w.proposer?.agent ?? m?.claim?.agent ?? "An agent")}</b> proposed it${(w.proposer ?? m?.claim)?.why ? `: “${esc((w.proposer ?? m.claim).why)}”` : "."}</li>`,
       w.replaces ? `<li class="note">A revision of “${esc(w.replaces.sentence)}”. The old rule was retired when this one was accepted.</li>` : "",
       m ? `<li class="held"><b>Made true</b> in <span class="attempt">${esc(m.attempt?.id)}</span>${f.acceptedAt ? ` and accepted ${ago(f.acceptedAt)}` : ""}.${links(m.attempt?.id, m.attempt?.previewUrl)}</li>` : "",
+      f.acceptedHow && f.acceptedHow !== "a person" ? `<li class="held"><b>Landed with no click</b>, by ${esc(f.acceptedHow)}.</li>` : f.acceptedHow ? `<li class="note"><b>Accepted by a person.</b></li>` : "",
       f.status === "declined" ? `<li class="broke"><b>Declined</b> by a person${f.declinedAt ? ` ${ago(f.declinedAt)}` : ""}${f.declineReason ? `: “${esc(f.declineReason)}”` : "."}</li>` : "",
       w.retiredBy ? `<li class="note"><b>Retired</b> by ${esc(w.retiredBy.claim?.agent)}'s revision, replaced by “${esc(w.retiredBy.replacement?.sentence ?? "")}”: “${esc(w.retiredBy.claim?.why)}”</li>` : "",
       judged.size ? `<li class="${failed.length ? "broke" : "held"}">${status === "proposed" ? "Tried" : "Judged"} on <b>${judged.size} attempt${judged.size === 1 ? "" : "s"}</b> so far: ${[status === "proposed" ? `${kept} made it true` : `${kept} kept it`, failed.length ? `${failed.length} broke it` : "", behind.length ? `${behind.length} were built before it existed` : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")}.${status === "proposed" && kept ? " Waiting for a person to accept it." : ""}</li>` : "",
@@ -1322,7 +1335,7 @@
   }
 
   // ---- Demo: the judge's moves, played in this browser. Nothing is sent anywhere; a refresh starts over. ----------
-  const demo = { deploying: false, log: [], auto: false, landed: 0 };
+  const demo = { deploying: false, log: [], auto: false, landed: 0, confirming: new Set() };
   const soon = (ms, fn) => setTimeout(() => { fn(); render(); }, ms);
   const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
   const names = (list) => list.join(" and ").replace(/ and (?=.* and )/g, ", ");
@@ -1399,6 +1412,7 @@
             fresh.verdict = { ...old.verdict, attemptId: fresh.attemptId, outcome: "behind", judgedAt: Date.now() };
             return reapply([fresh]);
           }
+          if (breaksCanon(fresh)) return say(["rejected", `${esc(fresh.agent)}’s attempt rejected`, `Re-applied on the new canon, it breaks “${sentenceOf(fresh.verdict.lost[0].factId)}”, which it clashed with.`]);
           fresh.status = old.was === "ready" ? "ready" : "unproven";
           fresh.verdict = { ...demoVerdict(fresh), retires: old.verdict?.retires ?? [], claimed: old.verdict?.claimed ?? { factId: fresh.factId, held: true, detail: "ok" }, outcome: fresh.status };
           fresh.verdict.kept = fresh.verdict.kept.filter((id) => !fresh.verdict.retires.includes(id));
@@ -1407,6 +1421,15 @@
         });
       }
     });
+  }
+  // An attempt whose change breaks a fact that became canon meanwhile (it clashed with it) is rejected, as the judge would.
+  function breaksCanon(x) {
+    const k = (x.clashes ?? []).find((c) => c.breaks === "theirs" && state.facts.find((f) => f.id === c.factId)?.status === "canon");
+    if (!k) return false;
+    x.status = "contradicts";
+    x.verdict = { ...demoVerdict(x), outcome: "contradicts", lost: [{ factId: k.factId, detail: k.detail }] };
+    x.verdict.kept = x.verdict.kept.filter((id) => id !== k.factId);
+    return true;
   }
   // A verdict on the current canon: every canon fact kept (scoped tooling not run), its own fact true.
   function demoVerdict(x) {
@@ -1422,11 +1445,47 @@
     ["stall-products", "Each stall lists its own products", "Shoppers want to browse one stall at a time"],
   ];
   let agentNo = 9;
-  function setAutopilot(on) {
+  // The demo's charter: the listed price is locked; of the two stall rules, no double-booking wins.
+  const CHARTER = { locked: ["price-is-listed"], priority: ["no-double-booking", "stalls-can-be-shared"] };
+  // The same rule as the judge's autopilot: may this Ready claim land with no click, or why does it wait?
+  function demoDecide(x) {
+    const mode = state.policy?.autoAccept ?? "off";
+    const fact = state.facts.find((f) => f.id === x.factId);
+    if (mode === "off" || x.status !== "ready" || fact?.status !== "proposed") return null;
+    if (fact.origin !== "backlog" && mode !== "charter") return { wait: "an agent proposed this fact, and Backlog autopilot only lands facts people wrote" };
+    if (fact.replaces && CHARTER.locked.includes(fact.replaces)) return { wait: `it changes “${sentenceOf(fact.replaces)}”, which the charter locks` };
+    const reasons = [fact.origin === "backlog" ? "a backlog fact people wrote" : ""];
+    // Clashes first: a fact that loses one waits, however many agents make it true.
+    const rank = (id) => { const i = CHARTER.priority.indexOf(id); return i < 0 ? Infinity : i; };
+    const clashes = state.claims.filter((c) => c.factId === fact.id && c.status === "ready").flatMap((c) => c.clashes ?? []);
+    const seen = new Set();
+    for (const k of clashes) {
+      const rival = state.claims.find((c) => c.id === k.with.claimId);
+      if (rival?.status !== "ready" || rival.factId === fact.id || seen.has(rival.factId)) continue;
+      seen.add(rival.factId);
+      const mine = rank(fact.id), theirs = rank(rival.factId);
+      const wins = mine !== theirs ? mine < theirs : fact.id < rival.factId;
+      if (!wins) return { wait: `it clashes with “${esc(rival.sentence)}”, which the charter ranks higher` };
+      reasons.push(`it wins the clash with “${esc(rival.sentence)}” (ranked higher in the charter)`);
+    }
+    if (fact.origin !== "backlog") {
+      const other = state.claims.find((c) => c.factId === fact.id && c.status === "ready" && c.agent !== x.agent);
+      if (!other) return { wait: "confirm", text: "the charter needs a second agent to make this fact true independently" };
+      reasons.unshift(`made true independently by ${x.agent} and ${other.agent}`);
+    }
+    return { how: `${mode === "charter" ? "the charter" : "autopilot"}: ${reasons.filter(Boolean).join("; ")}` };
+  }
+  const sentenceOf = (id) => esc(state.facts.find((f) => f.id === id)?.sentence ?? id);
+  const waitText = (d) => (d?.wait === "confirm" ? d.text : d?.wait);
+  function setAutopilot(mode) {
     acted();
-    demo.auto = on;
-    state.policy = { autoAccept: on ? "backlog" : "off" };
+    const was = state.policy?.autoAccept ?? "off";
+    if (mode === was) return;
+    demo.auto = mode !== "off";
+    state.policy = { autoAccept: mode, charter: mode === "charter" ? CHARTER : null };
+    demo.doneSaid = false;
     clearTimeout(demo.ticker);
+    const on = mode !== "off";
     if (on && !demo.seeded) {
       demo.seeded = true;
       for (const [id, sentence] of BACKLOG) {
@@ -1434,11 +1493,19 @@
       }
       say(["autopilot", "Autopilot on", "An attempt that keeps every fact and makes a backlog fact true lands on its own. No click."],
         ["backlog", "A backlog appears", "People wrote 4 facts for agents to make true. They’re in the canon column."],
-        ["you", "Still yours", "Facts agents proposed themselves, like the two clashing stall facts, still wait for you."]);
-    } else say(on ? ["autopilot", "Autopilot on", "Ready backlog attempts land on their own again."] : ["you", "Autopilot off", "Ready attempts wait for you again."]);
+        ...(mode === "charter" ? [] : [["you", "Still yours", "Facts agents proposed themselves, like the two clashing stall facts, still wait for you."]]));
+      if (mode === "charter") fullSay();
+    } else if (mode === "charter") fullSay();
+    else say(on ? ["autopilot", "Autopilot: Backlog", "Facts people wrote land on their own. Facts agents proposed wait for you."] : ["you", "Autopilot off", "Ready attempts wait for you again."]);
     if (on) for (const x of state.claims) if (x.status === "ready") autoLand(x);
     render();
     if (on) tick();
+  }
+  function fullSay() {
+    say(["autopilot", "Autopilot: Full", "No person in the loop. Everything lands by rules people wrote once, in the charter."],
+      ["check", "Two agents, or it waits", "A fact an agent proposed lands only after a second agent makes it true independently."],
+      ["you", "Locked rules stay yours", "The charter locks “The basket charges the listed price”: no automatic change can retire it."],
+      ["canon", "Clashes by priority", "The charter ranks “A stall cannot be double-booked” above shared stalls, so it wins."]);
   }
   // Every couple of seconds: an idle agent picks up a backlog fact nobody is working on (two at a time).
   function tick() {
@@ -1449,15 +1516,18 @@
     const busy = state.claims.filter((x) => x.auto && ["open", "checking", "behind", "contradicts"].includes(x.status)).length;
     if (todo.length && busy < 2) spawn(todo[0]);
     const left = state.facts.some((f) => f.status === "proposed" && f.origin === "backlog");
-    if (!left && !demo.doneSaid) {
+    const moving = state.claims.some((x) => x.auto && ["open", "checking", "behind"].includes(x.status)) || demo.landing;
+    if (!left && !moving && !demo.doneSaid) {
       demo.doneSaid = true;
-      return say(["done", "Backlog done", `${demo.landed} fact${demo.landed === 1 ? "" : "s"} landed on autopilot. Agents wrote the code and the judge checked it.`], ["you", "Nobody clicked", "No one read a diff or pressed Accept. People only wrote the facts."]);
+      const waits = state.claims.filter((x) => x.status === "ready").map((x) => [x, waitText(demoDecide(x))]).filter(([, w]) => w);
+      return say(["done", "Autopilot is done", `${demo.landed} fact${demo.landed === 1 ? "" : "s"} landed with no click. Agents wrote the code; the judge checked every attempt.`],
+        ...(waits.length ? [["you", `Left for you: ${waits.length}`, waits.map(([x, w]) => `“${esc(x.sentence)}”: ${w}.`).join(" ")]] : [["you", "Nothing left for you", "Every Ready fact landed by the rules. No one read a diff or pressed Accept."]]));
     }
     demo.ticker = setTimeout(tick, 2400);
   }
-  function spawn(fact) {
+  function spawn(fact, why) {
     const plan = BACKLOG.find((b) => b[0] === fact.id);
-    const x = { id: `a-${agentNo}`, agent: `agent-${agentNo++}`, factId: fact.id, sentence: fact.sentence, status: "open", why: plan?.[2] ?? "Picked from the backlog",
+    const x = { id: `a-${agentNo}`, agent: `agent-${agentNo++}`, factId: fact.id, sentence: fact.sentence, status: "open", why: why ?? plan?.[2] ?? "Picked from the backlog",
       attemptId: `farmstand-${hex(3)}`, createdAt: Date.now(), verdict: null, clashes: [], auto: true, baseSeq: state.canon.seq, failOnce: plan?.[3] ?? null };
     state.claims.unshift(x);
     render();
@@ -1482,19 +1552,34 @@
       x.verdict = { ...v, outcome: "behind", stale: [{ factId: state.canon.fact ?? "", detail: "built before it existed" }] };
       return reapply([x]);
     }
+    if (breaksCanon(x)) return;
     x.status = "ready";
     x.verdict = v;
     autoLand(x);
   }
   // Autopilot lands a Ready attempt on a backlog fact, one at a time. Facts agents invented wait for a person.
   function autoLand(x) {
-    const fact = state.facts.find((f) => f.id === x.factId);
-    if (!demo.auto || x.status !== "ready" || fact?.origin !== "backlog" || fact.status !== "proposed") return;
+    const d = demoDecide(x);
+    if (!d) return;
+    if (d.wait) {
+      // Full autopilot: another agent goes to confirm a fact an agent proposed.
+      if (d.wait === "confirm" && !demo.confirming.has(x.factId)) {
+        demo.confirming.add(x.factId);
+        const fact = state.facts.find((f) => f.id === x.factId);
+        soon(900, () => {
+          spawn(fact, `Confirming “${fact.sentence}” independently, as the charter asks`);
+          state.claims[0].clashes = (x.clashes ?? []).map((k) => ({ ...k, with: { ...k.with } }));
+          say(["check", "Confirming", `${esc(state.claims[0].agent)} builds its own attempt at “${esc(fact.sentence)}”. Two agents must make it true before the charter lands it.`]);
+        });
+      }
+      return;
+    }
     if (demo.landing) return void soon(1500, () => autoLand(x));
     demo.landing = true;
     soon(1100, () => {
       demo.landing = false;
-      if (demo.auto && x.status === "ready") { demo.landed++; demoAccept(x.id, true); }
+      const now = demoDecide(x);
+      if (now?.how) { demo.landed++; demoAccept(x.id, true, now.how); }
     });
   }
 
@@ -1508,7 +1593,7 @@
     demo.folded = true;
     tips(false);
   }
-  function demoAccept(id, auto = false) {
+  function demoAccept(id, auto = false, how = "a person") {
     if (!auto) acted();
     const s = state;
     const cl = s.claims.find((x) => x.id === id);
@@ -1517,8 +1602,8 @@
     if (fact?.status !== "proposed") { cl.status = "superseded"; return render(); }
     const now = Date.now();
     // On a rival's attempt, the accepted fact got further than on canon and then failed: that's the clash.
-    const rivals = new Map((cl.clashes ?? []).filter((c) => c.breaks === "mine").map((c) => [c.with.claimId, c.detail]));
-    Object.assign(fact, { status: "canon", acceptedAt: now, madeTrueBy: cl.attemptId });
+    const rivals = new Map(s.claims.filter((c) => c.factId === cl.factId).flatMap((c) => c.clashes ?? []).filter((c) => c.breaks === "mine").map((c) => [c.with.claimId, c.detail]));
+    Object.assign(fact, { status: "canon", acceptedAt: now, madeTrueBy: cl.attemptId, acceptedHow: how });
     if (fact.replaces) Object.assign(s.facts.find((f) => f.id === fact.replaces) ?? {}, { status: "retired", retiredBy: cl.attemptId, retiredAt: now });
     cl.status = "accepted";
     s.canon = { attemptId: cl.attemptId, sha: hex(20), seq: s.canon.seq + 1, previewUrl: cl.verdict?.previewUrl ?? s.canon.previewUrl };
@@ -1527,7 +1612,7 @@
     for (const x of same) x.status = "superseded";
     demo.deploying = true;
     s.canon.fact = cl.factId;
-    if (auto) say(["autopilot", `Landed: canon #${seq}`, `“${esc(cl.sentence)}”. ${esc(cl.agent)}’s attempt kept every fact and made a backlog fact true, so nobody clicked.`], ["deploy", "Deploying", `${esc(cl.agent)}’s attempt is going to production.`]);
+    if (auto) say(["autopilot", `Landed: canon #${seq}`, `“${esc(cl.sentence)}”, with no click.`], ["check", "Why it could land", `${how.replace(/^(the charter|autopilot): /, "")}.`], ["deploy", "Deploying", `${esc(cl.agent)}’s attempt is going to production.`]);
     else say(
       ["canon", `Canon #${seq}`, `“${esc(cl.sentence)}” is canon now: a fact production must keep from here on.`],
       ["deploy", "Deploying", `${esc(cl.agent)}’s attempt, the exact commit the judge checked, is going to production.`],

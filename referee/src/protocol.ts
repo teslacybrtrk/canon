@@ -39,6 +39,7 @@ export interface Fact {
   createdAt: number;
   acceptedAt: number | null;
   retiredBy: string | null; // attempt that retired it (by accepting a revision)
+  acceptedHow: string | null; // who decided it: "a person", or the rule that landed it on its own
   declinedAt: number | null; // a person declined the claim that proposed it, and nobody else was working on it
   declineReason: string | null;
   retiredAt: number | null;
@@ -59,7 +60,19 @@ export interface CanonFile {
   facts: FactDef[];
   // Facts people want made true. Agents claim them; with autoAccept "backlog" they land on their own.
   backlog?: FactDef[];
-  policy?: { autoAccept?: "off" | "backlog" };
+  policy?: Policy;
+}
+
+// Who decides when no person clicks. off: a person accepts everything. backlog: an attempt on a fact people wrote lands
+// on its own. charter: agent-proposed facts and rule changes land too, by rules people wrote once (see Charter).
+export type AutoAccept = "off" | "backlog" | "charter";
+export interface Charter {
+  locked?: string[]; // canon facts no automatic decision may retire: only a person changes them
+  priority?: string[]; // when two Ready facts clash, the one listed first wins (unlisted: the earlier-proposed fact)
+}
+export interface Policy {
+  autoAccept?: AutoAccept;
+  charter?: Charter;
 }
 
 // ---- Checks -------------------------------------------------------------------
@@ -127,6 +140,7 @@ export interface Claim {
   // How the judge's own refresh of this claim went, when it was behind: started, or why the agent must refresh it.
   refresh: string | null;
   declineReason: string | null; // why a person declined it
+  autoWait: string | null; // under autopilot: why this Ready claim isn't landing on its own
 }
 
 // Two Ready claims that can't both land. `factId` failed on the other attempt's preview at a later step than on the
@@ -157,7 +171,7 @@ export interface CanonState {
   canon: { attemptId: string; sha: string; seq: number; previewUrl: string | null } | null;
   facts: Fact[]; // canon + proposed
   claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[] }>;
-  policy: { autoAccept: "off" | "backlog" };
+  policy: { autoAccept: AutoAccept; charter: Charter | null };
   // The last time every canon probe fact ran against production (hourly, and after each deploy).
   production: { at: number; url: string; results: Record<string, { held: boolean; detail: string }> } | null;
 }

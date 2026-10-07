@@ -182,7 +182,7 @@ function read(s: CanonState, path: string | null): string {
   const governs = (f: { scope: string[] | null }) => !path || !f.scope || f.scope.some((g) => globToRegExp(g).test(path.replace(/^\.\//, "")));
   const facts = s.facts.filter(governs);
   const line = (f: CanonState["facts"][number]) => `- ${f.id}: ${f.sentence}${f.scope ? ` [only when ${f.scope.join(", ")} change]` : ""}\n  check: ${JSON.stringify(f.check)}`;
-  const out = [`Canon of ${s.project}: attempt ${s.canon.attemptId} @ ${s.canon.sha.slice(0, 8)} (#${s.canon.seq})${s.policy.autoAccept === "backlog" ? ". Autopilot: an attempt that makes a backlog fact true lands on its own." : ""}`];
+  const out = [`Canon of ${s.project}: attempt ${s.canon.attemptId} @ ${s.canon.sha.slice(0, 8)} (#${s.canon.seq})${s.policy.autoAccept === "backlog" ? ". Autopilot: an attempt that makes a backlog fact true lands on its own." : s.policy.autoAccept === "charter" ? ". Autopilot (charter): Ready facts land on their own by the charter's rules; a fact you propose lands once another agent independently makes it true too." : ""}`];
   if (path) out.push(`(only the facts that govern ${path})`);
   out.push("", "FACTS THAT MUST STAY TRUE", ...facts.filter((f) => f.status === "canon").map(line));
   const backlog = facts.filter((f) => f.status === "proposed" && f.origin === "backlog");

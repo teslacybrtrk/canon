@@ -22,6 +22,8 @@ import {
   type Ledger,
   type Verdict,
   type Attempt,
+  type AutoAccept,
+  type Charter,
 } from "./protocol";
 import { SCHEMA, UPGRADES } from "./schema";
 import { diffTrees, inScope } from "./scope";
@@ -31,7 +33,6 @@ const PREVIEW_READY_TIMEOUT_MS = 45_000;
 const LIVE: ClaimStatus[] = ["checking", "contradicts", "unproven", "behind", "ready", "error"];
 
 type Row = Record<string, SqlStorageValue>;
-type AutoAccept = "off" | "backlog";
 
 const LIVE_CHECK_TTL_MS = 30_000;
 const PRODUCTION_CHECK_EVERY_MS = 60 * 60_000;
@@ -103,7 +104,7 @@ export class Referee extends DurableObject<Env> {
       canon: canon && { attemptId: canon.attempt_id as string, sha: canon.sha as string, seq: canon.seq as number, previewUrl: this.attempt(canon.attempt_id as string)?.previewUrl ?? null },
       facts,
       claims,
-      policy: { autoAccept: this.autoAccept() },
+      policy: { autoAccept: this.autoAccept(), charter: this.charter() },
       production: JSON.parse(this.meta("production") ?? "null"),
     };
   }
@@ -274,7 +275,9 @@ export class Referee extends DurableObject<Env> {
       const now = Date.now();
       for (const f of file.ok ? file.facts : []) this.insertFact(f, "canon", "seed", now, now);
       for (const f of file.ok ? (file.backlog ?? []) : []) this.insertFact(f, "proposed", "backlog", now);
-      this.setMeta("autoAccept", file.ok && file.policy?.autoAccept === "backlog" ? "backlog" : "off");
+      const auto = file.ok ? file.policy?.autoAccept : undefined;
+      this.setMeta("autoAccept", auto === "backlog" || auto === "charter" ? auto : "off");
+      this.setMeta("charter", JSON.stringify(file.ok && file.policy?.charter ? file.policy.charter : null));
     }
     const verdict = await this.evaluate(this.attempt(repo)!, sha, previewUrl, undefined, commands);
 
@@ -286,8 +289,9 @@ export class Referee extends DurableObject<Env> {
       await this.scheduleProductionCheck(20_000);
     }
     this.broadcast();
-    await this.autopilot(attempt.claimId, verdict);
+    // Clashes first: the charter needs them to pick a winner.
     await this.followUp(attempt.claimId, verdict);
+    await this.autopilot(attempt.claimId, verdict);
     return verdict;
   }
 
@@ -367,7 +371,7 @@ export class Referee extends DurableObject<Env> {
   // ---- Review and promotion ---------------------------------------------------------
 
   /** A person (or the autopilot policy) accepts a change in the facts. The attempt comes along as evidence and becomes canon. */
-  async accept(claimId: string) {
+  async accept(claimId: string, how = "a person") {
     const claim = this.claim(claimId);
     if (!claim) throw new ProtocolError(404, "no such claim");
     if (claim.status !== "ready") throw new ProtocolError(409, `claim is ${claim.status}, not ready`);
@@ -391,7 +395,7 @@ export class Referee extends DurableObject<Env> {
     const now = Date.now();
     const fact = this.fact(claim.factId)!;
     this.sql.exec(`UPDATE attempts SET frozen = 1 WHERE id = ?`, attempt.id);
-    this.sql.exec(`UPDATE facts SET status = 'canon', made_true_by = ?, accepted_at = ? WHERE id = ?`, attempt.id, now, fact.id);
+    this.sql.exec(`UPDATE facts SET status = 'canon', made_true_by = ?, accepted_at = ?, accepted_how = ? WHERE id = ?`, attempt.id, now, how, fact.id);
     // A revision retires the fact it replaces: the rule changed on purpose, and the history says who and why.
     if (fact.replaces) {
       this.sql.exec(`UPDATE facts SET status = 'retired', retired_by = ?, retired_at = ? WHERE id = ? AND status = 'canon'`, attempt.id, now, fact.replaces);
@@ -469,6 +473,7 @@ export class Referee extends DurableObject<Env> {
         }
         this.broadcast();
         for (const [claimId, verdict] of judged) await this.followUp(claimId, verdict);
+        for (const [claimId, verdict] of judged) await this.autopilot(claimId, verdict);
       }
       const canon = this.currentCanon();
       if (canon && Date.now() >= Number(this.meta("prodCheckAt") ?? 0)) {
@@ -739,17 +744,56 @@ export class Referee extends DurableObject<Env> {
 
   // ---- Internals ---------------------------------------------------------------------
 
-  /** With autoAccept "backlog", the first attempt that keeps canon and makes a backlog fact true lands on its own. */
+  /**
+   * Lands a Ready claim with no click when the policy allows it, and otherwise records why it waits.
+   * backlog: a fact people wrote lands. charter: so does a fact an agent proposed, once a different agent has
+   * independently made it true too, and a rule change, unless the charter locks the rule it replaces. Either way,
+   * of two Ready facts that clash, only the one the charter ranks higher (or else the earlier-proposed one) lands.
+   */
   private async autopilot(claimId: string | null, verdict: Verdict) {
-    if (!claimId || verdict.outcome !== "ready" || this.autoAccept() !== "backlog") return;
+    if (!claimId || verdict.outcome !== "ready") return;
     const claim = this.claim(claimId);
-    const fact = claim ? this.fact(claim.factId) : null;
-    if (!claim || fact?.origin !== "backlog") return;
+    if (!claim || claim.status !== "ready") return;
+    const decision = this.autoDecision(claim);
+    this.sql.exec(`UPDATE claims SET auto_wait = ? WHERE id = ?`, decision && "wait" in decision ? decision.wait : null, claim.id);
+    if (!decision || "wait" in decision) return this.broadcast();
     try {
-      await this.accept(claim.id);
+      await this.accept(claim.id, decision.how);
     } catch {
       // another attempt won the race, or canon moved: the re-judge decides what happens next
     }
+  }
+
+  private autoDecision(claim: Claim): { how: string } | { wait: string } | null {
+    const policy = this.autoAccept();
+    const fact = this.fact(claim.factId);
+    if (policy === "off" || fact?.status !== "proposed") return null;
+    const charter = this.charter() ?? {};
+    if (fact.origin !== "backlog" && policy !== "charter") return { wait: "an agent proposed this fact, and autopilot only lands facts people wrote" };
+    if (fact.replaces && charter.locked?.includes(fact.replaces)) return { wait: `it changes “${this.fact(fact.replaces)?.sentence ?? fact.replaces}”, which the charter locks` };
+    const reasons: string[] = [fact.origin === "backlog" ? "a backlog fact people wrote" : ""];
+    // A clash goes to the fact the charter ranks first, or else to the one proposed first. It's settled before
+    // anything else: a fact that loses one waits, however many agents make it true.
+    const rank = (f: Fact) => [charter.priority?.indexOf(f.id) ?? -1, f.createdAt] as const;
+    const beats = (a: Fact, b: Fact) => {
+      const [ra, ta] = rank(a), [rb, tb] = rank(b);
+      if (ra !== rb) return ra === -1 ? false : rb === -1 ? true : ra < rb;
+      return ta !== tb ? ta < tb : a.id < b.id;
+    };
+    const seen = new Set<string>();
+    for (const c of this.clashesFor(claim.id)) {
+      const other = this.fact(c.with.factId);
+      if (!other || other.id === fact.id || seen.has(other.id)) continue;
+      seen.add(other.id);
+      if (!beats(fact, other)) return { wait: `it clashes with “${other.sentence}”, which ${charter.priority?.includes(other.id) ? "the charter ranks higher" : "was proposed first"}` };
+      reasons.push(`it wins the clash with “${other.sentence}” (${charter.priority?.includes(fact.id) ? "ranked higher in the charter" : "proposed first"})`);
+    }
+    if (fact.origin !== "backlog") {
+      const confirmed = this.rows(`SELECT agent FROM claims WHERE fact_id = ? AND status = 'ready' AND agent != ?`, fact.id, claim.agent)[0]?.agent as string | undefined;
+      if (!confirmed) return { wait: "the charter needs a second agent to make this fact true independently" };
+      reasons.unshift(`made true independently by ${claim.agent} and ${confirmed}`);
+    }
+    return { how: `${policy === "charter" ? "the charter" : "autopilot"}: ${reasons.filter(Boolean).join("; ")}` };
   }
 
   private async evaluate(attempt: Attempt, sha: string, previewUrl: string, forced?: CheckResult, commands?: Record<string, CheckResult>): Promise<Verdict> {
@@ -928,8 +972,17 @@ export class Referee extends DurableObject<Env> {
     };
   }
 
+  private charter(): Charter | null {
+    try {
+      return JSON.parse(this.meta("charter") ?? "null") as Charter | null;
+    } catch {
+      return null;
+    }
+  }
+
   private autoAccept(): AutoAccept {
-    return this.meta("autoAccept") === "backlog" ? "backlog" : "off";
+    const v = this.meta("autoAccept");
+    return v === "backlog" || v === "charter" ? v : "off";
   }
 
   private currentCanon(): Row | null {
@@ -1005,6 +1058,7 @@ function toFact(r: Row): Fact {
     acceptedAt: r.accepted_at as number | null,
     retiredBy: (r.retired_by as string | null) ?? null,
     retiredAt: (r.retired_at as number | null) ?? null,
+    acceptedHow: (r.accepted_how as string | null) ?? null,
     declinedAt: (r.declined_at as number | null) ?? null,
     declineReason: (r.decline_reason as string | null) ?? null,
   };
@@ -1022,6 +1076,7 @@ function toClaim(r: Row): Claim {
     refreshedFrom: (r.refreshed_from as string | null) ?? null,
     refresh: (r.refresh as string | null) ?? null,
     declineReason: (r.decline_reason as string | null) ?? null,
+    autoWait: (r.auto_wait as string | null) ?? null,
   };
 }
 

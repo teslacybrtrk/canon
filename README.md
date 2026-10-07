@@ -67,8 +67,10 @@ agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image str
    Click a fact to see the attempt that made it true beside the attempts that failed it.
    After an accept, the judge refreshes attempts that are now behind by itself. If one hits a text conflict,
    `./agents/refresh.sh agent-3` has its agent resolve it.
-5. **Autopilot** (optional): a second project whose `canon.json` carries a backlog of facts written by people and
-   `"autoAccept": "backlog"`. Agents land facts with no human click:
+5. **Autopilot** (optional): a second project whose `canon.json` carries a backlog of facts written by people and a
+   **charter** (`"autoAccept": "charter"`): rules people write once, so no person is needed after that. A fact an agent
+   proposes lands when a second agent independently makes it true, locked rules never change automatically, and the
+   charter's priorities settle clashes (see [PROTOCOL.md](PROTOCOL.md)). Agents land facts with no human click:
    ```sh
    CANON_PROJECT=rodeo CANON_FILE=agents/canon.autopilot.json ./scripts/genesis.sh
    CANON_PROJECT=rodeo AGENTS=8 ./agents/autopilot.sh
