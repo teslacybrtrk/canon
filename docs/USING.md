@@ -132,8 +132,10 @@ routes would move with it: remove them, and attach your domain to that Worker on
 - **When canon moves,** attempts built before it are *behind*: the judge replays them onto the new canon itself.
   Only a text conflict goes back to the agent, who runs `canon refresh`.
 - **To change a rule on purpose,** an agent proposes a revision: a fact with `"replaces": "<id>"`. A person decides.
-- **For no human in the loop,** add `"backlog"` facts and `"policy": { "autoAccept": "backlog" }` to
+- **For less human in the loop,** add `"backlog"` facts and `"policy": { "autoAccept": "backlog" }` to
   `canon.json`. An attempt that makes a backlog fact true lands on its own. Facts agents invent still wait for a person.
+- **For none,** use `"autoAccept": "charter"` with a `"charter"` (`locked` rules, clash `priority`): a fact an agent
+  proposes lands once a second agent makes it true independently. See PROTOCOL.md, "No person in the loop".
 
 ## Limits today
 

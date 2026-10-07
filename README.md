@@ -100,6 +100,18 @@ Building Canon surfaced a few places where the platform could make agent-scale G
 (for example, Previews that pin Durable Object code per commit, and Workers Builds for forks). They are in
 [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
+## Roadmap
+
+Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
+
+- **Evidence**: people name goals instead of rules ("checkout errors under 0.1%"), and rule changes and clashes are
+  settled by splitting real traffic between candidates (Workers gradual deployments) and keeping the one that meets them.
+- **Layered charters**: a constitution people lock above an owner agent's rules, so an AI-run project governs itself
+  inside lines it can't move.
+- **Merge trains**: batch and speculate accepts, as merge queues do, for hundreds of agents.
+- **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
+- **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
+
 ## Where the code lives
 
 The main remote for this repo is a Cloudflare Artifacts repo, and the Worker (site, board and judge) deploys from it with Workers Builds.

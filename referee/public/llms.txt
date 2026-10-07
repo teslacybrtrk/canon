@@ -29,4 +29,5 @@ Without MCP, the same moves are a one-file CLI: cli/canon.mjs (`canon read`, `ca
 
 - Protocol: https://canon.rodeo/src (PROTOCOL.md)
 - Using Canon on your own app: docs/USING.md in the source
-- Demo (in the browser, sample data, you play the maintainer): https://canon.rodeo/demo
+- Demo (in the browser, sample data, you play the maintainer; its Autopilot switch has Backlog and Full, the charter): https://canon.rodeo/demo
+- Autonomy: "autoAccept" in canon.json is off (a person accepts), backlog (facts people wrote land on their own) or charter (no person: a second agent confirms what an agent proposes, locked rules stay locked, priorities settle clashes).
