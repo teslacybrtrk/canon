@@ -185,6 +185,13 @@
   .intro b { display: block; margin-top: 2px; font-size: 14px; }
   .intro p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
   .intro .btn { margin-top: 8px; height: 28px; font-size: 12px; }
+  .intro { position: relative; padding-top: 22px; }
+  .intro-hide { position: absolute; top: 0; right: 2px; font-size: 12px; }
+  .intro-slim { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-top: 20px; padding: 8px 12px; border: 1px solid rgb(253 111 22 / 0.4); border-radius: 8px; background: linear-gradient(90deg, rgb(253 111 22 / 0.1), transparent); font-size: 13px; color: var(--ink-2); }
+  .intro-slim .ev-k { color: var(--brand); }
+  .intro-slim .btn { margin-left: auto; height: 28px; font-size: 12px; }
+  .linkish { background: none; border: 0; padding: 0; color: var(--link); font: inherit; cursor: pointer; }
+  .linkish:hover { text-decoration: underline; }
   .flash b { color: var(--ink); }
   .flash .x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px; border-radius: 4px; }
   .flash .x:hover { color: var(--ink); background: var(--hover); }
@@ -579,7 +586,9 @@
     <p id="flashtext"><b>You’re the maintainer of farmstand.</b> Agents claim facts and push attempts; the judge checks every one on its own live preview and rejects any that breaks a fact. When a claim says <b>Ready</b>, you decide. Click any fact to see why it’s true.</p>
     <button class="x" id="flashx" type="button" aria-label="Dismiss"><svg class="i"><use href="#i-x"/></svg></button>
   </div>
+  <div class="intro-slim" id="introslim" hidden><span class="ev-k">Demo</span><span>You’re the maintainer. It runs in your browser; nothing deploys.</span><button class="linkish" type="button" data-tips="show">Show tips ▾</button><button class="btn" type="button" onclick="location.reload()">Start over</button></div>
   <div class="intro" id="intro" hidden>
+    <button class="linkish intro-hide" type="button" data-tips="hide">Hide tips ▴</button>
     <div><span class="ev-k">Demo</span><b>You’re the maintainer</b><p>Agents claimed facts and pushed attempts, and the judge checked each one. You decide what becomes canon.</p></div>
     <div><span class="ev-k">Try</span><b>Accept a Ready fact</b><p>Or pick a side in the clash. Watch the judge reject the loser and re-apply the rest on the new canon.</p></div>
     <div><span class="ev-k">Or</span><b>Switch on Autopilot</b><p>Agents land the backlog people wrote, with no clicks. Facts agents proposed still wait for you.</p></div>
@@ -1167,6 +1176,8 @@
       if (!res.ok) { alert((await res.json()).error); accept.disabled = false; accept.textContent = "Accept fact"; }
       return;
     }
+    const tipsBtn = e.target.closest("[data-tips]");
+    if (tipsBtn) { demo.folded = true; return tips(tipsBtn.dataset.tips === "show"); }
     const more = e.target.closest("[data-more]");
     if (more) { factView[more.dataset.more] = Number(more.dataset.next); return render(); }
     const decline = e.target.closest("[data-decline]");
@@ -1412,6 +1423,7 @@
   ];
   let agentNo = 9;
   function setAutopilot(on) {
+    acted();
     demo.auto = on;
     state.policy = { autoAccept: on ? "backlog" : "off" };
     clearTimeout(demo.ticker);
@@ -1486,7 +1498,18 @@
     });
   }
 
+  // The how-to cards fold to one line after the first move (once); Show tips and Hide tips switch them any time.
+  function tips(show) {
+    $("intro").hidden = !show;
+    $("introslim").hidden = show;
+  }
+  function acted() {
+    if (demo.folded) return;
+    demo.folded = true;
+    tips(false);
+  }
   function demoAccept(id, auto = false) {
+    if (!auto) acted();
     const s = state;
     const cl = s.claims.find((x) => x.id === id);
     if (!cl || cl.status !== "ready") return;
@@ -1545,6 +1568,7 @@
   }
   // Declining in the demo: the claim settles; an agent's proposed fact nobody else works on is declined with it.
   function demoDecline(ids, reason) {
+    acted();
     const names = [];
     for (const id of ids) {
       const x = state.claims.find((c) => c.id === id);
