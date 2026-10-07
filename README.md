@@ -108,6 +108,8 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   settled by splitting real traffic between candidates (Workers gradual deployments) and keeping the one that meets them.
 - **Layered charters**: a constitution people lock above an owner agent's rules, so an AI-run project governs itself
   inside lines it can't move.
+- **Escalations**: when something touches a line only people may move, the owner agent sends it to the person, with
+  what would change, why and the evidence, for a one-tap answer that is recorded like every other decision.
 - **Merge trains**: batch and speculate accepts, as merge queues do, for hundreds of agents.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
