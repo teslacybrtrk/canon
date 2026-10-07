@@ -253,6 +253,7 @@
   .state.s-open, .state.s-checking, .state.s-unproven, .state.s-behind, .state.s-error { color: var(--pending); background: var(--pending-bg); border-color: rgb(210 153 34 / 0.45); }
   .state.s-accepted { color: var(--merged); background: var(--merged-bg); border-color: rgb(253 111 22 / 0.45); }
   .state.s-superseded, .state.s-declined { color: var(--muted); border-color: var(--border); }
+  .state.s-locked { color: var(--gold); border-color: rgb(253 200 109 / 0.5); background: rgb(253 200 109 / 0.1); }
   .next { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
   .next b { color: var(--ink-2); }
   .next.you b { color: var(--brand); }
@@ -910,6 +911,7 @@
         default: return "";
       }
     };
+    const autoWaitOf = (cl) => (MOCK ? (typeof demoDecide === "function" ? (demoDecide(cl)?.wait === "confirm" ? demoDecide(cl).text : demoDecide(cl)?.wait) : null) : cl.autoWait);
     const declineBtn = (cl) => SETTLED.includes(cl.status) ? "" : `<button class="decline" data-decline="${esc(cl.id)}">Decline</button>`;
 
     // How the judge decided, step by step, from the verdict and each fact's own check.
@@ -953,6 +955,7 @@
       return `<article class="pr s-${cl.status} ${motion}" id="claim-${esc(cl.id)}">
         <div class="pr-top">
           <span class="state s-${cl.status}">${icon(STATUS_ICON[cl.status] ?? "dot")}${LABEL[cl.status] ?? esc(cl.status)}</span>
+          ${cl.status === "ready" && /locks/.test(autoWaitOf(cl) ?? "") ? `<span class="state s-locked" title="The charter locks the rule this changes, so no automatic decision may make it.">${icon("key")}Locked by the charter</span>` : ""}
           <span class="pr-agent">${avatar(cl.agent, 18)}${esc(cl.agent)}</span>
           <ol class="track" aria-label="Progress">${steps(cl)}</ol>
         </div>
@@ -1022,7 +1025,9 @@
     const grouped = (list) => GROUPS.map(([key, title, help, statuses]) => {
       const rows = list.filter((x) => statuses.includes(x.status));
       if (!rows.length) return "";
-      const head = `<b>${title}</b><span class="n">${rows.length}</span><span>${help}</span>`;
+      // On autopilot, Ready claims are only here because a rule keeps them for a person: say so.
+      const helpNow = key === "ready" && s.policy?.autoAccept && s.policy.autoAccept !== "off" ? "Autopilot lands what its rules allow. These wait for a person: each card says which rule keeps it here." : help;
+      const head = `<b>${title}</b><span class="n">${rows.length}</span><span>${helpNow}</span>`;
       // Rejections are the agents' business: folded away unless you open them.
       if (key === "rejected") return `<details class="gfold"${foldOpen || $("search").value ? " open" : ""}><summary class="divider group g-${key}">${head}</summary>${rows.map(row).join("")}</details>`;
       return `<div class="divider group g-${key}">${head}</div>${key === "ready" ? readyRows(rows) : rows.map(row).join("")}`;
