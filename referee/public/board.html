@@ -895,6 +895,7 @@
           // Under autopilot, say why this one isn't landing on its own.
           const d = MOCK ? demoDecide(cl) : cl.autoWait ? { wait: cl.autoWait } : null;
           if (d?.wait === "confirm" || /second agent/.test(d?.wait ?? "")) return them("another agent", "The charter lands it once a second agent makes it true independently.");
+          if (/locks/.test(d?.wait ?? "")) return `<p class="next you"><b>Next: the owner</b> (you, or an owner agent). It changes a rule the charter locks, and only the owner can change a locked rule. Accept it, or decline.</p>`;
           if (d?.wait) return you(`Autopilot won’t land this: ${d.wait}. Accept it, or decline.`);
           return you(v?.retires?.length ? "Accept the rule change, or decline it." : "Accept it, or decline.");
         }
@@ -955,7 +956,7 @@
       return `<article class="pr s-${cl.status} ${motion}" id="claim-${esc(cl.id)}">
         <div class="pr-top">
           <span class="state s-${cl.status}">${icon(STATUS_ICON[cl.status] ?? "dot")}${LABEL[cl.status] ?? esc(cl.status)}</span>
-          ${cl.status === "ready" && /locks/.test(autoWaitOf(cl) ?? "") ? `<span class="state s-locked" title="The charter locks the rule this changes, so no automatic decision may make it.">${icon("key")}Locked by the charter</span>` : ""}
+          ${cl.status === "ready" && /locks/.test(autoWaitOf(cl) ?? "") ? `<span class="state s-locked" title="The charter locks the rule this changes. No agent, and no automatic decision, may change it: only the owner (you, or an owner agent).">${icon("key")}Locked: owner decides</span>` : ""}
           <span class="pr-agent">${avatar(cl.agent, 18)}${esc(cl.agent)}</span>
           <ol class="track" aria-label="Progress">${steps(cl)}</ol>
         </div>
@@ -1278,7 +1279,10 @@
         : `<li class="note"><b>${esc(w.proposer?.agent ?? m?.claim?.agent ?? "An agent")}</b> proposed it${(w.proposer ?? m?.claim)?.why ? `: “${esc((w.proposer ?? m.claim).why)}”` : "."}</li>`,
       w.replaces ? `<li class="note">A revision of “${esc(w.replaces.sentence)}”. The old rule was retired when this one was accepted.</li>` : "",
       m ? `<li class="held"><b>Made true</b> in <span class="attempt">${esc(m.attempt?.id)}</span>${f.acceptedAt ? ` and accepted ${ago(f.acceptedAt)}` : ""}.${links(m.attempt?.id, m.attempt?.previewUrl)}</li>` : "",
-      f.acceptedHow && f.acceptedHow !== "a person" ? `<li class="held"><b>Landed with no click</b>, by ${esc(f.acceptedHow)}.</li>` : f.acceptedHow ? `<li class="note"><b>Accepted by a person.</b></li>` : "",
+      !f.acceptedHow ? ""
+        : /^(the owner|a person)$/.test(f.acceptedHow) ? `<li class="note"><b>Accepted by the owner.</b></li>`
+        : f.acceptedHow.startsWith("the owner") ? `<li class="note"><b>Accepted by the owner</b>, ${esc(f.acceptedHow.replace(/^the owner, /, ""))}.</li>`
+        : `<li class="held"><b>Landed with no click</b>, by ${esc(f.acceptedHow)}.</li>`,
       f.status === "declined" ? `<li class="broke"><b>Declined</b> by a person${f.declinedAt ? ` ${ago(f.declinedAt)}` : ""}${f.declineReason ? `: “${esc(f.declineReason)}”` : "."}</li>` : "",
       w.retiredBy ? `<li class="note"><b>Retired</b> by ${esc(w.retiredBy.claim?.agent)}'s revision, replaced by “${esc(w.retiredBy.replacement?.sentence ?? "")}”: “${esc(w.retiredBy.claim?.why)}”</li>` : "",
       judged.size ? `<li class="${failed.length ? "broke" : "held"}">${status === "proposed" ? "Tried" : "Judged"} on <b>${judged.size} attempt${judged.size === 1 ? "" : "s"}</b> so far: ${[status === "proposed" ? `${kept} made it true` : `${kept} kept it`, failed.length ? `${failed.length} broke it` : "", behind.length ? `${behind.length} were built before it existed` : ""].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")}.${status === "proposed" && kept ? " Waiting for a person to accept it." : ""}</li>` : "",
@@ -1598,7 +1602,7 @@
     demo.folded = true;
     tips(false);
   }
-  function demoAccept(id, auto = false, how = "a person") {
+  function demoAccept(id, auto = false, how = "the owner") {
     if (!auto) acted();
     const s = state;
     const cl = s.claims.find((x) => x.id === id);
@@ -1608,6 +1612,7 @@
     const now = Date.now();
     // On a rival's attempt, the accepted fact got further than on canon and then failed: that's the clash.
     const rivals = new Map(s.claims.filter((c) => c.factId === cl.factId).flatMap((c) => c.clashes ?? []).filter((c) => c.breaks === "mine").map((c) => [c.with.claimId, c.detail]));
+    if (how === "the owner" && fact.replaces && state.policy?.autoAccept === "charter" && CHARTER.locked.includes(fact.replaces)) how = "the owner, overriding the charter’s lock";
     Object.assign(fact, { status: "canon", acceptedAt: now, madeTrueBy: cl.attemptId, acceptedHow: how });
     if (fact.replaces) Object.assign(s.facts.find((f) => f.id === fact.replaces) ?? {}, { status: "retired", retiredBy: cl.attemptId, retiredAt: now });
     cl.status = "accepted";

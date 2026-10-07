@@ -371,7 +371,7 @@ export class Referee extends DurableObject<Env> {
   // ---- Review and promotion ---------------------------------------------------------
 
   /** A person (or the autopilot policy) accepts a change in the facts. The attempt comes along as evidence and becomes canon. */
-  async accept(claimId: string, how = "a person") {
+  async accept(claimId: string, how = "the owner") {
     const claim = this.claim(claimId);
     if (!claim) throw new ProtocolError(404, "no such claim");
     if (claim.status !== "ready") throw new ProtocolError(409, `claim is ${claim.status}, not ready`);
@@ -390,6 +390,9 @@ export class Referee extends DurableObject<Env> {
       throw new ProtocolError(409, "canon moved since this verdict; re-judged, check the board");
     }
 
+    // The owner may accept a change to a rule the charter locks; the history says it overrode the lock.
+    const lockedRule = this.fact(claim.factId)?.replaces;
+    if (how === "the owner" && lockedRule && this.charter()?.locked?.includes(lockedRule)) how = "the owner, overriding the charter’s lock";
     // Every write happens before the first await, so a second accept can't slip in between: the attempt is frozen
     // (its pushes are ignored from here on), the fact is canon and the canon pointer has moved.
     const now = Date.now();

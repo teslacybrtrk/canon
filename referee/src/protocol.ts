@@ -39,7 +39,7 @@ export interface Fact {
   createdAt: number;
   acceptedAt: number | null;
   retiredBy: string | null; // attempt that retired it (by accepting a revision)
-  acceptedHow: string | null; // who decided it: "a person", or the rule that landed it on its own
+  acceptedHow: string | null; // who decided it: "the owner" (a person or an owner agent), or the rule that landed it on its own
   declinedAt: number | null; // a person declined the claim that proposed it, and nobody else was working on it
   declineReason: string | null;
   retiredAt: number | null;

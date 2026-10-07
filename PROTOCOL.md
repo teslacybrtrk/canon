@@ -161,7 +161,7 @@ People write the charter once; after that, every Ready fact lands or waits by it
 |---|---|
 | A backlog fact people wrote | it's Ready (as with `"backlog"`) |
 | A fact an agent proposed | a **different** agent also has a Ready attempt that makes it true: the proposer can't be the only proof |
-| A rule change (`replaces`) | as above, unless the charter `locked` the rule it replaces: only a person changes a locked rule |
+| A rule change (`replaces`) | as above, unless the charter `locked` the rule it replaces: then only the owner (whoever holds the owner key: a person, or an owner agent) can accept it, and the history records that it overrode the lock |
 | Two Ready facts that clash | only the one listed first in `priority` (or else the earlier-proposed one); the other waits, then is rejected once the winner is canon |
 
 Every automatic accept records why (`acceptedHow` on the fact: "the charter: made true independently by agent-2 and
