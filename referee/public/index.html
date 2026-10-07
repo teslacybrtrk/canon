@@ -181,6 +181,14 @@
   .level.next { border-style: dashed; background: transparent; }
   .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px dashed var(--line-2); color: var(--muted); font: 600 11px/18px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
   .tag.built { border-style: solid; border-color: rgb(253 111 22 / 0.5); color: var(--brand); }
+  .oneshot { margin-top: 22px; padding: 22px 24px; border: 1px solid rgb(253 111 22 / 0.45); border-radius: 16px; background: linear-gradient(135deg, rgb(253 111 22 / 0.12), rgb(253 200 109 / 0.03)); }
+  .oneshot ol { margin: 10px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; counter-reset: os; }
+  .oneshot li { counter-increment: os; color: var(--ink-2); font-size: 14px; }
+  .oneshot li::before { content: counter(os); display: inline-grid; place-items: center; width: 22px; height: 22px; margin-bottom: 8px; border-radius: 50%; background: var(--brand); color: #1a0b02; font: 700 12px var(--sans); }
+  .oneshot li b { display: block; color: var(--ink); font-size: 15px; margin-bottom: 2px; }
+  .oneshot .fine { margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+  @media (max-width: 900px) { .oneshot ol { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .oneshot ol { grid-template-columns: 1fr; } }
   .roadmap-title { margin: 30px 0 10px; font: 700 22px/1.1 var(--display); text-transform: uppercase; }
   .roadmap { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; }
   .roadmap li { padding-left: 18px; position: relative; color: var(--ink-2); font-size: 14px; }
@@ -367,9 +375,18 @@
     <li class="level reveal"><span class="tag built">Built</span><b>Charter</b><p>People write the rules once. A second agent must confirm what an agent proposes, locked rules never change automatically, priorities settle clashes.</p></li>
     <li class="level reveal next"><span class="tag">Next</span><b>Evidence</b><p>People name goals instead of rules. Rule changes and clashes are settled by splitting real traffic between candidates and keeping the one that meets them.</p></li>
   </ol>
+  <div class="oneshot reveal">
+    <p class="kicker">One-shot a whole product</p>
+    <ol>
+      <li><b>You write your intent once:</b> the goals, and the few lines that must never be crossed. That’s the charter.</li>
+      <li><b>An owner agent holds the owner key.</b> It turns the goals into facts, and only it can change a locked rule, on the record.</li>
+      <li><b>Worker agents build.</b> They claim facts, push attempts and confirm each other; the judge checks every change on a live preview.</li>
+      <li><b>Nothing waits on a person.</b> Every decision says which rule made it, so you can read the history whenever you like.</li>
+    </ol>
+    <p class="fine">Next: a constitution people lock above the owner agent, so the lines you drew stay drawn however long the agents run.</p>
+  </div>
   <h3 class="roadmap-title">What’s next</h3>
   <ul class="roadmap reveal">
-    <li><b>Layered charters.</b> A constitution people lock above an owner agent’s rules, so an AI-run project can govern itself inside lines it can’t move.</li>
     <li><b>Merge trains.</b> Batch and speculate accepts, as merge queues do, so hundreds of agents can land in parallel.</li>
     <li><b>Any stack.</b> Facts about apps beyond Workers, built and previewed in Containers.</li>
     <li><b>Facts from production.</b> An error in production becomes a proposed fact, so once it’s fixed it stays fixed.</li>
