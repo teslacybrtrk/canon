@@ -889,6 +889,7 @@
       if (cl.status === "ready" && v?.retires?.length) return "A rule change: it keeps every other fact and replaces one on purpose. You decide.";
       if (cl.status === "behind" && cl.refresh?.startsWith("conflict")) return `Canon moved, and this change conflicts with the new code (${esc(cl.refresh.slice(10))}). Its agent resolves it.`;
       if (cl.status === "superseded" && refreshedBy.has(cl.id)) return `Canon moved; the judge re-applied this change on the new canon as ${esc(refreshedBy.get(cl.id).attemptId)}.`;
+      if (cl.refresh === "repaired" && ["open", "checking", "ready", "unproven", "contradicts"].includes(cl.status)) return "Re-applying this change hit a text conflict; the judge’s repair model resolved it, and every fact still decides.";
       if (cl.refreshedFrom && ["open", "checking"].includes(cl.status)) return "The judge re-applied this change on the new canon. Judging it again.";
       return MEANING[cl.status] ?? "";
     };

@@ -207,7 +207,29 @@ export class RefreshAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       if (out.includes("CANON_REFRESH_PUSHED")) outcome = "pushed";
       else if (out.includes("CANON_REFRESH_CONFLICT")) {
         outcome = "conflict";
-        detail = `in ${out.slice(out.indexOf("CANON_REFRESH_CONFLICT") + 22).trim().split(/\s+/).join(", ") || "the change"}`;
+        detail = `in ${(out.match(/CANON_REFRESH_CONFLICT([^\n]*)/)?.[1] ?? "").trim().split(/\s+/).filter(Boolean).join(", ") || "the change"}`;
+        // Bounded repair: the judge's model resolves the markers once; the result is pushed and judged like any push.
+        const files: Record<string, string> = {};
+        for (const m of out.matchAll(/CANON_CONFLICT_FILE (\S+) (\S+)/g)) files[m[1]] = new TextDecoder().decode(Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0)));
+        if (Object.keys(files).length) {
+          const resolved = await step
+            .do("repair", { timeout: "8 minutes", retries: { limit: 0, delay: 1_000 } }, async () => {
+              const r = await referee.repairConflict(repo, files);
+              return r ? JSON.stringify(r) : null;
+            })
+            .catch(() => null);
+          if (resolved) {
+            const bytes = new TextEncoder().encode(resolved);
+            let bin = "";
+            for (const b of bytes) bin += String.fromCharCode(b);
+            const again = await ci.runner({ name: "re-apply (repaired)", command: REFRESH_SCRIPT, env: { ...env, RESOLVED: btoa(bin) }, config: { retries: { limit: 1, delay: 15_000 }, timeout: 5 * 60_000 } });
+            const out2 = typeof again.logs.stdout === "string" ? again.logs.stdout : "";
+            if (out2.includes("CANON_REFRESH_PUSHED")) {
+              outcome = "pushed";
+              detail = "repaired";
+            }
+          }
+        }
       }
     } catch (err) {
       detail = isCiRunnerFailure(err) ? err.message : String(err);
@@ -399,8 +421,19 @@ const REFRESH_SCRIPT = [
   `commit() { git commit -q -m "$1" --trailer "Canon-Fact: $FACT" --trailer "Canon-Claim: $CLAIM" --trailer "Canon-Agent: $AGENT"; }`,
   `git add canon.json && commit "canon: claim \"$FACT\""`,
   `if [ -s /tmp/canon-refresh.patch ]; then`,
-  `  if ! git apply --3way /tmp/canon-refresh.patch >/dev/null 2>&1; then echo CANON_REFRESH_CONFLICT $(git diff --name-only --diff-filter=U); exit 0; fi`,
-  `  git add -A && commit "Re-apply $OLD_ID on canon $CANON_SEQ"`,
+  `  if git apply --3way /tmp/canon-refresh.patch >/dev/null 2>&1; then`,
+  `    git add -A && commit "Re-apply $OLD_ID on canon $CANON_SEQ"`,
+  // A text conflict. With RESOLVED (the judge's repair, second pass) write the resolved files; otherwise hand the
+  // conflicted files to the judge and stop.
+  `  elif [ -n "\${RESOLVED:-}" ]; then`,
+  `    printf %s "$RESOLVED" | base64 -d > /tmp/canon-resolved.json`,
+  `    node -e 'const fs=require("fs");for(const [p,t] of Object.entries(JSON.parse(fs.readFileSync("/tmp/canon-resolved.json","utf8"))))fs.writeFileSync(p,t)'`,
+  `    git add -A && commit "Re-apply $OLD_ID on canon $CANON_SEQ (a text conflict resolved by the judge's repair model; every fact decides)"`,
+  `  else`,
+  `    files=$(git diff --name-only --diff-filter=U); echo CANON_REFRESH_CONFLICT $files`,
+  `    for f in $files; do [ "$(wc -c < "$f")" -lt 150000 ] && echo "CANON_CONFLICT_FILE $f $(base64 -w0 "$f")"; done`,
+  `    exit 0`,
+  `  fi`,
   `fi`,
   `git push -q "$NEW_URL" HEAD:main 2>&1 | sed 's#//x:[^@]*@#//x:***@#g'`,
   `git ls-remote "$NEW_URL" refs/heads/main | grep -q "$(git rev-parse HEAD)" && echo CANON_REFRESH_PUSHED`,

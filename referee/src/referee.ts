@@ -30,6 +30,7 @@ import {
 } from "./protocol";
 import { edgeFailure, platformFailure } from "./platform";
 import { addedText, callsInto, changedSymbols } from "./symbols";
+import { fileFromAnswer, repairPrompt, validResolution } from "./repair";
 import { SCHEMA, UPGRADES } from "./schema";
 import { ground, parseAnswer, REVIEW_SCHEMA, reviewPrompt, type Review, type ReviewFile } from "./review";
 
@@ -646,6 +647,7 @@ export class Referee extends DurableObject<Env> {
     // decides whether this deploy is healthy (see checkCanonOnProduction).
     if (ok) this.setMeta("verifyDeploy", String(seq));
     await this.scheduleProductionCheck(20_000);
+    if (ok) await this.retryConflicts().catch(() => {});
     // A speculative train checked on this canon: it lands now if the release went out, and fails if it was held back.
     for (const t of this.rows(`SELECT * FROM trains WHERE status = 'waiting' AND base_seq = ?`, seq)) {
       const v = this.latestVerdict(t.id as string);
@@ -879,6 +881,7 @@ export class Referee extends DurableObject<Env> {
     const before = this.currentCanon()?.seq;
     await this.keepCanonReleased();
     this.setMeta("rejudge", "1"); // Ready claims are judged (and autopiloted) again, under the rules as they are now
+    await this.retryConflicts().catch(() => {});
     await this.ctx.storage.setAlarm(Date.now() + 1_000); // and run the rest of the alarm's work (retries, mutation runs) now
     return { canonSeq: this.currentCanon()?.seq, reverted: this.currentCanon()?.seq !== before };
   }
@@ -1507,7 +1510,10 @@ export class Referee extends DurableObject<Env> {
 
   /** The refresh Workflow's result. Pushed: the push event takes it from here. Otherwise the old claim goes back to its agent. */
   async refreshed(attemptId: string, outcome: "pushed" | "conflict" | "failed", detail: string) {
-    if (outcome === "pushed") return;
+    if (outcome === "pushed") {
+      if (detail === "repaired") this.sql.exec(`UPDATE claims SET refresh = 'repaired' WHERE attempt_id = ?`, attemptId);
+      return this.broadcast();
+    }
     const attempt = this.attempt(attemptId);
     const claim = attempt?.claimId ? this.claim(attempt.claimId) : null;
     if (!attempt || !claim?.refreshedFrom || attempt.headSha) return;
@@ -1515,7 +1521,11 @@ export class Referee extends DurableObject<Env> {
     this.sql.exec(`DELETE FROM claims WHERE id = ?`, claim.id);
     this.sql.exec(`DELETE FROM attempts WHERE id = ?`, attempt.id);
     const note = outcome === "conflict" ? `conflict: ${detail.replace(/\s+/g, " ").trim().slice(0, 200)}` : "failed";
-    this.sql.exec(`UPDATE claims SET status = 'behind', refresh = ? WHERE id = ? AND status = 'superseded'`, note, claim.refreshedFrom);
+    // Which canon it conflicted with: a newer canon gets one more try (see retryConflicts).
+    const seen = JSON.parse(this.meta("conflictSeq") ?? "{}") as Record<string, number>;
+    seen[claim.refreshedFrom] = this.canonSeq();
+    this.setMeta("conflictSeq", JSON.stringify(Object.fromEntries(Object.entries(seen).slice(-300))));
+    this.sql.exec(`UPDATE claims SET status = 'behind', refresh = ?, auto_wait = NULL WHERE id = ? AND status = 'superseded'`, note, claim.refreshedFrom);
     this.broadcast();
   }
 
@@ -1561,6 +1571,67 @@ export class Referee extends DurableObject<Env> {
   }
 
   // ---- A second pair of eyes: the advisory reviewer --------------------------------------------------------------
+
+  /**
+   * Bounded repair of a text conflict met while re-applying an attempt: the model resolves the markers in each file
+   * (at most three), told what both sides are for. Each answer must leave no markers and keep every line outside the
+   * conflicts, or the repair is off and the conflict goes back to the agent as before. A repair that passes is only
+   * a candidate: it's pushed as the re-applied attempt and judged on every fact like any push.
+   */
+  async repairConflict(attemptId: string, files: Record<string, string>): Promise<Record<string, string> | null> {
+    const attempt = this.attempt(attemptId);
+    const claim = attempt?.claimId ? this.claim(attempt.claimId) : null;
+    const paths = Object.keys(files);
+    if (!claim || !this.env.AI || !paths.length || paths.length > 3) return null;
+    const from = claim.refreshedFrom ? this.claim(claim.refreshedFrom) : null;
+    const forkedAt = from ? (this.attempt(from.attemptId)?.createdAt ?? 0) : 0;
+    const intents = [
+      this.fact(claim.factId)?.sentence ?? claim.factId,
+      ...this.rows(`SELECT * FROM facts WHERE status = 'canon' AND accepted_at > ?`, forkedAt).map(toFact).map((f) => f.sentence),
+    ];
+    const out: Record<string, string> = {};
+    for (const path of paths) {
+      const answer = await this.askModel(repairPrompt(path, files[path], intents)).catch(() => null);
+      const text = fileFromAnswer(answer);
+      if (!text || !validResolution(files[path], text)) return null;
+      out[path] = text;
+    }
+    return out;
+  }
+
+  /** One answer from the frontier models on Workers AI: retried when they're out of capacity, then the next one down. */
+  private async askModel(messages: Array<{ role: "system" | "user"; content: string }>): Promise<string | null> {
+    for (const m of [REVIEW_MODELS[0], REVIEW_MODELS[0], ...REVIEW_MODELS.slice(1)]) {
+      try {
+        const out = (await this.env.AI!.run(m as Parameters<Ai["run"]>[0], { messages, max_completion_tokens: 24000, temperature: 0.1 } as never)) as {
+          response?: unknown;
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        const answer = out.choices?.[0]?.message?.content ?? out.response;
+        return typeof answer === "string" ? answer : null;
+      } catch (err) {
+        if (!/capacity|3040|overloaded|timeout/i.test(String(err))) throw err;
+        await new Promise((r) => setTimeout(r, 3_000));
+      }
+    }
+    return null;
+  }
+
+  /**
+   * A text conflict is against one canon. When canon has moved on since, the judge re-applies the attempt once more on
+   * the new one (and its repair model can step in): the conflict may be gone, or now resolvable.
+   */
+  private async retryConflicts() {
+    const seen = JSON.parse(this.meta("conflictSeq") ?? "{}") as Record<string, number>;
+    const seq = this.canonSeq();
+    for (const c of this.rows(`SELECT * FROM claims WHERE status = 'behind' AND refresh LIKE 'conflict%' LIMIT 10`).map(toClaim)) {
+      if ((seen[c.id] ?? 0) >= seq) continue;
+      seen[c.id] = seq;
+      this.sql.exec(`UPDATE claims SET refresh = NULL WHERE id = ?`, c.id);
+      await this.autoRefresh(c.id).catch(() => {});
+    }
+    this.setMeta("conflictSeq", JSON.stringify(Object.fromEntries(Object.entries(seen).slice(-300))));
+  }
 
   /** The owner asks for a fresh review of an attempt's latest commit (a new model, a changed prompt). */
   async reReview(attemptId: string): Promise<Review | null> {
@@ -2318,7 +2389,9 @@ export class Referee extends DurableObject<Env> {
   }
 
   private setClaimStatus(id: string, status: ClaimStatus) {
-    this.sql.exec(`UPDATE claims SET status = ? WHERE id = ?`, status, id);
+    // Why autopilot waits only means something for a Ready claim; any other state clears it.
+    if (status === "ready") this.sql.exec(`UPDATE claims SET status = ? WHERE id = ?`, status, id);
+    else this.sql.exec(`UPDATE claims SET status = ?, auto_wait = NULL WHERE id = ?`, status, id);
   }
 
   private requireProject(): string {
