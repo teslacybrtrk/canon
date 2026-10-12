@@ -69,6 +69,9 @@ export type AutoAccept = "off" | "backlog" | "charter";
 export interface Charter {
   locked?: string[]; // canon facts no automatic decision may retire: only a person changes them
   priority?: string[]; // when two Ready facts clash, the one listed first wins (unlisted: the earlier-proposed fact)
+  // File globs no automatic decision may land: an attempt that changes one (auth, migrations, deploy config...) waits
+  // for the owner, a person or an owner agent, however good its verdict. Facts settle behaviour; these get a reviewer.
+  review?: string[];
 }
 export interface Policy {
   autoAccept?: AutoAccept;
@@ -234,6 +237,8 @@ export interface Verdict {
   // The judge's own random draw for this verdict, picked after the commit was pushed: probe inputs come from the
   // commit, this seed and the fact, so no agent can know them in advance, and the verdict can be replayed exactly.
   seed?: string;
+  // Files this attempt changed that the charter routes to review (see Charter.review).
+  review?: string[];
   // Added when the verdict is read (GET /attempts/:id/verdict), not stored with it:
   refreshedAs?: string; // canon moved, and the judge re-applied this attempt on the current canon as this attempt
   declined?: string; // a person declined this claim, for this reason

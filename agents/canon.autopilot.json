@@ -461,7 +461,8 @@
     "autoAccept": "charter",
     "charter": {
       "locked": ["price-is-listed"],
-      "priority": ["no-double-booking"]
+      "priority": ["no-double-booking"],
+      "review": ["migrations/**", "src/auth/**"]
     }
   }
 }

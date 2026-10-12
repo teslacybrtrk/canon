@@ -152,7 +152,8 @@ proposed by agents themselves still wait for a person, so an agent cannot lower 
 
 ```json
 "policy": { "autoAccept": "charter",
-            "charter": { "locked": ["price-is-listed"], "priority": ["no-double-booking", "stalls-can-be-shared"] } }
+            "charter": { "locked": ["price-is-listed"], "priority": ["no-double-booking", "stalls-can-be-shared"],
+                         "review": ["migrations/**", "src/auth/**"] } }
 ```
 
 People write the charter once; after that, every Ready fact lands or waits by its rules, and no model chooses:
@@ -162,6 +163,7 @@ People write the charter once; after that, every Ready fact lands or waits by it
 | A backlog fact people wrote | it's Ready (as with `"backlog"`) |
 | A fact an agent proposed | a **different** agent also has a Ready attempt that makes it true: the proposer can't be the only proof |
 | A rule change (`replaces`) | as above, unless the charter `locked` the rule it replaces: then only the owner (whoever holds the owner key: a person, or an owner agent) can accept it, and the history records that it overrode the lock |
+| An attempt that changes a `review` path | never automatically: its verdict lists the files (`review`), and the owner (a person or an owner agent) reviews the code, then accepts or declines. Facts settle behaviour; some files also deserve a reviewer |
 | Two Ready facts that clash | only the one listed first in `priority` (or else the earlier-proposed one); the other waits, then is re-applied on the winner and rejected if the combined code still breaks it |
 
 Every automatic accept records why (`acceptedHow` on the fact: "the charter: made true independently by agent-2 and

@@ -966,6 +966,8 @@ export class Referee extends DurableObject<Env> {
     const charter = this.charter() ?? {};
     if (fact.origin !== "backlog" && policy !== "charter") return { wait: "an agent proposed this fact, and autopilot only lands facts people wrote" };
     if (fact.replaces && charter.locked?.includes(fact.replaces)) return { wait: `it changes “${this.fact(fact.replaces)?.sentence ?? fact.replaces}”, which the charter locks` };
+    const touched = this.latestVerdict(claim.attemptId)?.review ?? [];
+    if (touched.length) return { wait: `it changes ${touched.slice(0, 3).join(", ")}${touched.length > 3 ? " and more" : ""}, which the charter routes to review` };
     const reasons: string[] = [fact.origin === "backlog" ? "a backlog fact people wrote" : ""];
     // A clash goes to the fact the charter ranks first, or else to the one proposed first. It's settled before
     // anything else: a fact that loses one waits, however many agents make it true.
@@ -1046,6 +1048,9 @@ export class Referee extends DurableObject<Env> {
     const lost = failed.filter((x) => !newer(x)).map((x) => ({ factId: x.fact.id, detail: x.detail }));
     const stale = failed.filter(newer).map((x) => (opposed.has(x.fact.id) ? { factId: x.fact.id, detail: opposed.get(x.fact.id)!, clash: true } : { factId: x.fact.id, detail: x.detail }));
     const ledger: Ledger = forced ? { status: "ok", detail: "not read: build failed" } : await this.checkLedger(attempt, sha, claimedFact, canonFacts, retiring);
+    // The charter's review paths this attempt touched: autopilot won't land it; the owner decides.
+    const reviewGlobs = this.charter()?.review ?? [];
+    const reviewed = reviewGlobs.length && changed ? changed.filter((p) => inScope(reviewGlobs, [p])) : [];
     if (ledger.status === "tampered") lost.push({ factId: "canon.json", detail: ledger.detail });
     const claimed = claim ? results.get(claim.factId) : undefined;
     const behind = stale.length > 0 || ledger.status === "behind";
@@ -1067,6 +1072,7 @@ export class Referee extends DurableObject<Env> {
       ledger,
       judgedAt: now,
       seed,
+      ...(reviewed.length ? { review: reviewed } : {}),
     };
     // first_at keeps the first verdict's time for the run report; a re-judge only replaces the verdict itself.
     this.sql.exec(
