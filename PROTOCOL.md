@@ -232,8 +232,10 @@ boarding window; claims that may land meanwhile (typically the queue behind a re
 more riders become one candidate: the judge forks a train attempt from canon, CI applies each rider's own change onto
 it in order (one that doesn't apply cleanly on the others is dropped and lands on its own), and the push is judged
 once, against every canon fact and every rider's fact. If it all holds, every rider's fact becomes canon in one canon
-entry (`facts` in `deploys`) and one release through the gate. A train that doesn't hold lands its riders one by one;
-a train held back at release does too, so the gate finds the rider that breaks production. A revert undoes a train as
+entry (`facts` in `deploys`) and one release through the gate. A train that doesn't hold (on its combined preview, or
+held back at release) doesn't say which rider broke it: four or more riders split in two halves, each its own train at
+the next departures (`half` in `trains`), and a half that fails splits again; fewer land one at a time. A train of eight
+finds its culprit in about three checks instead of eight. A revert undoes a train as
 a unit. Rule changes never ride a train.
 
 **Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release

@@ -27,7 +27,8 @@ candidate; if not, canon steps back.
   config, its own long-lived data) first, a version that breaks one is held back, and canon always equals what
   production runs: a held-back release reverts it.
 - **Throughput**: on autopilot with `"batch": true`, claims that queue behind a release leave together as one merge train: one candidate, checked once,
-  released once. A train that doesn't hold lands its riders one by one, so the gate finds the culprit. Trains are
+  released once. A train that doesn't hold splits in halves (four or more riders) or goes one by one, so the gate
+  finds the culprit in a few checks. Trains are
   speculative: the next one is built and checked on the canon still being released, and lands the moment it ships.
 - **Why**: the fact chain. Every fact links to the attempt that made it true and to the attempts that failed it.
   Failed attempts stay clonable, so they remain the project's memory. The chain is in Git too, as notes on the canon
@@ -175,7 +176,7 @@ to wrangler, so give the agent key only to agents you run.
 
 Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
 (for example, Previews that pin Durable Object code per commit, version overrides that reach Durable Objects, and
-Workers Builds for forks). All twenty-four are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+Workers Builds for forks). All twenty-three are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
 ## Roadmap
 
@@ -191,8 +192,8 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   shows which ones no fact noticed. Next, concurrency and retry breaks: two requests at once, a repeated request.
 - **Reviewer as a gate**: today a reviewer model writes advisory notes grounded in quoted lines. Next, let a charter
   route a `risk` note to the owner the way `review` paths are, with the notes' track record on the board.
-- **Bisecting trains**: today a failed train lands its riders one by one. Next, split it in halves, so a train of
-  eight finds its culprit in three checks instead of eight.
+- **Fair scheduling**: today the queue is first come, first served. Next, share CI between agents by the value of
+  their claims, and cancel work a newer canon has made pointless.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Canary traffic**: today a new canon runs every fact on a full release candidate, then (for Workers without Durable
   Objects) on the production URL at 0% traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,

@@ -1150,8 +1150,8 @@
     const fresh = t && (["building", "judging", "waiting"].includes(t.status) || Date.now() - (t.createdAt ?? 0) < 90_000);
     const sentenceOfClaim = (c) => s.facts.find((f) => f.id === c.factId)?.sentence ?? c.factId;
     const trainHtml = fresh ? `<div class="train ${t.status}"><b>${{
-      building: `${t.speculative ? "Speculative merge train" : "Merge train"}: ${t.claims.length} attempts leave together`,
-      judging: `${t.speculative ? "Speculative merge train" : "Merge train"}: checking ${t.claims.length} changes as one candidate`,
+      building: `${t.half ? "Half of a held-back train" : t.speculative ? "Speculative merge train" : "Merge train"}: ${t.claims.length} attempts leave together`,
+      judging: `${t.half ? "Half of a held-back train" : t.speculative ? "Speculative merge train" : "Merge train"}: checking ${t.claims.length} changes as one candidate`,
       waiting: `Merge train checked: it lands the moment canon #${t.baseSeq ?? ""} is released`,
       landed: `Merge train landed: ${t.claims.length} facts, one release`,
       failed: "Merge train didn’t hold: its riders land one at a time",
@@ -1473,7 +1473,7 @@
   }
 
   // ---- Demo: the judge's moves, played in this browser. Nothing is sent anywhere; a refresh starts over. ----------
-  const demo = { deploying: false, log: [], auto: false, landed: 0, confirming: new Set(), train: null, trainFailed: new Set() };
+  const demo = { deploying: false, log: [], auto: false, landed: 0, confirming: new Set(), train: null, trainFailed: new Set(), bisect: [], stallHoursFixed: false };
   const soon = (ms, fn) => setTimeout(() => { fn(); render(); }, ms);
   const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
   const names = (list) => list.join(" and ").replace(/ and (?=.* and )/g, ", ");
@@ -1540,6 +1540,9 @@
           why: `${old.why.replace(/ \(refreshed onto canon \d+\)$/, "")} (refreshed onto canon ${seq})`, createdAt: Date.now(),
         };
         s.claims.unshift(fresh);
+        // Re-applied, it is still the same rider: it keeps its place in a failed train's halves.
+        if (demo.trainFailed.has(old.id)) demo.trainFailed.add(fresh.id);
+        demo.bisect = demo.bisect.map((g) => g.map((id) => (id === old.id ? fresh.id : id)));
         // The same change clashes the same way: point the other side's clash at the new attempt.
         for (const x of s.claims) for (const k of x.clashes ?? []) if (k.with.claimId === old.id) k.with = { ...k.with, claimId: fresh.id, attemptId: fresh.attemptId };
         soon(3000 + Math.random() * 3000, () => {
@@ -1791,10 +1794,20 @@
   function departQueue() {
     if (!["backlog", "charter"].includes(state.policy?.autoAccept)) return;
     if (demo.train && ["building", "judging", "waiting"].includes(demo.train.status)) return;
+    // Halves of a train that was held back go first, one per departure, once the release in front of them is out.
+    let half = null;
+    while (!demo.deploying && demo.bisect.length && !half) {
+      const ids = demo.bisect.shift();
+      // Members still being re-applied or judged: the half waits for them.
+      if (ids.some((id) => ["open", "checking", "behind"].includes(state.claims.find((x) => x.id === id)?.status))) { demo.bisect.unshift(ids); return; }
+      const group = ids.map((id) => state.claims.find((x) => x.id === id)).filter((x) => x?.status === "ready" && demoDecide(x)?.how);
+      if (group.length === 1) { demo.landed++; demoAccept(group[0].id, true, demoDecide(group[0]).how); return; }
+      if (group.length >= 2) half = group;
+    }
     // While a release runs, two or more riders leave anyway: a speculative train, built on the canon being released.
-    const speculative = !!demo.deploying;
+    const speculative = !!demo.deploying && !half;
     const seen = new Set();
-    const riders = state.claims.filter((x) => {
+    const riders = half ?? state.claims.filter((x) => {
       const f = state.facts.find((g) => g.id === x.factId);
       if (x.status !== "ready" || f?.replaces || seen.has(x.factId) || demo.trainFailed.has(x.id)) return false;
       const d = demoDecide(x, speculative);
@@ -1807,10 +1820,12 @@
     if (!riders.length) return;
     const hows = Object.fromEntries(riders.map((r) => [r.id, demoDecide(r, true).how]));
     const baseSeq = state.canon.seq;
-    demo.train = { status: "building", createdAt: Date.now(), speculative, baseSeq, claims: riders.map((r) => ({ claimId: r.id, agent: r.agent, factId: r.factId })) };
+    demo.train = { status: "building", createdAt: Date.now(), speculative, half: !!half, baseSeq, claims: riders.map((r) => ({ claimId: r.id, agent: r.agent, factId: r.factId })) };
     demo.trainRiders = riders;
     demo.trainHows = hows;
-    say(speculative
+    say(half
+      ? ["train", "Half a train", `${riders.length} riders of the train that was held back try again together. If they hold, the culprit is in the other half.`]
+      : speculative
       ? ["train", "Speculative merge train", `${riders.length} attempts don’t wait for canon #${baseSeq} to finish releasing: the judge builds them on it now, as one candidate.`]
       : ["train", "Merge train", `${riders.length} attempts were waiting on the last release. The judge applies each one’s own change onto canon as one candidate.`]);
     render();
@@ -1905,7 +1920,7 @@
     // A release (candidate, every fact, then production) is the slowest step; what queues meanwhile may leave speculatively.
     soon(auto ? 8500 : 5200, () => {
       demo.deploying = false;
-      if (landedIds.has("stall-hours") && !demo.heldOnce) {
+      if (landedIds.has("stall-hours") && !demo.stallHoursFixed) {
         // A speculative train built on this canon loses its base: its riders land one at a time.
         if (demo.train && demo.train.baseSeq === seq && ["building", "judging", "waiting"].includes(demo.train.status)) {
           demo.train.status = "failed";
@@ -1931,10 +1946,13 @@
     s.deploys[0] = { ...s.deploys[0], deployed: "failed", health: "held", detail: `${detail}. Held back: production never served it.` };
     s.canon = { ...prevCanon, seq: seq + 1, trainFacts: [] };
     s.deploys.unshift({ seq: seq + 1, reverts: seq, facts: [], factId: null, deployed: "deployed", health: "healthy", detail: null });
+    // A train held back doesn't say which rider broke it: they're all Ready again, and retry in halves (four or more)
+    // or one at a time. Only a release with the culprit alone in it names it.
+    const alone = landed.length === 1;
     for (const x of landed) {
       const f = s.facts.find((g) => g.id === x.factId);
       if (f) Object.assign(f, { status: "proposed", acceptedAt: null, madeTrueBy: null, acceptedHow: null });
-      if (x.factId === "stall-hours") {
+      if (alone) {
         x.status = "contradicts";
         x.verdict = { ...(x.verdict ?? demoVerdict(x)), outcome: "contradicts", heldBack: detail, lost: [{ factId: "market-lists-stalls", detail: `at release, ${detail}` }] };
       } else {
@@ -1942,14 +1960,21 @@
         demo.trainFailed.add(x.id);
       }
     }
-    say(["rejected", "Held back before release", "“Every stall shows its opening hours” passed its fresh preview, but on the release candidate, a full copy with production’s data, the market page broke: its new column isn’t in the existing database. No visitor ever got it."],
-      ["canon", `Canon went back: #${seq + 1}`, `Canon is what production runs, so it’s canon #${seq - 1}’s code again.${landed.length > 1 ? " What rode with it lands again, one at a time." : ""}`]);
+    const halves = !alone && landed.length >= 4;
+    if (halves) {
+      const mid = Math.ceil(landed.length / 2);
+      demo.bisect.unshift(landed.slice(0, mid).map((x) => x.id), landed.slice(mid).map((x) => x.id));
+    }
+    say(alone
+      ? ["rejected", "Held back before release", "“Every stall shows its opening hours” passed its fresh preview, but on the release candidate, a full copy with production’s config and its own long-lived data, the market page broke: its new column isn’t in the existing database. No visitor ever got it."]
+      : ["rejected", "Train held back before release", `On the release candidate (production’s config, its own long-lived data) the market page broke. The train doesn’t say which of its ${landed.length} riders did it, so no visitor got any of them.`],
+      ["canon", `Canon went back: #${seq + 1}`, `Canon is what production runs, so it’s canon #${seq - 1}’s code again.${alone ? "" : halves ? ` The ${landed.length} riders try again as two halves, so the culprit is found in a few releases, not ${landed.length}.` : " What rode with it lands again, one at a time."}`]);
     render();
     soon(1200, departQueue);
-    // The agent fixes it (adds the column with a migration) and claims the fact again.
-    soon(6000, () => {
+    // Found alone: the agent fixes it (adds the column with a migration) and claims the fact again.
+    if (alone) soon(6000, () => {
       const f = s.facts.find((g) => g.id === "stall-hours");
-      if (f?.status === "proposed" && demo.auto) spawn(f, "Held back at release: add the opening-hours column with a migration, so existing data works");
+      if (f?.status === "proposed" && demo.auto) { demo.stallHoursFixed = true; spawn(f, "Held back at release: add the opening-hours column with a migration, so existing data works"); }
     });
   }
 

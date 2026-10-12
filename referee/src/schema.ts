@@ -23,6 +23,7 @@ export const UPGRADES = [
   `ALTER TABLE canon ADD COLUMN facts_json TEXT`,
   `ALTER TABLE trains ADD COLUMN base_seq INTEGER`,
   `ALTER TABLE trains ADD COLUMN speculative INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE trains ADD COLUMN half INTEGER NOT NULL DEFAULT 0`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];

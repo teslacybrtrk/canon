@@ -120,11 +120,6 @@ Found while building, October 2026.
     were less often right. A 24,000-token budget fixed it. Llama 3.3 70B in JSON mode returned an empty list for the
     same prompt. Kimi also answered "3040: Capacity temporarily exceeded" once. *We did:* retry, then fall back to
     Kimi K2.6.
-24. **A brand-new Worker's workers.dev hostname answers 530 for a while.** The first release of a project creates its
-    production Worker; for the first minute or so, requests to it got a 530 from Cloudflare's edge, which our judge first
-    read as the code breaking a fact (and rolled back a correct release). *We did:* a check answered by the edge (520-530)
-    or by nobody never counts against the code; the judge waits for the app instead. *Would help:* `wrangler deploy`
-    returning only once the hostname serves, or a distinct, documented status for "not provisioned yet".
 
 ## Things that worked especially well
 

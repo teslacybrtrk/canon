@@ -125,6 +125,7 @@ export class Referee extends DurableObject<Env> {
         detail: (t.detail as string | null) ?? null,
         baseSeq: (t.base_seq as number | null) ?? null,
         speculative: t.speculative === 1,
+        half: t.half === 1,
         createdAt: t.created_at as number,
         claims: (JSON.parse(t.claims as string) as string[]).flatMap((id) => {
           const c = this.claim(id);
@@ -768,6 +769,8 @@ export class Referee extends DurableObject<Env> {
     const undoneAttempts = accepts.flatMap((u) => [u.row.attempt_id as string, ...u.claims.flatMap((c) => (c ? [c.attemptId] : []))]);
     for (const { row, factIds, claims } of accepts) {
       const why = row.seq === seq ? brokeAt : ((row.health_detail as string | null) ?? null);
+      // A merge train held back at release: its riders try again as two halves (or one by one), see splitTrain.
+      if (why && factIds.length > 1) this.splitTrain(claims.flatMap((c) => (c ? [c.id] : [])));
       for (const [k, factId] of factIds.entries()) {
       const fact = this.fact(factId);
       this.sql.exec(`UPDATE facts SET status = 'proposed', accepted_at = NULL, made_true_by = NULL, accepted_how = NULL WHERE id = ?`, factId);
@@ -775,12 +778,10 @@ export class Referee extends DurableObject<Env> {
       // The claim that was accepted: back to its agent with what broke, or Ready again if only the platform failed.
       const claim = claims[k];
       const verdict = claim ? this.latestVerdict(claim.attemptId) : null;
-      // A merge train held back at release doesn't say which rider broke it: its riders land one by one instead,
-      // never in a train again, and the release gate finds the one that breaks.
+      // A merge train held back at release doesn't say which rider broke it: its riders are Ready again and retry in
+      // halves (or one by one), so the release gate finds the one that breaks.
       if (claim && verdict && why && factIds.length > 1) {
         this.sql.exec(`UPDATE attempts SET frozen = 0 WHERE id = ?`, claim.attemptId);
-        const failedRiders = new Set([...(JSON.parse(this.meta("trainFailed") ?? "[]") as string[]), claim.id]);
-        this.setMeta("trainFailed", JSON.stringify([...failedRiders].slice(-200)));
         this.setClaimStatus(claim.id, "ready");
       } else if (claim && verdict) {
         if (!why) this.sql.exec(`UPDATE attempts SET frozen = 0 WHERE id = ?`, claim.attemptId); // only the platform failed: it may land again
@@ -899,7 +900,7 @@ export class Referee extends DurableObject<Env> {
     const broke: Array<{ fact: Fact; detail: string }> = [];
     for (const f of facts) {
       let r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
-      // Cloudflare's edge answering for the app (a new hostname coming up) never counts: wait for the app, ~2 minutes.
+      // Cloudflare's edge answering instead of the app (a 52x/530) never counts: wait for the app, ~2 minutes.
       for (let i = 0; !r.held && edgeFailure(r.detail) && i < 8; i++) {
         await new Promise((ok) => setTimeout(ok, 15_000));
         r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
@@ -1204,6 +1205,12 @@ export class Referee extends DurableObject<Env> {
       const why = `${claim.why.replace(/ \(refreshed onto canon \d+\)$/, "")} (refreshed onto canon ${canon.seq})`;
       fresh = await this.declare({ agent: claim.agent, why, join: claim.factId, replaces: claim.id });
       this.sql.exec(`UPDATE claims SET refreshed_from = ? WHERE id = ?`, claim.id, fresh.claim.id);
+      // Re-applied, it is still the same rider: it keeps its place in a failed train's halves (and out of other trains).
+      const failed = JSON.parse(this.meta("trainFailed") ?? "[]") as string[];
+      if (failed.includes(claim.id)) this.setMeta("trainFailed", JSON.stringify([...failed, fresh.claim.id].slice(-200)));
+      const halves = JSON.parse(this.meta("bisect") ?? "[]") as string[][];
+      const freshId = fresh.claim.id;
+      if (halves.some((g) => g.includes(claim.id))) this.setMeta("bisect", JSON.stringify(halves.map((g) => g.map((id) => (id === claim.id ? freshId : id)))));
       await this.env.REFRESH_WORKFLOW.create({ id: `refresh-${fresh.attempt.id}`, params: this.ciParams(fresh.attempt.id, canon.sha as string) });
     } catch (err) {
       if (fresh) await this.refreshed(fresh.attempt.id, "failed", String(err));
@@ -1564,6 +1571,14 @@ export class Referee extends DurableObject<Env> {
     if (!until || Date.now() < until) return;
     // A train is out: look again in a few seconds; promoted() also brings it forward.
     if (this.activeTrain()) return void this.setMeta("boardingUntil", String(Date.now() + 15_000));
+    // Halves of a failed train go first, one per departure.
+    if ((JSON.parse(this.meta("bisect") ?? "[]") as string[][]).length) {
+      const half = await this.departHalf().catch(() => "wait" as const);
+      if (half !== "none") {
+        const more = (JSON.parse(this.meta("bisect") ?? "[]") as string[][]).length > 0;
+        return void this.setMeta("boardingUntil", more || half === "wait" ? String(Date.now() + 15_000) : "0");
+      }
+    }
     // A release is out: two or more riders leave now anyway, as a speculative train built on the canon being released.
     // It is checked while that release runs; it lands the moment the release goes out, or fails if it's held back.
     const releasing = this.releasing();
@@ -1619,7 +1634,7 @@ export class Referee extends DurableObject<Env> {
   }
 
   /** Forks a train attempt from canon and asks CI to apply every rider's own change to it, in order. */
-  private async startTrain(riders: Array<{ claim: Claim; how: string }>) {
+  private async startTrain(riders: Array<{ claim: Claim; how: string }>, half = false) {
     const canon = this.currentCanon();
     const releasing = this.releasing();
     // While a release runs, only a train built on the very canon being released (speculation on its success).
@@ -1629,8 +1644,8 @@ export class Referee extends DurableObject<Env> {
     const { remote } = await this.forkAttempt(canon.attempt_id as string, id, `merge train: ${riders.map((r) => r.claim.factId).join(", ")}`);
     this.sql.exec(`INSERT INTO attempts (id, claim_id, remote, base_attempt, base_sha, created_at) VALUES (?, NULL, ?, ?, ?, ?)`, id, remote, canon.attempt_id, canon.sha, now);
     this.sql.exec(
-      `INSERT INTO trains (id, claims, hows, status, created_at, base_seq, speculative) VALUES (?, ?, ?, 'building', ?, ?, ?)`,
-      id, JSON.stringify(riders.map((r) => r.claim.id)), JSON.stringify(Object.fromEntries(riders.map((r) => [r.claim.id, r.how]))), now, canon.seq, releasing ? 1 : 0,
+      `INSERT INTO trains (id, claims, hows, status, created_at, base_seq, speculative, half) VALUES (?, ?, ?, 'building', ?, ?, ?, ?)`,
+      id, JSON.stringify(riders.map((r) => r.claim.id)), JSON.stringify(Object.fromEntries(riders.map((r) => [r.claim.id, r.how]))), now, canon.seq, releasing ? 1 : 0, half ? 1 : 0,
     );
     const ride = releasing
       ? `it's riding merge train ${id}, checked now on canon #${canon.seq} while that release runs: it lands the moment the release goes out`
@@ -1736,9 +1751,8 @@ export class Referee extends DurableObject<Env> {
   /** A train that couldn't be built or didn't hold: its riders don't train again, and land one at a time. */
   private async trainFailed(train: Row, why: string) {
     const riders = JSON.parse(train.claims as string) as string[];
-    this.sql.exec(`UPDATE trains SET status = 'failed', detail = ? WHERE id = ?`, why.slice(0, 400), train.id);
-    const failed = new Set([...(JSON.parse(this.meta("trainFailed") ?? "[]") as string[]), ...riders]);
-    this.setMeta("trainFailed", JSON.stringify([...failed].slice(-200)));
+    const halves = this.splitTrain(riders);
+    this.sql.exec(`UPDATE trains SET status = 'failed', detail = ? WHERE id = ?`, `${why.slice(0, 360)}${halves ? "; its riders try again as two halves" : ""}`, train.id);
     for (const id of riders) this.sql.exec(`UPDATE claims SET auto_wait = NULL WHERE id = ?`, id);
     this.broadcast();
     for (const id of riders) {
@@ -1746,6 +1760,55 @@ export class Referee extends DurableObject<Env> {
       const v = c ? this.latestVerdict(c.attemptId) : null;
       if (c && v) await this.autopilot(c.id, v);
     }
+  }
+
+  /**
+   * A train that didn't hold doesn't say which rider broke it. Four or more riders split in two halves, each its own
+   * train (in order, the next one at the next departure), so a train of eight finds its culprit in about three checks
+   * instead of eight; fewer land one at a time. Either way they never ride with the rest of the queue again.
+   */
+  private splitTrain(riders: string[]): boolean {
+    const failed = new Set([...(JSON.parse(this.meta("trainFailed") ?? "[]") as string[]), ...riders]);
+    this.setMeta("trainFailed", JSON.stringify([...failed].slice(-200)));
+    if (riders.length < 4) return false;
+    const mid = Math.ceil(riders.length / 2);
+    const queue = JSON.parse(this.meta("bisect") ?? "[]") as string[][];
+    this.setMeta("bisect", JSON.stringify([riders.slice(0, mid), riders.slice(mid), ...queue].slice(0, 20)));
+    return true;
+  }
+
+  /** The next half of a failed train leaves: as a train of its own, or alone if only one of it can still land. */
+  private async departHalf(): Promise<"left" | "wait" | "none"> {
+    const queue = JSON.parse(this.meta("bisect") ?? "[]") as string[][];
+    while (queue.length) {
+      const ids = queue.shift()!;
+      // Members still being re-applied or judged: the half waits for them rather than leaving without them.
+      if (ids.some((id) => ["open", "checking", "behind"].includes(this.claim(id)?.status ?? ""))) {
+        this.setMeta("bisect", JSON.stringify([ids, ...queue]));
+        return "wait";
+      }
+      const riders = ids.flatMap((id) => {
+        const c = this.claim(id);
+        if (!c || c.status !== "ready" || this.attempt(c.attemptId)?.frozen) return [];
+        const d = this.autoDecision(c, true);
+        return d && "how" in d ? [{ claim: c, how: d.how }] : [];
+      });
+      if (!riders.length) continue;
+      // A single rider can't land while a release runs: it waits for the next departure.
+      if (riders.length === 1 && this.releasing()) {
+        this.setMeta("bisect", JSON.stringify([ids, ...queue]));
+        return "wait";
+      }
+      this.setMeta("bisect", JSON.stringify(queue));
+      if (riders.length >= 2) await this.startTrain(riders, true);
+      else {
+        this.sql.exec(`UPDATE claims SET auto_wait = NULL WHERE id = ?`, riders[0].claim.id);
+        await this.accept(riders[0].claim.id, riders[0].how).catch(() => {});
+      }
+      return "left";
+    }
+    this.setMeta("bisect", "[]");
+    return "none";
   }
 
   private autoDecision(claim: Claim, ignoreQueue = false): { how: string } | { wait: string } | null {
