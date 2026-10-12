@@ -818,8 +818,8 @@
       ?? (MOCK ? null : s.claims.find((x) => x.status === "accepted" && x.factId === (s.deploys ?? []).find((d) => d.seq === c.seq)?.facts?.[0])));
     const landedAt = c && s.facts.filter((f) => f.madeTrueBy === c.attemptId && f.acceptedAt).map((f) => f.acceptedAt)[0];
     // A merge train lands several facts at once; a revert goes back to the code production runs.
-    const thisDeploy = MOCK ? null : (s.deploys ?? []).find((d) => d.seq === c?.seq);
-    const trainFacts = MOCK ? (c?.trainFacts ?? []) : (thisDeploy?.facts ?? []);
+    const thisDeploy = (s.deploys ?? []).find((d) => d.seq === c?.seq);
+    const trainFacts = c?.trainFacts?.length ? c.trainFacts : (thisDeploy?.facts ?? []);
     const sentenceOf2 = (id) => s.facts.find((f) => f.id === id)?.sentence ?? id;
     $("commit").innerHTML = !c ? "No canon yet."
       : `${thisDeploy?.reverts ? `${HAT(20)}<b>judge</b><span class="msg">reverted canon #${thisDeploy.reverts}: it wasn’t released, and canon is what production runs</span>`
@@ -1832,13 +1832,51 @@
       if (cards.length) say(...cards);
       reapply([...rejected, ...behind]);
     });
+    // The release, as the judge does it: a full release candidate first. In the demo, the opening-hours change is the
+    // one that passes its fresh preview and breaks on a copy with real data (as it did in the real run), once.
+    const prevCanon = { ...s.canon, seq: seq - 1 };
+    s.deploys = [{ seq, facts: [...landedIds], factId: cl.factId, deployed: "pending", health: null, detail: null }, ...(s.deploys ?? [])].slice(0, 10);
     soon(5200, () => {
       demo.deploying = false;
+      if (landedIds.has("stall-hours") && !demo.heldOnce) return holdBack(seq, prevCanon, [cl, ...riders]);
+      s.deploys[0] = { ...s.deploys[0], deployed: "deployed", health: "healthy" };
       soon(400, departQueue);
       if (!auto) say(["deploy", "In production", `Canon #${seq} is live, and every canon fact holds there.`]);
       s.production = { at: Date.now(), url: s.production?.url ?? "https://farmstand.canon.rodeo", results: {} };
+      render();
     });
   }
+  // Held back at release: production never served it, so canon goes back to the last canon that shipped. The culprit
+  // goes back to its agent with the reason; anything that rode with it lands again on its own. Then the agent fixes it.
+  function holdBack(seq, prevCanon, landed) {
+    const s = state;
+    demo.heldOnce = true;
+    const detail = "broke “The market page lists every stall” on its release candidate (a full copy with production’s config): step 1: GET / returned 500, expected 200";
+    s.deploys[0] = { ...s.deploys[0], deployed: "failed", health: "held", detail: `${detail}. Held back: production never served it.` };
+    s.canon = { ...prevCanon, seq: seq + 1, trainFacts: [] };
+    s.deploys.unshift({ seq: seq + 1, reverts: seq, facts: [], factId: null, deployed: "deployed", health: "healthy", detail: null });
+    for (const x of landed) {
+      const f = s.facts.find((g) => g.id === x.factId);
+      if (f) Object.assign(f, { status: "proposed", acceptedAt: null, madeTrueBy: null, acceptedHow: null });
+      if (x.factId === "stall-hours") {
+        x.status = "contradicts";
+        x.verdict = { ...(x.verdict ?? demoVerdict(x)), outcome: "contradicts", heldBack: detail, lost: [{ factId: "market-lists-stalls", detail: `at release, ${detail}` }] };
+      } else {
+        x.status = "ready";
+        demo.trainFailed.add(x.id);
+      }
+    }
+    say(["rejected", "Held back before release", "“Every stall shows its opening hours” passed its fresh preview, but on the release candidate, a full copy with production’s data, the market page broke: its new column isn’t in the existing database. No visitor ever got it."],
+      ["canon", `Canon went back: #${seq + 1}`, `Canon is what production runs, so it’s canon #${seq - 1}’s code again.${landed.length > 1 ? " What rode with it lands again, one at a time." : ""}`]);
+    render();
+    soon(1200, departQueue);
+    // The agent fixes it (adds the column with a migration) and claims the fact again.
+    soon(6000, () => {
+      const f = s.facts.find((g) => g.id === "stall-hours");
+      if (f?.status === "proposed" && demo.auto) spawn(f, "Held back at release: add the opening-hours column with a migration, so existing data works");
+    });
+  }
+
   // Declining in the demo: the claim settles; an agent's proposed fact nobody else works on is declined with it.
   function demoDecline(ids, reason) {
     acted();

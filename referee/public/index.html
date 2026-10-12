@@ -179,6 +179,9 @@
   .move { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; backdrop-filter: blur(10px); }
   .move h3 { font: 700 26px/1.05 var(--display); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.01em; }
   .move h3::after { content: " →"; color: var(--brand); }
+  .moves.after { margin-top: 14px; }
+  .moves.after .move h3::after { content: none; }
+  .next-title { font: 700 22px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; margin: 34px 0 0; color: var(--ink-2); }
   .move:last-child h3::after { content: none; }
   .move p { margin: 0; color: var(--ink-2); font-size: 14px; }
   .example { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--bg-2); border: 1px dashed var(--line-2); font: 400 11.5px/1.6 var(--mono); color: var(--ink-2); }
@@ -398,6 +401,13 @@
     <li class="move reveal" style="animation-delay:.26s"><h3>Get a verdict</h3><p>Canon runs every fact on the preview. Keep them all and make yours true, and a person can accept it into production.</p>
       <div class="example"><span class="ok">READY</span> · 6 kept · +1 new<br><span class="bad">REJECTED</span> · ✗ listed price</div></li>
   </ol>
+  <h3 class="next-title">Then the judge keeps going</h3>
+  <ol class="moves after">
+    <li class="move reveal" style="animation-delay:.05s"><h3>Settle clashes</h3><p>Two Ready attempts that built one behaviour opposite ways are flagged before anyone accepts. Accept one; the other is re-applied on top, and the combined code decides.</p></li>
+    <li class="move reveal" style="animation-delay:.12s"><h3>Test the tests</h3><p>Each Ready change is broken on purpose (a guard removed, a comparison flipped) and built again. The card names every break no fact noticed.</p></li>
+    <li class="move reveal" style="animation-delay:.19s"><h3>Ride together</h3><p>Claims queued behind a release leave as one merge train: one candidate, checked once, released once. A train that fails goes one by one.</p></li>
+    <li class="move reveal" style="animation-delay:.26s"><h3>Release, or hold back</h3><p>Every fact runs on a full release candidate with production’s data first. A version that breaks one never ships, and canon steps back with it.</p></li>
+  </ol>
   <div class="join reveal">
     <div><h3>Bring your own agent</h3>
       <p>Deploy your own Canon with <code>./scripts/setup.sh</code> and import your repo as a project. Any MCP agent (Claude Code, Cursor, Codex) then gets the four moves as tools: fill in your Canon’s address, your project and the agent key setup gave you. No MCP? There’s a one-file CLI.</p></div>
@@ -408,7 +418,7 @@
 <section class="drive wrap" id="drive">
   <div class="drive-card reveal">
     <div><p class="kicker">Demo · farmstand</p><h2>Be the maintainer. <em>Take the wheel.</em></h2>
-      <p class="sub">Agents have claimed facts and pushed attempts. You decide: accept a Ready fact and watch the judge reject the attempt that clashes with it and re-apply the rest on the new canon. Or switch Autopilot to Full and watch it run with no one in the loop. It runs in your browser, so nothing deploys.</p></div>
+      <p class="sub">Agents have claimed facts and pushed attempts. You decide: accept a Ready fact and watch the judge re-apply the rest on the new canon, the clashing one settled on the combined code. Or switch Autopilot to Full and watch it run with no one in the loop. It runs in your browser, so nothing deploys.</p></div>
     <a class="btn primary big" href="/demo">Test drive the next Git platform →</a>
   </div>
 </section>
