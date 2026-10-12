@@ -55,7 +55,7 @@ was held back, its riders landed one by one, and the gate found it.
 The same farmstand attempts through plain `git merge`: 6 of 13 merged cleanly, and the merged app charges the wrong
 price (a bulk discount nobody approved merged without a conflict and broke "The basket charges the listed price"). The
 other 7 stopped at text conflicts for a person to resolve. Reproduce it with `node scripts/baseline.mjs`; the report is
-[docs/baseline.md](docs/baseline.md). Canon's own numbers come from `GET /p/farmstand/stats` and `/p/rodeo/stats`.
+[docs/baseline.md](docs/baseline.md). Canon's own numbers come from the judge's records, live at [canon.rodeo/p/farmstand/stats](https://canon.rodeo/p/farmstand/stats) and [canon.rodeo/p/rodeo/stats](https://canon.rodeo/p/rodeo/stats).
 
 ## How it compares
 
