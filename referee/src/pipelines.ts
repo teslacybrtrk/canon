@@ -101,19 +101,23 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     // A later accept already moved canon on: its own deploy wins, and this older one must not land after it.
     if ((await step.do("still the latest canon", () => referee.canonSeq())) > seq) return;
     let ok = true;
+    let versionId: string | null = null;
     try {
       const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
       // Each project deploys under its own Worker name, so projects never share a production app.
       const project = repo.slice(0, repo.lastIndexOf("-"));
-      await deps.runner({
+      const deployed = await deps.runner({
         name: "deploy",
         command: `npx wrangler deploy --name ${project}`,
         cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
       });
+      // The Worker version this deploy made: a broken deploy rolls back to the last healthy one by its id.
+      const out = typeof deployed.logs.stdout === "string" ? deployed.logs.stdout : "";
+      versionId = out.match(/Version ID:\s*([0-9a-f-]{36})/i)?.[1] ?? null;
     } catch {
       ok = false;
     }
-    await step.do("record promotion", () => referee.promoted(seq, ok));
+    await step.do("record promotion", () => referee.promoted(seq, ok, versionId));
     // The fact chain goes into Git as notes on the canon commits. Best effort: the deploy above is what counts.
     try {
       const env = await step.do("notes job", async () => {

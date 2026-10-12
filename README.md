@@ -130,8 +130,9 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   recorded beside the facts.
 - **Merge trains**: batch and speculate accepts, as merge queues do, for hundreds of agents.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
-- **Accepted, deployed, healthy**: three separate states. A change lands in canon, rolls out in stages with health
-  gates, and only counts as done once production keeps every fact, with a recovery plan if it doesn't.
+- **Staged rollouts**: today each accepted canon deploys as a Worker version, is checked against every fact in
+  production, and is marked healthy or rolled back to the last healthy version. Next, it goes to a slice of traffic
+  first (Workers gradual deployments) before 100%.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
 
 ## Where the code lives

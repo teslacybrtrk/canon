@@ -174,6 +174,10 @@ export interface CanonState {
   policy: { autoAccept: AutoAccept; charter: Charter | null };
   // The last time every canon probe fact ran against production (hourly, and after each deploy).
   production: { at: number; url: string; results: Record<string, { held: boolean; detail: string }> } | null;
+  // Accepted, deployed and healthy are three different things. Each accepted canon deploys as a Worker version; the
+  // first production check after the deploy marks it healthy, or broken, and a broken one is rolled back to the last
+  // healthy version.
+  deploys: Array<{ seq: number; factId: string | null; deployed: "pending" | "deployed" | "failed"; versionId: string | null; health: "healthy" | "broken" | "rolled-back" | null; detail: string | null }>;
 }
 
 // ---- Move 2: declare --------------------------------------------------------------

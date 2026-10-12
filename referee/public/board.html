@@ -812,10 +812,18 @@
     const prod = s.production;
     const offProd = (f) => f.status === "canon" && prod?.results?.[f.id] && !prod.results[f.id].held;
     const failing = canonFacts.filter(offProd).length;
-    $("prodline").className = `prod ${prod ? (failing ? "bad" : "good") : ""}`;
-    $("prodtext").textContent = demo.deploying ? `Deploying canon #${c.seq} to production…` : !prod ? "Production is checked every hour"
+    // Accepted, deployed, healthy: the newest deploy's state, then the latest production check.
+    const dep = (s.deploys ?? [])[0];
+    const rolled = dep?.health === "rolled-back" || dep?.health === "broken";
+    $("prodline").className = `prod ${rolled ? "bad" : prod ? (failing ? "bad" : "good") : ""}`;
+    $("prodtext").textContent = demo.deploying || dep?.deployed === "pending" ? `Deploying canon #${c.seq} to production…`
+      : rolled ? `Canon #${dep.seq} ${dep.detail ?? "broke a fact in production"}`
+      : dep?.deployed === "failed" ? `Canon #${dep.seq} couldn’t deploy; production stays on the last good version`
+      : !prod ? "Production is checked every hour"
       : failing ? `${failing} fact${failing === 1 ? "" : "s"} failed on production ${ago(prod.at)}`
+      : dep?.health === "healthy" && dep.factId ? `Canon #${dep.seq} is deployed and healthy: every fact held on production ${ago(prod.at)}`
       : `All facts held on production ${ago(prod.at)}`;
+    $("prodline").title = dep?.versionId ? `Worker version ${dep.versionId}` : "";
     const prodUrl = prod?.url ?? c?.previewUrl;
     $("prodlinkrow").hidden = $("prodbtn").hidden = !prodUrl;
     if (prodUrl) { $("prodlink").href = $("prodbtn").href = prodUrl; $("prodlink").textContent = new URL(prodUrl).host; }

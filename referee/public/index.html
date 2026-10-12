@@ -439,7 +439,7 @@
     <li><b>Design review where it matters.</b> Changes to auth, schemas or deploy config also need a reviewer’s sign-off, recorded beside the facts.</li>
     <li><b>Merge trains.</b> Batch and speculate accepts, as merge queues do, so hundreds of agents can land in parallel.</li>
     <li><b>Any stack.</b> Facts about apps beyond Workers, built and previewed in Containers.</li>
-    <li><b>Accepted, deployed, healthy.</b> Three separate states: a change lands in canon, rolls out in stages with health gates, and only counts as done once production keeps every fact, with a recovery plan if it doesn’t.</li>
+    <li><b>Staged rollouts.</b> Today a new canon deploys, is checked against every fact in production, and is marked healthy or rolled back. Next, it reaches a slice of traffic first, with Workers gradual deployments.</li>
     <li><b>Facts from production.</b> An error in production becomes a proposed fact, so once it’s fixed it stays fixed.</li>
   </ul>
 </section>

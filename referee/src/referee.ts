@@ -24,6 +24,7 @@ import {
   type Attempt,
   type AutoAccept,
   type Charter,
+  type ProbeCheck,
 } from "./protocol";
 import { SCHEMA, UPGRADES } from "./schema";
 import { diffTrees, inScope } from "./scope";
@@ -106,6 +107,14 @@ export class Referee extends DurableObject<Env> {
       claims,
       policy: { autoAccept: this.autoAccept(), charter: this.charter() },
       production: JSON.parse(this.meta("production") ?? "null"),
+      deploys: this.rows(`SELECT * FROM canon ORDER BY seq DESC LIMIT 10`).map((r) => ({
+        seq: r.seq as number,
+        factId: (r.accepted_fact as string | null) ?? null,
+        deployed: r.deployed === 1 ? "deployed" : r.deployed === -1 ? "failed" : "pending",
+        versionId: (r.version_id as string | null) ?? null,
+        health: (r.health as "healthy" | "broken" | "rolled-back" | null) ?? null,
+        detail: (r.health_detail as string | null) ?? null,
+      })),
     };
   }
 
@@ -487,9 +496,11 @@ export class Referee extends DurableObject<Env> {
     return (this.currentCanon()?.seq as number | undefined) ?? 0;
   }
 
-  async promoted(seq: number, ok: boolean) {
-    this.sql.exec(`UPDATE canon SET deployed = ? WHERE seq = ?`, ok ? 1 : -1, seq);
-    // Production just changed: check canon's facts on it shortly, once the new version is serving.
+  async promoted(seq: number, ok: boolean, versionId: string | null = null) {
+    this.sql.exec(`UPDATE canon SET deployed = ?, version_id = COALESCE(?, version_id) WHERE seq = ?`, ok ? 1 : -1, versionId, seq);
+    // Production just changed: check canon's facts on it shortly, once the new version is serving. That first check
+    // decides whether this deploy is healthy (see checkCanonOnProduction).
+    if (ok) this.setMeta("verifyDeploy", String(seq));
     await this.scheduleProductionCheck(20_000);
     this.broadcast();
   }
@@ -540,16 +551,76 @@ export class Referee extends DurableObject<Env> {
     return last?.previewUrl && last.sha === attempt.headSha ? { sha: last.sha, previewUrl: last.previewUrl } : null;
   }
 
-  /** Runs every canon probe fact against production, one at a time so latency budgets don't skew each other. */
+  /**
+   * Runs every canon probe fact against production, one at a time so latency budgets don't skew each other.
+   * The first check after a deploy decides that deploy's health: every fact held, it's healthy; a fact broke (twice, to
+   * rule out a blip), it's broken, and production rolls back to the last healthy version. Later hourly checks only
+   * report: a fact that breaks long after a deploy is not evidence against that deploy's code.
+   */
   private async checkCanonOnProduction() {
     const url = this.env.PRODUCTION_URL.replace("{project}", this.requireProject());
     const results: Record<string, { held: boolean; detail: string }> = {};
-    for (const f of this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact)) {
-      if (f.check.kind !== "probe") continue;
-      const r = await runCheck(f.check, url);
+    const facts = this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).filter((f) => f.check.kind === "probe");
+    for (const f of facts) {
+      const r = await runCheck(f.check as ProbeCheck, url);
       results[f.id] = { held: r.held, detail: r.detail };
     }
+    const verifying = Number(this.meta("verifyDeploy") ?? 0);
+    const live = this.rows(`SELECT * FROM canon WHERE deployed = 1 ORDER BY seq DESC LIMIT 1`)[0];
+    if (live && verifying === live.seq) {
+      this.setMeta("verifyDeploy", "0");
+      for (const f of facts.filter((x) => !results[x.id].held)) {
+        await new Promise((r) => setTimeout(r, 3_000));
+        const again = await runCheck(f.check as ProbeCheck, url);
+        if (again.held) results[f.id] = { held: true, detail: again.detail };
+      }
+      const broke = facts.filter((f) => !results[f.id].held);
+      if (!broke.length) this.sql.exec(`UPDATE canon SET health = 'healthy', health_detail = NULL WHERE seq = ?`, live.seq);
+      else {
+        const what = `broke “${broke[0].sentence}” in production: ${results[broke[0].id].detail}`;
+        this.sql.exec(`UPDATE canon SET health = 'broken', health_detail = ? WHERE seq = ?`, what, live.seq);
+        await this.rollBack(live, what);
+      }
+    } else if (live && !live.health && facts.every((f) => results[f.id].held)) {
+      this.sql.exec(`UPDATE canon SET health = 'healthy' WHERE seq = ?`, live.seq);
+    }
     this.setMeta("production", JSON.stringify({ at: Date.now(), url, results }));
+  }
+
+  /**
+   * Puts production back on the last healthy version (Workers deployments: the same version at 100%). The canon
+   * itself does not move: the fact was accepted, the deploy just didn't hold in production, and the board says so.
+   */
+  private async rollBack(live: Row, what: string) {
+    const project = this.requireProject();
+    const healthy = this.rows(`SELECT * FROM canon WHERE seq < ? AND health = 'healthy' AND version_id IS NOT NULL ORDER BY seq DESC LIMIT 1`, live.seq)[0];
+    const api = `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${project}/deployments`;
+    const headers = { authorization: `Bearer ${this.env.CF_TOKEN}`, "content-type": "application/json" };
+    try {
+      let version = (healthy?.version_id as string | undefined) ?? null;
+      // No healthy canon recorded a version yet (genesis deploys outside Canon): take the deployment before this one.
+      if (!version) {
+        const list = await (await fetch(api, { headers })).json<{ result?: { deployments?: Array<{ versions: Array<{ version_id: string }> }> } }>();
+        version = list.result?.deployments?.find((d) => d.versions[0]?.version_id !== live.version_id)?.versions[0]?.version_id ?? null;
+      }
+      if (!version) throw new Error("no earlier version to roll back to");
+      const res = await fetch(api, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          strategy: "percentage",
+          versions: [{ percentage: 100, version_id: version }],
+          annotations: { "workers/message": `Canon rolled back: canon #${live.seq} ${what}`.slice(0, 100) },
+        }),
+      });
+      if (!res.ok) throw new Error(`deployments API returned ${res.status}`);
+      const to = healthy ? `canon #${healthy.seq}` : "the version before it";
+      this.sql.exec(`UPDATE canon SET health = 'rolled-back', health_detail = ? WHERE seq = ?`, `${what}. Production rolled back to ${to}.`, live.seq);
+      // Check the restored version shortly.
+      await this.scheduleProductionCheck(20_000);
+    } catch (err) {
+      this.sql.exec(`UPDATE canon SET health_detail = ? WHERE seq = ?`, `${what}. Couldn't roll back: ${String(err).slice(0, 120)}`, live.seq);
+    }
   }
 
   // The production check shares the one alarm with re-judging; never move an earlier alarm later.

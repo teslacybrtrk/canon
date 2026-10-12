@@ -198,7 +198,12 @@ settled by accepting one (the other is re-applied on it, and rejected if the com
 declining both.
 
 After each deploy, and every hour, the judge runs canon's probe facts against production and shows the result on
-the board.
+the board. Accepted, deployed and healthy are three states: each accepted canon deploys as a Worker version (recorded
+with it), and the first production check after the deploy decides its health. Every fact held: **healthy**. A fact
+broke, twice in a row: **broken**, and the judge rolls production back to the last healthy version through the Workers
+deployments API (**rolled-back**). The canon itself doesn't move: the fact was accepted, the deploy didn't hold, and
+the board and `deploys` in `GET /p/:project/canon` say so. Later hourly checks only report; a fact that breaks long
+after a deploy is not evidence against that deploy's code.
 
 ## MCP
 
