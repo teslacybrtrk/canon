@@ -1850,7 +1850,12 @@ export class Referee extends DurableObject<Env> {
     }
     // A safety valve: a fact held back at release twice doesn't land automatically again; the owner decides.
     // A release that failed without a fact breaking (the deploy itself failed, usually the platform) is retried more.
-    const releases = this.rows(`SELECT health FROM canon WHERE (accepted_fact = ? OR facts_json LIKE ?) AND (deployed = -1 OR health IN ('held', 'rolled-back'))`, fact.id, `%"${fact.id}"%`);
+    // Only releases where this fact went out alone count: a train held back says nothing about each of its riders (it
+    // splits in halves to find the one that broke).
+    const releases = this.rows(
+      `SELECT health FROM canon WHERE accepted_fact = ? AND (facts_json IS NULL OR json_array_length(facts_json) = 1) AND (deployed = -1 OR health IN ('held', 'rolled-back'))`,
+      fact.id,
+    );
     const heldTimes = releases.filter((r) => r.health === "held" || r.health === "rolled-back").length;
     const failedTimes = releases.length - heldTimes;
     if (heldTimes >= 2) return { wait: `it was held back at release ${heldTimes} times, so autopilot leaves it to the owner` };
