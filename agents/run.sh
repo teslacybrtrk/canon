@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Starts five real coding agents in parallel, each speaking the Canon protocol.
 #   ./agents/run.sh   (CANON_URL defaults to your referee, see scripts/env.sh)
-# Uses Claude Code headless (`claude -p`). For opencode, replace the claude line with `opencode run "$PROMPT"`.
+# Uses Claude Code headless (`claude -p`). GROK_AGENTS="agent-5" runs those agents on Grok Build (`grok -p`) instead,
+# with the same allow-list, to show any coding agent can play. For opencode, use `opencode run "$PROMPT"`.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/env.sh
@@ -35,12 +36,21 @@ for prompt in agents/prompts/*.md; do
   (
     cd "$dir"
     # Agents get the agent key: it can claim but never accept, and the owner's key never reaches them.
-    CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" CANON_CLAIMS="$PWD/claims" claude -p "$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md" "$ROOT/$prompt")" \
-      --model "$(model_for "$name")" \
-      --allowedTools "${TOOLS[@]}" \
-      --strict-mcp-config --disable-slash-commands \
-      --output-format stream-json --verbose \
-      > agent.log 2>&1 && echo "$agent done" || echo "$agent exited non-zero (see $dir/agent.log)"
+    PROMPT="$(cat "$ROOT/agents/PROTOCOL_FOR_AGENTS.md" "$ROOT/$prompt")"
+    if [[ " ${GROK_AGENTS:-} " == *" $agent "* ]]; then
+      # Grok Build, headless: only the allow-listed tools; anything else is refused without asking.
+      CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" CANON_CLAIMS="$PWD/claims" grok -p "$PROMPT" \
+        --allow "${TOOLS[@]}" --permission-mode dontAsk --disable-web-search \
+        --output-format streaming-messages-json \
+        > agent.log 2>&1 && echo "$agent done (grok)" || echo "$agent exited non-zero (see $dir/agent.log)"
+    else
+      CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" CANON_CLAIMS="$PWD/claims" claude -p "$PROMPT" \
+        --model "$(model_for "$name")" \
+        --allowedTools "${TOOLS[@]}" \
+        --strict-mcp-config --disable-slash-commands \
+        --output-format stream-json --verbose \
+        > agent.log 2>&1 && echo "$agent done" || echo "$agent exited non-zero (see $dir/agent.log)"
+    fi
   ) &
   sleep 3 # stagger so claims land on the board one at a time
 done
