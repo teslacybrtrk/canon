@@ -45,6 +45,17 @@ discount merged without a conflict and broke "The basket charges the listed pric
 as a text conflict in `src/index.ts`. Reproduce it with `node scripts/baseline.mjs`; the report is
 [docs/baseline.md](docs/baseline.md). Canon's own numbers come from `GET /p/farmstand/stats`.
 
+## How it compares
+
+| | Merge queue | AI review of the diff | Held-out tests | Canon |
+|---|---|---|---|---|
+| What decides | the branch's own tests pass on the merged tree | a model reads the diff | tests the author never sees | facts about the running app, checked on a live preview of each commit |
+| Can the author change the judge? | yes: the tests ship in the branch | it can argue with it | no | no: canon owns the facts; changing one is a revision someone accepts |
+| What a person reviews | code | the model's summary | a pass or fail | changes to the facts, in plain sentences |
+| Conflicts | text | text, plus an opinion | none | behaviour: clashes flagged before an accept, settled on the combined code |
+| Memory | PR threads | none | none | the fact chain, in Git notes; every failed attempt stays clonable |
+| After the deploy | nothing | nothing | nothing | every fact checked in production; a broken deploy rolls back |
+
 ## How it works
 
 ```
