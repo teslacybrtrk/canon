@@ -16,8 +16,9 @@ candidate; if not, canon steps back.
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
 - **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the judge replays an
   attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that breaks a fact is
-  not. Two Ready attempts that built the same behaviour opposite ways are flagged as a clash before anyone accepts
-  either; once one lands, the other is re-applied on top of it and the combined code decides.
+  not. Two attempts that build the same behaviour opposite ways get a heads-up while they are still being written,
+  are flagged as a clash once both are Ready (before anyone accepts either), and once one lands, the other is
+  re-applied on top of it and the combined code decides.
 - **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check. The
   judge also tests the checks: it breaks each Ready change on purpose and shows which break no fact noticed.
 - **Release**: accepted is not released. Every release runs all facts on a full release candidate (production's

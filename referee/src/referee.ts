@@ -104,7 +104,7 @@ export class Referee extends DurableObject<Env> {
       const claim = toClaim(r);
       const verdict = this.latestVerdict(claim.attemptId);
       const m = verdict ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, verdict.sha)[0] : null;
-      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict, clashes: this.clashesFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null };
+      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict, clashes: this.clashesFor(claim.id), headsUp: this.headsUpFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null };
     });
     return {
       project: this.meta("project") ?? "",
@@ -395,6 +395,7 @@ export class Referee extends DurableObject<Env> {
     return {
       ...verdict,
       clashes: this.clashesFor(claimId),
+      headsUp: this.headsUpFor(claimId),
       ...(next ? { refreshedAs: next } : {}),
       ...(claim?.status === "declined" ? { declined: claim.declineReason || "no reason given" } : {}),
     };
@@ -621,7 +622,7 @@ export class Referee extends DurableObject<Env> {
         this.setMeta("prodCheckAt", String(Date.now() + (deploying ? 5 * 60_000 : PRODUCTION_CHECK_EVERY_MS)));
         if (!deploying) await this.checkCanonOnProduction().catch(() => {});
         // Previews don't change, but the set of Ready claims does: recheck their clashes on the same schedule.
-        for (const r of this.rows(`SELECT id FROM claims WHERE status = 'ready'`)) await this.findClashes(r.id as string).catch(() => {});
+        for (const r of this.rows(`SELECT id FROM claims WHERE status IN ('ready', 'unproven')`)) await this.findClashes(r.id as string).catch(() => {});
       }
       this.broadcast();
     } finally {
@@ -1043,7 +1044,7 @@ export class Referee extends DurableObject<Env> {
   private async followUp(claimId: string | null, verdict: Verdict) {
     if (!claimId) return;
     try {
-      if (verdict.outcome === "ready") await this.findClashes(claimId);
+      if (verdict.outcome === "ready" || verdict.outcome === "unproven") await this.findClashes(claimId);
       if (verdict.outcome === "ready") await this.startMutation(claimId, verdict);
       if (verdict.outcome === "behind") await this.autoRefresh(claimId);
     } catch {
@@ -1074,9 +1075,11 @@ export class Referee extends DurableObject<Env> {
    */
   private async findClashes(claimId: string) {
     const claim = this.claim(claimId);
-    if (claim?.status !== "ready") return;
+    if (claim?.status !== "ready" && claim?.status !== "unproven") return;
     const mine = this.attempt(claim.attemptId);
-    const others = this.rows(`SELECT * FROM claims WHERE status = 'ready' AND id != ? AND fact_id != ?`, claim.id, claim.factId).map(toClaim);
+    // Ready attempts and ones still being written (unproven: canon holds, their own fact not yet). Two Ready ones that
+    // collide are a clash; while either is still unproven the same finding is a heads-up to both agents.
+    const others = this.rows(`SELECT * FROM claims WHERE status IN ('ready', 'unproven') AND id != ? AND fact_id != ?`, claim.id, claim.factId).map(toClaim);
     const found: Array<{ claimId: string; otherId: string; factId: string; detail: string }> = [];
     const probe = async (owner: Claim, on: Attempt | null, otherId: string) => {
       const fact = this.fact(owner.factId);
@@ -1101,6 +1104,19 @@ export class Referee extends DurableObject<Env> {
       const mine = r.claim_id === claimId;
       const other = this.claim((mine ? r.other_claim_id : r.claim_id) as string);
       if (other?.status !== "ready") return [];
+      return [{ with: { claimId: other.id, agent: other.agent, attemptId: other.attemptId, factId: other.factId }, factId: r.fact_id as string, breaks: mine ? "mine" : "theirs", detail: r.detail as string } satisfies Clash];
+    });
+  }
+
+  /** The same findings while either side is still being written: a heads-up to both agents, not a clash yet. */
+  private headsUpFor(claimId: string): Clash[] {
+    const me = this.claim(claimId);
+    if (me?.status !== "ready" && me?.status !== "unproven") return [];
+    return this.rows(`SELECT * FROM clashes WHERE claim_id = ? OR other_claim_id = ?`, claimId, claimId).flatMap((r) => {
+      const mine = r.claim_id === claimId;
+      const other = this.claim((mine ? r.other_claim_id : r.claim_id) as string);
+      if (!other || (other.status !== "ready" && other.status !== "unproven")) return [];
+      if (me.status === "ready" && other.status === "ready") return []; // that's a clash
       return [{ with: { claimId: other.id, agent: other.agent, attemptId: other.attemptId, factId: other.factId }, factId: r.fact_id as string, breaks: mine ? "mine" : "theirs", detail: r.detail as string } satisfies Clash];
     });
   }

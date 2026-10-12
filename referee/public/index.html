@@ -403,7 +403,7 @@
   </ol>
   <h3 class="next-title">Then the judge keeps going</h3>
   <ol class="moves after">
-    <li class="move reveal" style="animation-delay:.05s"><h3>Settle clashes</h3><p>Two Ready attempts that built one behaviour opposite ways are flagged before anyone accepts. Accept one; the other is re-applied on top, and the combined code decides.</p></li>
+    <li class="move reveal" style="animation-delay:.05s"><h3>Settle clashes</h3><p>Two agents building one behaviour opposite ways get a heads-up while they are still writing, and a clash flag once both are Ready. Accept one; the other is re-applied on top, and the combined code decides.</p></li>
     <li class="move reveal" style="animation-delay:.12s"><h3>Test the tests</h3><p>Each Ready change is broken on purpose (a guard removed, a comparison flipped) and built again. The card names every break no fact noticed.</p></li>
     <li class="move reveal" style="animation-delay:.19s"><h3>Ride together</h3><p>On autopilot with batching on, claims queued behind a release leave as one merge train: one candidate, checked once, released once. A train that fails goes one by one.</p></li>
     <li class="move reveal" style="animation-delay:.26s"><h3>Release, or hold back</h3><p>Every fact runs on a full release candidate (production’s config, its own long-lived data) first. A version that breaks one there never ships, and canon steps back with it.</p></li>

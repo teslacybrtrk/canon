@@ -372,8 +372,10 @@
   .lbl.new { color: var(--pending); background: var(--pending-bg); border: 1px dashed rgb(210 153 34 / 0.4); }
   .lbl.retire { color: var(--gold); border-color: var(--gold); background: var(--pending-bg); }
   .lbl.plus { border-style: solid; background: transparent; }
+  .clash.early { border-color: rgb(253 200 109 / 0.45); border-left-color: var(--gold, #fdc86d); background: rgb(253 200 109 / 0.08); }
   .clash { margin-top: 8px; padding: 8px 10px; border: 1px solid rgb(248 81 73 / 0.4); border-left: 3px solid var(--broke); border-radius: 6px; background: var(--broke-bg); font-size: 13px; color: var(--ink-2); }
   .clash b { color: var(--broke); }
+  .clash.early b { color: var(--gold); }
   .clash code { font: 12px var(--mono); }
   .copy { font: 500 12px var(--sans); color: var(--ink); background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
   .copy:hover { background: var(--hover); }
@@ -887,6 +889,21 @@
       if (cl.refreshedFrom && ["open", "checking"].includes(cl.status)) return "The judge re-applied this change on the new canon. Judging it again.";
       return MEANING[cl.status] ?? "";
     };
+    // The same finding while one side is still being written: a heads-up to both agents, before either is Ready.
+    const headsUpNote = (cl) => {
+      const seen = new Set();
+      const writing = (x) => x?.status === "ready" || x?.status === "unproven";
+      if (!writing(cl)) return "";
+      return (cl.headsUp ?? []).filter((c) => !seen.has(c.with.claimId) && seen.add(c.with.claimId)).flatMap((c) => {
+        const other = s.claims.find((x) => x.id === c.with.claimId);
+        if (!writing(other) || (cl.status === "ready" && other.status === "ready")) return [];
+        const theirs = `“${esc(other?.sentence ?? c.with.factId)}”`;
+        const how = c.breaks === "mine"
+          ? `${esc(c.with.agent)}’s ${other.status === "ready" ? "Ready attempt for" : "work in progress on"} ${theirs} breaks this fact.`
+          : `this attempt breaks ${esc(c.with.agent)}’s ${theirs}.`;
+        return [`<div class="clash early" title="${esc(c.detail)}"><b>Heads-up: ${how}</b> Not a clash yet: one side is still being written. Both agents were told, so one can change course now.</div>`];
+      }).join("");
+    };
     // Two Ready attempts that can't both land, shown on both before anyone accepts either.
     const clashNote = (cl) => {
       const byOther = new Map();
@@ -1037,7 +1054,7 @@
           <button class="t" type="button" data-fact="${esc(cl.factId)}" title="See the check and the fact’s history">${esc(cl.sentence)}</button>
         </div>
         ${nextStep(cl, v)}
-        ${cl.status === "ready" ? clashNote(cl) : ""}
+        ${cl.status === "ready" ? clashNote(cl) : ""}${headsUpNote(cl)}
         <details class="more" data-card="${esc(cl.id)}"${openCards.has(cl.id) ? " open" : ""}>
           <summary>Details <span>· how the judge decided</span></summary>
           <p class="meaning">${meaning(cl, v)}</p>
@@ -1070,6 +1087,7 @@
       return `<article class="pr duel-side s-${x.status}" id="claim-${esc(x.id)}">
         <div class="pr-top"><span class="state s-ready">${icon("check")}Ready</span>${mutBadge(x)}<span class="pr-agent">${avatar(x.agent, 18)}${esc(x.agent)}</span></div>
         <div class="pr-goal"><span class="k">Goal</span><button class="t" type="button" data-fact="${esc(x.factId)}" title="See the check and the fact’s history">${esc(x.sentence)}</button></div>
+        ${headsUpNote(x)}
         <details class="more" data-card="${esc(x.id)}"${openCards.has(x.id) ? " open" : ""}>
           <summary>Details <span>· how the judge decided</span></summary>
           <p class="keeps"><b>✓ Keeps all ${x.verdict?.kept.length ?? 0} canon facts</b> and makes its own true.</p>

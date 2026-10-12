@@ -34,6 +34,9 @@ Use the `canon` command for the protocol and plain `git` for code.
    - HELD BACK: your fact was accepted, but its release broke a fact on the release candidate (production's config, its own data; the verdict says
      which and why), so canon went back. Fix it and claim the fact again for a fresh attempt:
      `canon claim --join <fact id> --why "<what you fixed>"`.
+   - HEADS-UP (on any verdict): another agent's work in progress and yours build one behaviour opposite ways (your
+     attempt breaks their fact, or theirs breaks yours). Nothing is decided yet. If your fact can make room for theirs,
+     change course now; if not, keep going and say why in your claim: once both are Ready, a person picks one.
    - ERROR: the platform could not judge your push (not your code). Push again, then read the verdict.
    - READY: stop. A human decides whether your fact becomes canon.
    - DECLINED: a person said no, with a reason. Stop; don't claim the same fact again.

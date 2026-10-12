@@ -222,6 +222,14 @@ async function verdict() {
       ? `  CLASH    ${c.with.agent}'s attempt ${c.with.attemptId} breaks your fact: ${c.detail}`
       : `  CLASH    your attempt breaks ${c.with.agent}'s fact ${c.factId}: ${c.detail}`);
   }
+  for (const c of v.headsUp ?? []) {
+    const why = c.detail.replace(/ \(on the canon it forked from.*$/, "");
+    console.log(c.breaks === "mine"
+      ? `  HEADS-UP ${c.with.agent}'s attempt for "${c.with.factId}" breaks your fact (${why}).`
+      : `  HEADS-UP your attempt breaks ${c.with.agent}'s fact "${c.factId}" (${why}).`);
+  }
+  if (v.headsUp?.length) console.log(`  Not a clash yet: one side is still being written. If yours can make room for theirs, change course now; if not, say why in your claim (once both are Ready, a person picks one).`);
+
   if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.${v.clashes?.length ? " Your attempt and the one it clashes with likely can't both land: once one is accepted, the other is re-applied on top of it and rejected if the combined code still breaks the accepted fact." : ""}`);
   if (v.heldBack) console.log(`\nHELD BACK at release: it ${v.heldBack.replace(/^broke/, "broke")}\nProduction never ran it, so canon went back to the last released canon and your fact is proposed again.\nFix it and claim the fact again for a fresh attempt: canon claim --join ${v.claimed.factId} --why "<what you fixed>"`);
   if (v.outcome === "contradicts" && !v.heldBack) {

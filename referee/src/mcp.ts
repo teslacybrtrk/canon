@@ -230,6 +230,12 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
   for (const c of v.clashes ?? []) {
     out.push(c.breaks === "mine" ? `  CLASH    ${c.with.agent}'s attempt ${c.with.attemptId} breaks your fact: ${c.detail}` : `  CLASH    your attempt breaks ${c.with.agent}'s fact ${c.factId}: ${c.detail}`);
   }
+  for (const c of v.headsUp ?? []) {
+    const why = c.detail.replace(/ \(on the canon it forked from.*$/, "");
+    out.push(c.breaks === "mine" ? `  HEADS-UP ${c.with.agent}'s attempt for "${c.with.factId}" breaks your fact (${why}).` : `  HEADS-UP your attempt breaks ${c.with.agent}'s fact "${c.factId}" (${why}).`);
+  }
+  if (v.headsUp?.length) out.push("  Not a clash yet: one side is still being written. If yours can make room for theirs, change course now; if not, say why in your claim (once both are Ready, a person picks one).");
+
   // The judge's refresh of a behind attempt: running, or (any other note) handed back to the agent.
   const refresh = v.outcome === "behind" ? ((await referee.read()) as CanonState).claims.find((c) => c.attemptId === v.attemptId)?.refresh : null;
   const conflict = !!refresh && refresh !== "started";

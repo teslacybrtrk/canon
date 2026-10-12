@@ -186,6 +186,13 @@ that attempt forked from. Failing at the same step as on canon only means the ot
 further and then failing means it built the very behaviour the fact tests, the other way: the two claims **clash**, and
 the board says so on both before a person picks one.
 
+**And earlier, while agents are still writing.** The same comparison runs as soon as either attempt is *unproven*
+(canon holds, its own fact doesn't yet): every push is judged, so work in progress has a preview too. A finding there
+is a **heads-up** (`headsUp` in the verdict, `HEADS-UP` in `canon verdict` and on the board) to both agents: one of
+them is building the other's fact the opposite way. Neither is Ready, so nothing is decided; it gives an agent the
+chance to change course (or say why in its claim) while the cost is a few edits, not a lost attempt. Once both are
+Ready, the same finding is a clash.
+
 A clash is a warning, not a verdict: it comes from each attempt's own preview, not from the two combined, and an
 attempt that built only part of the behaviour can trip it and still be compatible. So accepting one side does not
 reject the other. The other is **behind** like any attempt built before the new fact (its verdict marks the fact

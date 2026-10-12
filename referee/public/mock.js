@@ -33,6 +33,11 @@
     return { with: { claimId: other, agent, attemptId, factId }, factId: x.factId, breaks: x.owner === me ? "mine" : "theirs", detail: x.detail };
   });
 
+  // agent-8 is still writing its double-booking guard: it already refuses a second booking (with the wrong status), so
+  // agent-3's shared stalls break on its preview. Neither side is done: a heads-up to both, not a clash.
+  const EARLY = { with: { claimId: "c-3", agent: "agent-8", attemptId: "farmstand-m4n1aa", factId: "no-double-booking" }, factId: "stalls-can-be-shared", breaks: "mine", detail: "step 2: POST /api/reservations returned 400, expected 201" };
+  const EARLY_THEIRS = { with: { claimId: "c-10", agent: "agent-3", attemptId: "farmstand-k8s2co", factId: "stalls-can-be-shared" }, factId: "stalls-can-be-shared", breaks: "theirs", detail: EARLY.detail };
+
   window.CANON_MOCK = {
     checks: CHECKS,
     state: {
@@ -66,9 +71,9 @@
         { ...claim("c-2", "agent-2", "no-double-booking", "A stall cannot be double-booked", "ready", "Vendors keep fighting over stall 1", "farmstand-p2q8zz",
           verdict("farmstand-p2q8zz", SOLD_OUT, "ready", { factId: "no-double-booking", held: true, detail: "ok" })), clashes: CLASH("c-2") },
         { ...claim("c-10", "agent-3", "stalls-can-be-shared", "Two vendors can share a stall on the same market day", "ready", "Market manager wants co-op stalls where two small vendors share one stall", "farmstand-k8s2co",
-          verdict("farmstand-k8s2co", SOLD_OUT, "ready", { factId: "stalls-can-be-shared", held: true, detail: "ok" })), clashes: CLASH("c-10") },
-        claim("c-3", "agent-8", "no-double-booking", "A stall cannot be double-booked", "unproven", "Joining the reservation race", "farmstand-m4n1aa",
-          verdict("farmstand-m4n1aa", SOLD_OUT, "unproven", { factId: "no-double-booking", held: false, detail: "step 2: POST /api/reservations returned 201, expected 409" })),
+          verdict("farmstand-k8s2co", SOLD_OUT, "ready", { factId: "stalls-can-be-shared", held: true, detail: "ok" })), clashes: CLASH("c-10"), headsUp: [EARLY] },
+        { ...claim("c-3", "agent-8", "no-double-booking", "A stall cannot be double-booked", "unproven", "Joining the reservation race", "farmstand-m4n1aa",
+          verdict("farmstand-m4n1aa", SOLD_OUT, "unproven", { factId: "no-double-booking", held: false, detail: "step 2: POST /api/reservations returned 400, expected 409" })), headsUp: [EARLY_THEIRS] },
         claim("c-4", "agent-5", "search-by-name", "Shoppers can search products by name", "ready", "Shoppers want to find eggs fast", "farmstand-9tw8ex",
           verdict("farmstand-9tw8ex", GENESIS, "ready", { factId: "search-by-name", held: true, detail: "ok" })),
         claim("c-5", "agent-6", "stall-hours", "Every stall shows its opening hours", "checking", "People show up before the stalls open", "farmstand-h7k2qq", null),

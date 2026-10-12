@@ -197,7 +197,7 @@ export interface CanonState {
   project: string;
   canon: { attemptId: string; sha: string; seq: number; previewUrl: string | null } | null;
   facts: Fact[]; // canon + proposed
-  claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[]; mutation?: Mutation | null }>;
+  claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[]; headsUp?: Clash[]; mutation?: Mutation | null }>;
   policy: { autoAccept: AutoAccept; charter: Charter | null };
   // The last time every canon probe fact ran against production (hourly, and after each deploy).
   production: { at: number; url: string; results: Record<string, { held: boolean; detail: string }> } | null;
@@ -270,6 +270,9 @@ export interface Verdict {
   refreshedAs?: string; // canon moved, and the judge re-applied this attempt on the current canon as this attempt
   declined?: string; // a person declined this claim, for this reason
   clashes?: Clash[];
+  // The same comparison while at least one side is still being written (unproven): a warning to both agents before
+  // either is Ready, so they can talk it over (or one can change course) instead of finding out at accept time.
+  headsUp?: Clash[];
 }
 
 // Errors lose their class crossing the Durable Object RPC boundary, so the HTTP
