@@ -134,12 +134,12 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   inside lines it can't move.
 - **Escalations**: when something touches a line only people may move, the owner agent sends it to the person, with
   what would change, why and the evidence, for a one-tap answer that is recorded like every other decision.
-- **Checks that are checked**: the judge breaks an implementation on purpose (removes the guard, skips the
-  transaction) to confirm a fact's check notices. A fact is only as strong as its check; this makes the strength
-  visible.
-- **Design review where it matters**: changes to auth, schemas or deploy config also need a reviewer's sign-off,
-  recorded beside the facts.
-- **Merge trains**: batch and speculate accepts, as merge queues do, for hundreds of agents.
+- **Stronger breaks**: today the judge breaks each Ready change up to six ways (guards, statuses, comparisons) and
+  shows which ones no fact noticed. Next, concurrency and retry breaks: two requests at once, a repeated request.
+- **A reviewer agent**: today the charter routes risky files to the owner. Next, a reviewer from a different model
+  writes findings grounded in the exact candidate, for the owner to accept or decline.
+- **Speculative trains**: today queued claims leave as one merge train and a failed train lands them one by one.
+  Next, check the next train while this one releases, and split a failed train in halves to find the culprit.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Canary traffic**: today a new canon runs every fact on a full release candidate, then on the production URL at 0%
   traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,

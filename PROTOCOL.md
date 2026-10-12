@@ -217,6 +217,25 @@ the board. Accepted, deployed and healthy are three states, and a broken version
 A Durable Object class change can't be uploaded as a version (Cloudflare applies it atomically), so that one release
 skips step 2: the release candidate has run its code, and step 4 is the net.
 
+**Merge trains** (`"policy": { "batch": true }`, with autopilot). The first Ready claim that may land opens a short
+boarding window; claims that may land meanwhile (typically the queue behind a release) board too. When it closes, two or
+more riders become one candidate: the judge forks a train attempt from canon, CI applies each rider's own change onto
+it in order (one that doesn't apply cleanly on the others is dropped and lands on its own), and the push is judged
+once, against every canon fact and every rider's fact. If it all holds, every rider's fact becomes canon in one canon
+entry (`facts` in `deploys`) and one release through the gate. A train that doesn't hold lands its riders one by one;
+a train held back at release does too, so the gate finds the rider that breaks production. A revert undoes a train as
+a unit. Rule changes never ride a train.
+
+**Checks that are checked.** When a claim is Ready, the judge breaks the attempt's own change on purpose in CI: it drops a
+one-line guard, swaps an error status for 200, or flips a comparison in the lines the attempt added (up to six breaks),
+builds each break as a preview of its own, and runs the attempt's fact and every canon probe fact on each. A break no
+fact notices is code no check covers; the claim shows `mutation` (`caught` of `total`, and each break that got
+through). With `charter.mutation` (say `0.8`), autopilot only lands a claim whose facts catch that share.
+
+In the release gate, a fact that fails at 0% counts against the new version only if the old version answers
+differently (both run with the same inputs). Code inside a Durable Object runs on the version its object was assigned,
+so at 0% it still gives the old answer; the release candidate has already run the new code there in full.
+
 **Canon always equals what production runs.** A canon that isn't released (held back in step 1 or 2, rolled back in
 step 4, or a deploy that failed) is reverted: a new canon entry (`reverts` in `deploys`) points back at the last
 released canon. Every fact accepted since then is proposed again (a rule a revision retired comes back), and the

@@ -758,20 +758,22 @@ export class Referee extends DurableObject<Env> {
    * Every canon probe fact on `url` (with `extra` headers), each re-tried once. The accepted fact fails on the old code
    * (that's what made it a new fact), so the run waits until it holds: proof the new code is the code answering.
    */
-  private async factsOn(seq: number, url: string, extra: Record<string, string>): Promise<Array<{ fact: Fact; detail: string }>> {
+  private async factsOn(seq: number, url: string, extra: Record<string, string>, seedPrefix?: string): Promise<Array<{ fact: Fact; detail: string }>> {
+    // With a seed prefix, every fact draws the same inputs on every run (so two runs can be compared exactly).
+    const seedOf = (f: Fact) => (seedPrefix ? `${seedPrefix}:${f.id}` : undefined);
     const acceptedId = this.rows(`SELECT accepted_fact FROM canon WHERE seq = ?`, seq)[0]?.accepted_fact;
     const facts = this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).filter((f) => f.check.kind === "probe");
     const accepted = facts.find((f) => f.id === acceptedId);
     for (let i = 0; accepted && i < 6; i++) {
       await new Promise((r) => setTimeout(r, i ? 5_000 : 3_000));
-      if ((await runCheck(accepted.check as ProbeCheck, url, undefined, extra)).held) break;
+      if ((await runCheck(accepted.check as ProbeCheck, url, seedOf(accepted), extra)).held) break;
     }
     const broke: Array<{ fact: Fact; detail: string }> = [];
     for (const f of facts) {
-      let r = await runCheck(f.check as ProbeCheck, url, undefined, extra);
+      let r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
       if (!r.held) {
         await new Promise((ok) => setTimeout(ok, 3_000));
-        r = await runCheck(f.check as ProbeCheck, url, undefined, extra);
+        r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
       }
       if (!r.held) broke.push({ fact: f, detail: r.detail });
     }
@@ -805,7 +807,16 @@ export class Referee extends DurableObject<Env> {
     await deploy([{ version_id: versionId, percentage: 0 }, { version_id: current, percentage: 100 }], `Canon #${seq}: staged at 0% for its smoke test`);
     const url = this.env.PRODUCTION_URL.replace("{project}", project);
     const pin = { "cloudflare-workers-version-overrides": `${project}="${versionId}"` };
-    const broke = await this.factsOn(seq, url, pin);
+    // A fact that fails at 0% is only evidence against the new version if the old version behaves differently. Code
+    // inside a Durable Object runs on the version its object was assigned (the old one, at 0%), so for that code the
+    // pinned request still gets the old answer: the same failure, with the same inputs, as the old version. That's
+    // inconclusive, and the release candidate (step one) already ran the new code there in full.
+    const pinnedFails = await this.factsOn(seq, url, pin, "gate");
+    const broke: typeof pinnedFails = [];
+    for (const b of pinnedFails) {
+      const old = await runCheck(b.fact.check as ProbeCheck, url, `gate:${b.fact.id}`);
+      if (old.held || old.detail !== b.detail) broke.push(b);
+    }
     const facts = this.rows(`SELECT id FROM facts WHERE status = 'canon'`);
     if (broke.length) {
       const what = `broke “${broke[0].fact.sentence}” on production in its smoke test: ${broke[0].detail}`;
