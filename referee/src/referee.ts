@@ -656,7 +656,7 @@ export class Referee extends DurableObject<Env> {
       const forkedFrom = on?.baseAttempt ? this.attempt(on.baseAttempt)?.previewUrl : null;
       const judgedOn = on ? this.judgedPreview(on) : null;
       if (fact?.check.kind !== "probe" || !judgedOn || !forkedFrom) return;
-      const seed = `${judgedOn.sha}:${fact.id}`;
+      const seed = `${judgedOn.sha}:${crypto.randomUUID().slice(0, 8)}:${fact.id}`; // fresh, the same on both previews
       const detail = await this.interferes(fact, await runCheck(fact.check, judgedOn.previewUrl, seed), forkedFrom, seed);
       if (detail) found.push({ claimId: owner.id, otherId, factId: fact.id, detail });
     };
@@ -811,12 +811,14 @@ export class Referee extends DurableObject<Env> {
 
     const results = new Map<string, CheckResult>();
     const skipped: string[] = [];
+    const seed = crypto.randomUUID().slice(0, 8);
     await Promise.all(
       facts.map(async (f) => {
         if (forced) return results.set(f.id, forced);
         if (f.id !== claim?.factId && !inScope(f.scope, changed)) return skipped.push(f.id);
-        // Random inputs are seeded by the commit and the fact: the same commit always gets the same inputs.
-        if (f.check.kind === "probe") return results.set(f.id, await runCheck(f.check, previewUrl, `${sha}:${f.id}`));
+        // Random inputs come from the commit, a seed the judge draws now (after the push) and the fact: no agent can
+        // know them before pushing, and the verdict records the seed so the run can be replayed.
+        if (f.check.kind === "probe") return results.set(f.id, await runCheck(f.check, previewUrl, `${sha}:${seed}:${f.id}`));
         // Command facts ran in CI for this commit; a re-judge reuses that result (same commit, same answer).
         const ran = commands?.[f.id] ?? this.storedResult(attempt.id, sha, f.id);
         if (ran) results.set(f.id, ran);
@@ -845,7 +847,7 @@ export class Referee extends DurableObject<Env> {
     if (forkedFrom && !forced) {
       await Promise.all(
         failed.filter(newer).map(async (x) => {
-          const detail = await this.interferes(x.fact, results.get(x.fact.id)!, forkedFrom, `${sha}:${x.fact.id}`);
+          const detail = await this.interferes(x.fact, results.get(x.fact.id)!, forkedFrom, `${sha}:${seed}:${x.fact.id}`);
           if (detail) opposed.set(x.fact.id, detail);
         }),
       );
@@ -873,6 +875,7 @@ export class Referee extends DurableObject<Env> {
       offers: facts.filter((f) => f.status === "proposed" && f.id !== claim?.factId && results.get(f.id)?.held).map((f) => f.id),
       ledger,
       judgedAt: now,
+      seed,
     };
     this.sql.exec(`INSERT OR REPLACE INTO verdicts (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, attempt.id, sha, JSON.stringify(verdict), now);
     // Re-read the claim: the checks above awaited the network, and meanwhile another attempt may have been

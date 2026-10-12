@@ -16,7 +16,7 @@
     attemptId, sha: "3cf7cec5a1b2c3d4e5f60718293a4b5c6d7e8f90", previewUrl, canonSeq: 2, outcome,
     kept: KEPT.filter((k) => !lost.some((l) => l.factId === k)), lost, claimed, offers: [], retires: [], skipped: ["tooling-locked"], stale: [],
     ledger: { status: outcome === "behind" ? "behind" : "ok", detail: outcome === "behind" ? "canon gained sold-out-refused after this attempt forked; declare a fresh attempt" : "ok" },
-    judgedAt: now, ...extra,
+    judgedAt: now, seed: attemptId.slice(-4) + "a1f0".slice(0, 4), ...extra,
   });
   const claim = (id, agent, factId, sentence, status, why, attemptId, v) => ({ id, agent, factId, sentence, status, why, attemptId, createdAt: now, verdict: v });
 

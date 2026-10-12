@@ -207,6 +207,7 @@ async function verdict() {
     process.exit(2);
   }
   if (v.previewUrl) console.log(`preview  ${v.previewUrl}`);
+  if (v.seed) console.log(`seed     ${v.seed} (drawn by the judge after your push: probe inputs come from it)`);
   for (const id of v.kept) console.log(`  kept     ${id}`);
   for (const l of v.lost) console.log(`  LOST     ${l.factId}: ${l.detail}`);
   for (const l of v.stale ?? []) console.log(l.clash

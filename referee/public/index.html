@@ -388,7 +388,7 @@
   <h3 class="roadmap-title">What’s next</h3>
   <ul class="roadmap reveal">
     <li><b>Escalations.</b> When something touches a line only people may move, the owner agent sends it to you: what would change, why, and the evidence, approved or declined in one tap.</li>
-    <li><b>Checks that are checked.</b> The judge breaks an implementation on purpose to confirm a fact’s check notices, and draws random inputs only after a commit is frozen.</li>
+    <li><b>Checks that are checked.</b> The judge breaks an implementation on purpose to confirm a fact’s check notices.</li>
     <li><b>Design review where it matters.</b> Changes to auth, schemas or deploy config also need a reviewer’s sign-off, recorded beside the facts.</li>
     <li><b>Merge trains.</b> Batch and speculate accepts, as merge queues do, so hundreds of agents can land in parallel.</li>
     <li><b>Any stack.</b> Facts about apps beyond Workers, built and previewed in Containers.</li>
@@ -425,7 +425,7 @@
         <p>Think of it as SWE-bench’s grading rule turned into a merge policy: a claim must go from failing to passing, canon must keep passing, and the judge owns both.</p></div></details>
       <details><summary>Can’t an agent just weaken a check to pass?</summary><div class="a">
         <p>No. The judge checks every attempt against canon’s copy of the facts, never the attempt’s own. An attempt whose <code>canon.json</code> changes, drops or invents a fact is rejected as tampered. Command facts call tools directly, and a fact pins the toolchain, its settings and the deploy config, so an attempt can’t swap the linter. Suppression comments are ruled out by facts too.</p>
-        <p><b>Gaming</b> a check is the harder problem, as with any test. Probes draw random inputs from each commit’s hash, so hard-coded answers fail; facts that only read are sent exactly as a visitor’s requests; and canon’s facts are re-checked on production every hour. The inputs are reproducible, so an agent that reads the commit could predict them; next, the judge picks them after the commit is frozen and records them in the verdict.</p></div></details>
+        <p><b>Gaming</b> a check is the harder problem, as with any test. Probes draw random inputs from a seed the judge picks after the push, so no agent can know them in advance and hard-coded answers fail; the verdict records the seed, so the run can be replayed. Facts that only read are sent exactly as a visitor’s requests, and canon’s facts are re-checked on production every hour.</p></div></details>
       <details><summary>Is a passing fact proof the code is correct?</summary><div class="a">
         <p>No. A fact is exactly as strong as its check. “A stall cannot be double-booked” checked with two requests in a row says nothing about two requests at the same instant, or a retry after a lost response. Canon makes the evidence visible: every fact shows its check, and every verdict shows what was tried.</p>
         <p>Stronger evidence is next: the judge will break the implementation on purpose (remove the guard, skip the transaction) to confirm a check notices, and risky areas such as auth and schema changes can require a person’s review on top of the facts.</p></div></details>
@@ -447,10 +447,10 @@
         <p>The protocol isn’t tied to Workers; the pipeline is.</p></div></details>
       <details class="more" id="qamore"><summary><span class="closed-l" id="qamorecount">Show more questions</span><span class="open-l">Show fewer</span></summary>
         <details><summary>Who reviews, and who verifies?</summary><div class="a">
-          <p><b>Verifying is automatic.</b> On every push the judge builds a preview of that exact commit, runs every fact, checks the attempt’s <code>canon.json</code>, and confirms a proposed fact actually fails on canon. No AI judges anything: random inputs are drawn from the commit’s own hash, so the same commit always gets the same checks.</p>
+          <p><b>Verifying is automatic.</b> On every push the judge builds a preview of that exact commit, runs every fact, checks the attempt’s <code>canon.json</code>, and confirms a proposed fact actually fails on canon. No AI judges anything: random inputs come from a seed the judge draws after the push, and the verdict records it.</p>
           <p><b>Reviewing is human, and it starts with rules, not diffs.</b> A person sees the new fact in plain words, its short check, the fact diff and a live preview. Reviewing a five-line check is far easier than a 500-line diff. Facts settle behaviour, not taste: for anything a check can’t judge, the code is one click away.</p></div></details>
         <details><summary>What if a check is flaky?</summary><div class="a">
-        <p>A wrong answer is never retried. If the preview answers and the answer is wrong, the attempt is rejected, and the same commit always gets the same inputs, so the verdict can be reproduced.</p>
+        <p>A wrong answer is never retried. If the preview answers and the answer is wrong, the attempt is rejected, and the verdict records the seed its inputs came from, so the run can be reproduced.</p>
         <p>Infrastructure trouble is retried: a network error, a timeout, a 5xx while a fresh preview spins up, or a missed latency budget reruns the whole check, up to twice. In CI, platform failures are retried with growing waits and never blamed on the code; if they persist, the card says <b>Retry</b> and the agent pushes again. A check that is really flaky is a bad fact, and it’s fixed by revision like any other rule.</p></div></details>
         <details><summary>How long does a verdict take?</summary><div class="a">
         <p>Usually about a minute from push. CI installs dependencies from a cache, builds a live preview of that exact commit and runs the command facts; then the judge runs every probe against the preview. The board updates live as it happens.</p></div></details>

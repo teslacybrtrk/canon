@@ -927,7 +927,7 @@
     };
     const howChecked = (f) => !f?.check ? ""
       : f.check.kind === "command" ? `ran <code>${esc(f.check.run.length > 48 ? `${f.check.run.slice(0, 48)}…` : f.check.run)}</code> on the commit, in CI`
-      : `${f.check.steps.length} request${f.check.steps.length === 1 ? "" : "s"} to the preview${(f.check.samples ?? 1) > 1 ? `, ${f.check.samples} random samples` : ""}${f.check.vars ? ", inputs drawn from the commit" : ""}`;
+      : `${f.check.steps.length} request${f.check.steps.length === 1 ? "" : "s"} to the preview${(f.check.samples ?? 1) > 1 ? `, ${f.check.samples} random samples` : ""}${f.check.vars ? ", inputs drawn by the judge after the push" : ""}`;
     const trail = (cl, v) => {
       if (!v) return `<ol class="trail"><li>Nothing judged yet: ${cl.status === "checking" ? "the preview of its latest push is still building." : "the agent hasn’t pushed."}</li></ol>`;
       const ran = [
@@ -940,7 +940,7 @@
         v.ledger?.status === "tampered"
           ? `<li class="bad"><b>Read canon.json</b>: ${esc(v.ledger.detail)}.</li>`
           : `<li><b>Read canon.json</b>: canon’s facts plus its own${v.ledger?.status === "behind" ? ", missing a fact accepted after it forked" : ", nothing else changed"}.</li>`,
-        `<li><b>Ran ${ran.length} canon fact${ran.length === 1 ? "" : "s"}</b>${(v.retires ?? []).length ? `, not the one it replaces on purpose (“${esc(sentence(v.retires[0]))}”)` : ""}:<ul class="ran">${ran.map(([id, ok, d]) => `<li class="${ok ? "ok" : "bad"}"><span>${ok ? "✓" : "✗"}</span><span>${esc(sentence(id))} <small>${howChecked(s.facts.find((f) => f.id === id))}</small>${ok ? "" : `<code>${esc(d.replace(/ \(on the canon.*$/, ""))}</code>`}</span></li>`).join("")}</ul></li>`,
+        `<li><b>Ran ${ran.length} canon fact${ran.length === 1 ? "" : "s"}</b>${v.seed ? ` <span class="seed">(random inputs from seed <code>${esc(v.seed)}</code>, drawn after the push)</span>` : ""}${(v.retires ?? []).length ? `, not the one it replaces on purpose (“${esc(sentence(v.retires[0]))}”)` : ""}:<ul class="ran">${ran.map(([id, ok, d]) => `<li class="${ok ? "ok" : "bad"}"><span>${ok ? "✓" : "✗"}</span><span>${esc(sentence(id))} <small>${howChecked(s.facts.find((f) => f.id === id))}</small>${ok ? "" : `<code>${esc(d.replace(/ \(on the canon.*$/, ""))}</code>`}</span></li>`).join("")}</ul></li>`,
         v.skipped?.length ? `<li><b>Skipped</b> ${v.skipped.map((id) => `“${esc(sentence(id))}”`).join(", ")}: scoped to files this attempt didn’t change.</li>` : "",
         `<li class="${v.claimed.held ? "ok" : "bad"}"><b>Ran its own fact</b> (${howChecked(s.facts.find((f) => f.id === v.claimed.factId)) || "its check"}): ${v.claimed.held ? "it holds" : `it doesn’t hold yet: <code>${esc(v.claimed.detail)}</code>`}.</li>`,
         (v.offers ?? []).length ? `<li><b>Also checked</b> other proposed facts: it happens to make ${v.offers.map((id) => `“${esc(sentence(id))}”`).join(", ")} true too.</li>` : "",
@@ -1446,7 +1446,7 @@
   // A verdict on the current canon: every canon fact kept (scoped tooling not run), its own fact true.
   function demoVerdict(x) {
     const kept = state.facts.filter((f) => f.status === "canon" && f.id !== "tooling-locked").map((f) => f.id);
-    return { attemptId: x.attemptId, sha: hex(20), previewUrl: "https://farmstand.canon.rodeo", canonSeq: state.canon.seq, outcome: "ready", kept, lost: [], stale: [], retires: [], skipped: ["tooling-locked"], offers: [], claimed: { factId: x.factId, held: true, detail: "ok" }, ledger: { status: "ok", detail: "ok" }, judgedAt: Date.now() };
+    return { attemptId: x.attemptId, sha: hex(20), previewUrl: "https://farmstand.canon.rodeo", canonSeq: state.canon.seq, outcome: "ready", kept, lost: [], stale: [], retires: [], skipped: ["tooling-locked"], offers: [], claimed: { factId: x.factId, held: true, detail: "ok" }, ledger: { status: "ok", detail: "ok" }, judgedAt: Date.now(), seed: hex(4) };
   }
 
   // ---- Demo autopilot: people wrote the backlog; agents land it, and nobody clicks. ----------------------------

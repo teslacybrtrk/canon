@@ -16,8 +16,9 @@ export function progress(detail: string): number {
 }
 
 /**
- * Runs one check against an origin. Its random inputs are drawn from `seed`: the referee passes the
- * commit and the fact, so the same commit always gets the same inputs. Without a seed they are fresh.
+ * Runs one check against an origin. Its random inputs are drawn from `seed`: the referee passes the commit, a
+ * seed it draws after the push, and the fact, so an agent can't know them in advance and a verdict can be replayed
+ * from the seed it records. Without a seed they are fresh.
  */
 export async function runCheck(check: ProbeCheck, origin: string, seed: string = crypto.randomUUID()): Promise<CheckResult> {
   const started = Date.now();

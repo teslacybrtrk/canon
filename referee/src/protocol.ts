@@ -227,6 +227,9 @@ export interface Verdict {
   offers: string[]; // other proposed facts this attempt happens to make true
   ledger: Ledger; // the attempt's canon.json against canon
   judgedAt: number;
+  // The judge's own random draw for this verdict, picked after the commit was pushed: probe inputs come from the
+  // commit, this seed and the fact, so no agent can know them in advance, and the verdict can be replayed exactly.
+  seed?: string;
   // Added when the verdict is read (GET /attempts/:id/verdict), not stored with it:
   refreshedAs?: string; // canon moved, and the judge re-applied this attempt on the current canon as this attempt
   declined?: string; // a person declined this claim, for this reason

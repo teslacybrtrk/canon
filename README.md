@@ -23,8 +23,8 @@ the facts, and the accepted attempt becomes canon.
 The facts live in the repo as `canon.json`, so the canon survives outside Cloudflare. A fact works like a
 required check in branch protection, but it checks behaviour on a live preview. As in a merge queue, only a tested
 tree lands; unlike one, the checks are facts the agents can't edit, and people review changes to the facts instead
-of code. Probes draw random inputs seeded by each commit, and canon's facts are re-checked on production every
-hour. A person pushing by hand is just another attempt and gets the same verdict. You can start from an existing
+of code. Probes draw random inputs from a seed the judge picks after each push (recorded in the verdict), and canon's
+facts are re-checked on production every hour. A person pushing by hand is just another attempt and gets the same verdict. You can start from an existing
 Git repo by importing it.
 
 See [PROTOCOL.md](PROTOCOL.md) for the four moves. To be the maintainer yourself, open the
@@ -112,8 +112,8 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
 - **Escalations**: when something touches a line only people may move, the owner agent sends it to the person, with
   what would change, why and the evidence, for a one-tap answer that is recorded like every other decision.
 - **Checks that are checked**: the judge breaks an implementation on purpose (removes the guard, skips the
-  transaction) to confirm a fact's check notices, and draws random inputs only after a commit is frozen. A fact is only
-  as strong as its check; this makes the strength visible.
+  transaction) to confirm a fact's check notices. A fact is only as strong as its check; this makes the strength
+  visible.
 - **Design review where it matters**: changes to auth, schemas or deploy config also need a reviewer's sign-off,
   recorded beside the facts.
 - **Merge trains**: batch and speculate accepts, as merge queues do, for hundreds of agents.

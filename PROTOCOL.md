@@ -239,7 +239,8 @@ A check can draw random inputs, so a fact is a property rather than one example:
 ] }
 ```
 
-Expressions add and multiply numbers. The draws are seeded by the commit and the fact: nobody knows them before the
-push, and the same commit always gets the same ones. `samples` runs the steps again with fresh inputs (1-10), each in
+Expressions add and multiply numbers. The draws come from the commit, the fact and a seed the judge picks when it
+judges, after the push: no agent can know them in advance, and the verdict records the `seed` so the exact inputs can
+be replayed. `samples` runs the steps again with fresh inputs (1-10), each in
 a run of its own. `"isolate": false` sends the requests exactly as a visitor would, without the `x-canon-run` header,
 so the app can't tell it's being judged; use it for facts that need no state of their own.
