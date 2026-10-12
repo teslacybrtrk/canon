@@ -316,6 +316,16 @@ export class Referee extends DurableObject<Env> {
       return verdict;
     }
 
+    // A genesis that didn't hold (a platform blip on a fresh preview, say) is re-checked by the alarm a few times.
+    if (isGenesis && !(verdict.outcome === "ready" && verdict.kept.length > 0)) {
+      const tries = Number(this.meta("genesisRetries") ?? 0);
+      if (tries < 5) {
+        this.setMeta("genesisRetries", String(tries + 1));
+        const at = Date.now() + 30_000;
+        const current = await this.ctx.storage.getAlarm();
+        if (current === null || current > at) await this.ctx.storage.setAlarm(at);
+      }
+    }
     // Genesis becomes the first canon only if it declares facts and satisfies all of them.
     if (isGenesis && verdict.outcome === "ready" && verdict.kept.length > 0) {
       this.sql.exec(`INSERT INTO canon (attempt_id, sha, at) VALUES (?, ?, ?)`, repo, sha, Date.now());
@@ -557,6 +567,13 @@ export class Referee extends DurableObject<Env> {
   // One alarm, two jobs: re-judging live attempts after canon moves, and checking canon's facts on production hourly.
   async alarm() {
     try {
+      // No canon yet: re-judge genesis on its preview (judge() makes it canon once every fact holds).
+      if (!this.currentCanon() && Number(this.meta("genesisRetries") ?? 0) > 0) {
+        const id = this.rows(`SELECT id FROM attempts WHERE claim_id IS NULL AND preview_url IS NOT NULL ORDER BY created_at LIMIT 1`)[0]?.id as string | undefined;
+        const g = id ? this.attempt(id) : null;
+        if (g?.headSha && g.previewUrl) await this.judge(g.id, g.headSha, g.previewUrl).catch(() => {});
+        return;
+      }
       await this.keepCanonReleased().catch(() => {});
       await this.depart().catch(() => {});
       // An alarm set before the production check existed was a re-judge.
@@ -724,6 +741,12 @@ export class Referee extends DurableObject<Env> {
 
   /** Owner: apply the invariant now instead of at the next alarm. */
   async reconcile() {
+    // No canon yet: genesis gets re-checked on its preview by the alarm.
+    if (!this.currentCanon()) {
+      this.setMeta("genesisRetries", "1");
+      await this.ctx.storage.setAlarm(Date.now() + 1_000);
+      return { canonSeq: null, reverted: false, genesis: "re-checking" };
+    }
     const before = this.currentCanon()?.seq;
     await this.keepCanonReleased();
     return { canonSeq: this.currentCanon()?.seq, reverted: this.currentCanon()?.seq !== before };

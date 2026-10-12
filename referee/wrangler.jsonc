@@ -58,7 +58,7 @@
     // Bump to give every project a fresh referee (see scripts/reset-project.sh).
     // "true" publishes canon.rodeo/canon.git and /src (setup.sh sets it to "false" for your own Canon).
     "SOURCE_PUBLIC": "true",
-    "REFEREE_EPOCH": "16",
+    "REFEREE_EPOCH": "17",
     "BACKUP_BUCKET_NAME": "canon-ci-snapshots",
     "CLOUDFLARE_ACCOUNT_ID": "2d9aba350caa70abf3ce6c910950ffd0",
     // Previews are "<preview-name>-<worker-name>.<subdomain>.workers.dev"; production for each project is its
