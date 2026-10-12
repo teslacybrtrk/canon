@@ -1556,6 +1556,11 @@ export class Referee extends DurableObject<Env> {
     } catch (err) {
       put({ status: "error", ...base, detail: String(err instanceof Error ? err.message : err).slice(0, 200), at: Date.now() });
     }
+    // A charter that routes the reviewer's risks to the owner had autopilot waiting for this review.
+    if (this.charter()?.reviewRisk) {
+      const latest = this.latestVerdict(attempt.id);
+      if (latest && latest.sha === verdict.sha) await this.autopilot(claimId, latest).catch(() => {});
+    }
   }
 
   // ---- Checks that are checked: mutation testing ---------------------------------------------------------------
@@ -1928,6 +1933,14 @@ export class Referee extends DurableObject<Env> {
     }
     const touched = this.latestVerdict(claim.attemptId)?.review ?? [];
     if (touched.length) return { wait: `it changes ${touched.slice(0, 3).join(", ")}${touched.length > 3 ? " and more" : ""}, which the charter routes to review` };
+    // The reviewer as a gate: it can't land or reject anything, but a risk it names (quoting the line) waits for the owner.
+    if (charter.reviewRisk && this.env.AI) {
+      const v = this.latestVerdict(claim.attemptId);
+      const r = v ? this.reviewOf(claim.attemptId, v.sha) : null;
+      if (!r || (r.status === "running" && Date.now() - r.at < 10 * 60_000)) return { wait: "the reviewer is reading the change first (the charter routes its risks to the owner)" };
+      const risk = r.status === "done" ? r.notes.find((n) => n.kind === "risk") : undefined;
+      if (risk) return { wait: `the reviewer flagged a risk at ${risk.file}:${risk.line} (${risk.note.slice(0, 120)}), and the charter routes risks to the owner` };
+    }
     const reasons: string[] = [fact.origin === "backlog" ? "a backlog fact people wrote" : ""];
     // A clash goes to the fact the charter ranks first, or else to the one proposed first. It's settled before
     // anything else: a fact that loses one waits, however many agents make it true.

@@ -266,7 +266,9 @@ caught, and the lines it added. It writes at most three notes (`risk`, `untested
 asks), and each must quote the exact line it is about; a note whose quote isn't in the file is dropped and counted.
 The notes (`reviewer` on the claim and the verdict, `REVIEWER` in `canon verdict`) are advice for whoever decides,
 never a verdict: the facts decide, the reviewer only points. The owner can ask for a fresh review with
-`POST /p/:project/attempts/:id/review`.
+`POST /p/:project/attempts/:id/review`. With `"reviewRisk": true` in the charter, the reviewer becomes a gate in one
+direction only: a change it flags with a `risk` note waits for the owner instead of landing on autopilot (it can
+never land or reject anything itself).
 
 In the release gate, a fact that fails at 0% counts against the new version only if the old version answers
 differently (both run with the same inputs).

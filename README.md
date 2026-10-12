@@ -234,8 +234,8 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   what would change, why and the evidence, for a one-tap answer that is recorded like every other decision.
 - **Stronger breaks**: today the judge breaks each Ready change up to six ways (guards, statuses, comparisons) and
   shows which ones no fact noticed. Next, concurrency and retry breaks: two requests at once, a repeated request.
-- **Reviewer as a gate**: today a reviewer model writes advisory notes grounded in quoted lines. Next, let a charter
-  route a `risk` note to the owner the way `review` paths are, with the notes' track record on the board.
+- **Reviewer track record**: a charter can already route the reviewer's `risk` notes to the owner (`reviewRisk`).
+  Next, show how often its notes turned out right, so owners can tell when to trust it more.
 - **Fair scheduling**: today the queue is first come, first served. Next, share CI between agents by the value of
   their claims, and cancel work a newer canon has made pointless.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.

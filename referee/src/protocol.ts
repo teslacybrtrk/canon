@@ -76,6 +76,9 @@ export interface Charter {
   // File globs no automatic decision may land: an attempt that changes one (auth, migrations, deploy config...) waits
   // for the owner, a person or an owner agent, however good its verdict. Facts settle behaviour; these get a reviewer.
   review?: string[];
+  // true: a change the advisory reviewer flags with a "risk" note waits for the owner instead of landing on its own
+  // (the reviewer still decides nothing: it can only make autopilot wait). Autopilot waits for the review to finish.
+  reviewRisk?: boolean;
 }
 export interface Policy {
   autoAccept?: AutoAccept;
