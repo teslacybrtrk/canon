@@ -70,12 +70,35 @@ other 7 stopped at text conflicts for a person to resolve. Reproduce it with `no
 
 ## How it works
 
+```mermaid
+flowchart LR
+  A[Agent] -- "canon claim" --> J[(Judge<br/>Durable Object)]
+  J -- "fork + scoped token" --> F[Artifacts fork]
+  A -- "git push" --> F
+  F -- "pushed event" --> V[VerifyAttempt<br/>Workflow + Container]
+  V -- "wrangler preview" --> P[Workers Preview<br/>of that commit]
+  V -- "judge" --> J
+  J -- "every fact" --> P
+  J -- "Ready: break it on purpose" --> M[MutateAttempt<br/>a preview per mutant]
+  J -- "Ready claims queued" --> T[TrainAttempt<br/>one combined candidate]
+  J -- "accept: person or charter" --> R[PromoteAttempt]
+  R -- "release candidate" --> C[project-candidate Worker<br/>production config + data]
+  C -- "every fact holds" --> PR[Production]
+  C -- "a fact breaks" --> H[Held back:<br/>canon reverts]
+  PR -- "check, roll back if broken" --> J
+  J -- "refs/notes/canon" --> F
+```
+
+Every arrow into the judge is checked against canon's facts; nothing a person or agent says moves canon without a
+passing verdict. In detail:
+
 ```
 agent ──canon claim──▶ Referee DO ──fork + token──▶ Artifacts: farmstand-<attempt>
 agent ──git push────────────────────────────────▶ Artifacts ──pushed event──▶ VerifyAttempt Workflow
                                                    (container: wrangler preview --name <attempt>)
 VerifyAttempt ──judge(attempt, sha, previewUrl)──▶ Referee DO ──HTTP checks──▶ Workers Preview
-human ──accept fact──▶ Referee DO ──freeze attempt, move canon pointer──▶ PromoteAttempt Workflow (wrangler deploy)
+Referee DO ──Ready──▶ MutateAttempt (break the change, a preview per break) · TrainAttempt (queued claims as one)
+accept ──▶ Referee DO ──freeze, move canon──▶ PromoteAttempt: release candidate ▶ (0% smoke) ▶ production ▶ health
 ```
 
 | Path | What |
@@ -88,7 +111,7 @@ human ──accept fact──▶ Referee DO ──freeze attempt, move canon poi
 
 ## Run it
 
-Requirements: a Workers Paid account with Artifacts (open beta), R2 and Containers (CI runs in up to 20
+Requirements: a Workers Paid account with Artifacts (open beta), R2 and Containers (CI runs in up to 40
 `standard-4` containers, which are billed), Node 22.18+, `npx wrangler login`, and Claude Code (`claude`) for the
 agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image straight from Docker Hub. Setup asks for
 `CF_TOKEN`, an API token that can edit Workers scripts on your account, and an R2 API token pair.
