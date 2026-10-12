@@ -1734,8 +1734,12 @@ export class Referee extends DurableObject<Env> {
       return { wait: riding ? `it's riding merge train ${train.id}: checked together with the others, released once` : `merge train ${train.id} is being checked first` };
     }
     // A safety valve: a fact held back at release twice doesn't land automatically again; the owner decides.
-    const heldTimes = Number(this.rows(`SELECT COUNT(*) AS n FROM canon WHERE (accepted_fact = ? OR facts_json LIKE ?) AND (deployed = -1 OR health IN ('held', 'rolled-back'))`, fact.id, `%"${fact.id}"%`)[0]?.n ?? 0);
+    // A release that failed without a fact breaking (the deploy itself failed, usually the platform) is retried more.
+    const releases = this.rows(`SELECT health FROM canon WHERE (accepted_fact = ? OR facts_json LIKE ?) AND (deployed = -1 OR health IN ('held', 'rolled-back'))`, fact.id, `%"${fact.id}"%`);
+    const heldTimes = releases.filter((r) => r.health === "held" || r.health === "rolled-back").length;
+    const failedTimes = releases.length - heldTimes;
     if (heldTimes >= 2) return { wait: `it was held back at release ${heldTimes} times, so autopilot leaves it to the owner` };
+    if (failedTimes >= 4) return { wait: `its release failed ${failedTimes} times without a fact breaking (the platform may be down), so autopilot leaves it to the owner` };
     if (fact.origin !== "backlog" && policy !== "charter") return { wait: "an agent proposed this fact, and autopilot only lands facts people wrote" };
     if (fact.replaces && charter.locked?.includes(fact.replaces)) return { wait: `it changes “${this.fact(fact.replaces)?.sentence ?? fact.replaces}”, which the charter locks` };
     if (typeof charter.mutation === "number") {

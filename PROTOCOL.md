@@ -236,6 +236,12 @@ entry (`facts` in `deploys`) and one release through the gate. A train that does
 a train held back at release does too, so the gate finds the rider that breaks production. A revert undoes a train as
 a unit. Rule changes never ride a train.
 
+**Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release
+runs board for 10 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is
+built and checked while that release goes out. A train checked before the release finishes waits (`waiting`), then
+lands the moment the release is out, without a second check, because it was checked on exactly what production now
+runs. If the release is held back, the train's base is gone: it fails, and its riders land one at a time.
+
 **Checks that are checked.** When a claim is Ready, the judge breaks the attempt's own change on purpose in CI: it drops a
 one-line guard, swaps an error status for 200, or flips a comparison in the lines the attempt added (up to six breaks),
 builds each break as a preview of its own, and runs the attempt's fact and every canon probe fact on each. A break no

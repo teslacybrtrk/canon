@@ -146,5 +146,5 @@ routes would move with it: remove them, and attach your domain to that Worker on
 - **Apps:** only Workers apps built with npm, from the repo root. An attempt's own build runs in CI with your
   `CF_TOKEN` available to wrangler, so give the agent key only to agents you run.
 - **Pace:** one release at a time. Each accept sends the attempts in flight to refresh; on autopilot, merge trains let
-  what queued behind a release leave together. Speculative trains (checking the next one during a release) are next.
+  what queued behind a release leave together, built and checked while that release is still going out.
 - **Previews:** Workers keep the newest 500 per Worker. Older attempts stay clonable from Artifacts.
