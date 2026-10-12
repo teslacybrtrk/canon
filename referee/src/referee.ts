@@ -29,6 +29,7 @@ import {
   type Mutation,
 } from "./protocol";
 import { edgeFailure, platformFailure } from "./platform";
+import { changedSymbols } from "./symbols";
 import { SCHEMA, UPGRADES } from "./schema";
 import { ground, parseAnswer, REVIEW_SCHEMA, reviewPrompt, type Review, type ReviewFile } from "./review";
 
@@ -230,23 +231,38 @@ export class Referee extends DurableObject<Env> {
    * the rest wait in the Workflow and come in as slots free. A slot is freed when the judge gets the result (or the
    * platform error), and expires after 15 minutes if its Workflow died.
    */
-  admit(repo: string, sha: string): boolean {
-    const slots = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, number>;
-    for (const [k, at] of Object.entries(slots)) if (Date.now() - at > 15 * 60_000) delete slots[k];
+  admit(repo: string, sha: string): "go" | "wait" | "stale" {
+    // A newer push of the same attempt makes this one pointless: its verdict would be replaced at once.
+    const attempt = this.attempt(repo);
+    if (attempt?.headSha && attempt.headSha !== sha && attempt.claimId) return "stale";
+    const agent = attempt?.claimId ? (this.claim(attempt.claimId)?.agent ?? repo) : "the judge";
+    const now = Date.now();
+    const slots = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, number | { at: number; agent: string }>;
+    for (const [k, v] of Object.entries(slots)) if (now - (typeof v === "number" ? v : v.at) > 15 * 60_000) delete slots[k];
     const key = `${repo}:${sha}`;
-    if (!slots[key]) {
-      if (Object.keys(slots).length >= VERIFY_SLOTS) {
-        this.setMeta("verifying", JSON.stringify(slots));
-        return false;
-      }
-      slots[key] = Date.now();
+    if (slots[key]) return "go";
+    // Fair turns: a free slot goes to the waiting agent with the fewest builds running, then the one waiting longest,
+    // so one agent pushing a lot can't starve the others.
+    const waiting = JSON.parse(this.meta("waiting") ?? "{}") as Record<string, { agent: string; since: number; seen: number }>;
+    for (const [k, w] of Object.entries(waiting)) if (now - w.seen > 60_000) delete waiting[k];
+    waiting[key] = { agent, since: waiting[key]?.since ?? now, seen: now };
+    const running = (who: string) => Object.values(slots).filter((v) => typeof v !== "number" && v.agent === who).length;
+    const next = Object.entries(waiting).sort(([, x], [, y]) => running(x.agent) - running(y.agent) || x.since - y.since)[0]?.[0];
+    if (Object.keys(slots).length >= VERIFY_SLOTS || next !== key) {
+      this.setMeta("waiting", JSON.stringify(waiting));
+      this.setMeta("verifying", JSON.stringify(slots));
+      return "wait";
     }
+    delete waiting[key];
+    slots[key] = { at: now, agent };
+    this.setMeta("waiting", JSON.stringify(waiting));
     this.setMeta("verifying", JSON.stringify(slots));
-    return true;
+    return "go";
   }
 
+
   private releaseSlot(repo: string, sha: string) {
-    const slots = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, number>;
+    const slots = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, unknown>;
     if (slots[`${repo}:${sha}`]) {
       delete slots[`${repo}:${sha}`];
       this.setMeta("verifying", JSON.stringify(slots));
@@ -1241,19 +1257,55 @@ export class Referee extends DurableObject<Env> {
    * flight that changed any of them, with the fact it is building. Overlapping files are often fine (behaviour decides,
    * not text); this is so agents can talk before either finds out from a verdict.
    */
-  async overlaps(attemptId: string, localPaths: string[]) {
+  async overlaps(attemptId: string, localPaths: string[], localFiles: Record<string, string> = {}) {
     const mine = this.attempt(attemptId);
     if (!mine?.claimId) throw new ProtocolError(404, `no attempt ${attemptId}`);
     const pushed = mine.headSha ? ((await this.changedPaths(mine, mine.headSha)) ?? []) : [];
     const paths = new Set([...pushed, ...localPaths.slice(0, 500)].filter((p) => typeof p === "string" && p && p !== "canon.json"));
-    const out: Array<{ claimId: string; agent: string; factId: string; sentence: string; status: ClaimStatus; attemptId: string; files: string[] }> = [];
+    // Which functions I'm changing: my working copy (or my last push) against the canon my attempt forked from.
+    const code = /\.(ts|tsx|js|jsx|mjs)$/;
+    const mineSyms = new Map<string, Set<string>>();
+    for (const path of [...paths].filter((p) => code.test(p)).slice(0, 20)) {
+      const head = typeof localFiles[path] === "string" ? localFiles[path].slice(0, 400_000) : mine.headSha ? await this.fileAt(mine.id, mine.headSha, path) : null;
+      const base = mine.baseSha ? await this.fileAt(mine.id, mine.baseSha, path) : null;
+      if (head !== null) mineSyms.set(path, new Set(changedSymbols(base ?? "", head)));
+    }
+    const out: Array<{ claimId: string; agent: string; factId: string; sentence: string; status: ClaimStatus; attemptId: string; files: string[]; symbols: string[] }> = [];
     for (const c of this.rows(`SELECT * FROM claims WHERE status IN ('open', 'checking', 'unproven', 'ready', 'behind') AND attempt_id != ?`, attemptId).map(toClaim)) {
       const a = this.attempt(c.attemptId);
       if (!a?.headSha) continue;
       const files = ((await this.changedPaths(a, a.headSha)) ?? []).filter((p) => paths.has(p));
-      if (files.length) out.push({ claimId: c.id, agent: c.agent, factId: c.factId, sentence: this.fact(c.factId)?.sentence ?? c.factId, status: c.status, attemptId: c.attemptId, files });
+      if (!files.length) continue;
+      const symbols: string[] = [];
+      for (const path of files.filter((p) => mineSyms.has(p))) {
+        for (const s of await this.symbolsOf(a, path)) if (mineSyms.get(path)!.has(s)) symbols.push(`${s} in ${path}`);
+      }
+      out.push({ claimId: c.id, agent: c.agent, factId: c.factId, sentence: this.fact(c.factId)?.sentence ?? c.factId, status: c.status, attemptId: c.attemptId, files, symbols });
     }
+    out.sort((x, y) => y.symbols.length - x.symbols.length);
     return { paths: [...paths], overlaps: out, headsUp: this.headsUpFor(mine.claimId), clashes: this.clashesFor(mine.claimId) };
+  }
+
+  /** A file's text at a commit of an attempt, or null if it isn't there. */
+  private async fileAt(repoName: string, ref: string, path: string): Promise<string | null> {
+    try {
+      using repo = await this.env.ARTIFACTS.get(repoName);
+      const blob = await repo.readFile({ ref, path });
+      return blob ? await blob.text() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The functions an attempt's pushed commit changes in a file, against the canon it forked from (cached per commit). */
+  private async symbolsOf(a: Attempt, path: string): Promise<string[]> {
+    const key = `sym:${a.id}:${a.headSha}:${path}`;
+    if (this.changedCache.has(key)) return this.changedCache.get(key) ?? [];
+    const head = a.headSha ? await this.fileAt(a.id, a.headSha, path) : null;
+    const base = a.baseSha ? await this.fileAt(a.id, a.baseSha, path) : null;
+    const syms = head === null ? [] : changedSymbols(base ?? "", head);
+    this.changedCache.set(key, syms);
+    return syms;
   }
 
   /** The same findings while either side is still being written: a heads-up to both agents, not a clash yet. */

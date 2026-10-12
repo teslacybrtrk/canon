@@ -15,8 +15,11 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const attemptId = await step.do("register push", () => referee.pushed(repo, sha));
     if (!attemptId) return;
     // Admission: at most a few verifications per project build at once; this one waits its turn (up to ~30 minutes).
+    // A newer push of the same attempt makes this one pointless: it stops here.
     for (let turn = 0; turn < 120; turn++) {
-      if (await step.do(`slot ${turn}`, () => referee.admit(repo, sha))) break;
+      const turnFor = await step.do(`slot ${turn}`, () => referee.admit(repo, sha));
+      if (turnFor === "stale") return;
+      if (turnFor === "go") break;
       await step.sleep(`queued ${turn}`, "15 seconds");
     }
 

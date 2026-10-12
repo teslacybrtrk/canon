@@ -301,14 +301,22 @@ function fail(message: string): never {
   throw new Error(message);
 }
 
-type Overlaps = { paths: string[]; overlaps: Array<{ agent: string; factId: string; sentence: string; status: string; files: string[] }>; headsUp: unknown[]; clashes: unknown[] };
+type Overlaps = { paths: string[]; overlaps: Array<{ agent: string; factId: string; sentence: string; status: string; files: string[]; symbols: string[] }>; headsUp: unknown[]; clashes: unknown[] };
 
 /** Who else is changing the same files, in the words an agent acts on. */
 function overlapText(o: Overlaps): string {
   if (!o.paths.length) return "You haven't changed any files yet.";
   if (!o.overlaps.length) return `No other attempt in flight changes ${o.paths.slice(0, 6).join(", ")}${o.paths.length > 6 ? " and the rest" : ""}.`;
-  const lines = o.overlaps.slice(0, 8).map((x) => `  ${x.agent} (${x.status}) is making "${x.sentence}" true and changes ${x.files.join(", ")}`);
-  if (o.overlaps.length > 8) lines.push(`  …and ${o.overlaps.length - 8} more`);
-  const warn = o.headsUp.length + o.clashes.length ? `\n${o.headsUp.length + o.clashes.length} of these already conflict in behaviour: see HEADS-UP / CLASH in canon_verdict.` : "";
-  return `Others changing the same files:\n${lines.join("\n")}\nOverlapping files are fine when the behaviours agree. If yours could break one of theirs, change course now, or say why in your claim.${warn}`;
+  const close = o.overlaps.filter((x) => x.symbols.length);
+  const near = o.overlaps.filter((x) => !x.symbols.length);
+  const lines: string[] = [];
+  if (close.length) {
+    lines.push("Others changing the same code:");
+    for (const x of close.slice(0, 8)) lines.push(`  ${x.agent} (${x.status}) is changing ${x.symbols.slice(0, 3).join(", ")}, to make "${x.sentence}" true`);
+    if (close.length > 8) lines.push(`  …and ${close.length - 8} more`);
+  }
+  if (near.length) lines.push(`${close.length ? "Also in the same files, but other functions" : "Others change the same files, but other functions"}: ${near.slice(0, 5).map((x) => x.agent).join(", ")}${near.length > 5 ? ` and ${near.length - 5} more` : ""}.`);
+  if (close.length) lines.push("If yours could break one of theirs, change course now, or say why in your claim.");
+  const warn = o.headsUp.length + o.clashes.length ? `\n${o.headsUp.length + o.clashes.length} already conflict in behaviour: see HEADS-UP / CLASH in canon_verdict.` : "";
+  return lines.join("\n") + warn;
 }

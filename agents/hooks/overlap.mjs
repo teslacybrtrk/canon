@@ -32,7 +32,8 @@ try {
 } catch {
   process.exit(0); // the judge unreachable: say nothing rather than block the edit
 }
-if (!out.startsWith("Others changing the same files")) process.exit(0);
+// Only the same code is worth interrupting for: another agent changing a function this edit touches.
+if (!out.startsWith("Others changing the same code")) process.exit(0);
 
 // Only a change in who overlaps is news.
 const last = join(dir, ".git", "canon-overlap-last");

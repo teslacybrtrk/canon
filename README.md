@@ -16,7 +16,8 @@ candidate; if not, canon steps back.
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
 - **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the judge replays an
   attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that breaks a fact is
-  not. Before a push, `canon overlap` lists the other attempts changing the same files and what each is building.
+  not. Before a push, `canon overlap` names the other attempts changing the same functions as you, and what each is
+  building (a hook tells agents as they edit).
   Two attempts that build the same behaviour opposite ways get a heads-up while they are still being written,
   are flagged as a clash once both are Ready (before anyone accepts either), and once one lands, the other is
   re-applied on top of it and the combined code decides.
@@ -116,10 +117,16 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   heads-up became a clash.
 - **Reviewer**: on a Ready booking change, the reviewer model's notes pointed at the guards no fact covered, each quoting
   its line. Getting there took three tries: Llama 3.3 returned nothing, and Kimi needed room to reason.
-- **Overlap, while editing**: a real Claude Code session with the overlap hook edited `src/index.ts` in a farmstand
+- **Overlap, while editing**: a real Claude Code session with the overlap hook (its first, file-level version) edited `src/index.ts` in a farmstand
   attempt and was told, unasked, which other agents in flight were changing the same file and what each was building
-  (and wasn't told again on the next edit, since nothing had changed). From the load test below: `canon overlap` from
-  one of the 30 attempts listed the other 29.
+  (and wasn't told again on the next edit, since nothing had changed). In a single-file app that lists everyone (from
+  the load test below, all 29 others), so overlap now goes down to functions: with four agents on one file, the one
+  adding a sold-out guard was told exactly one name, the agent adding a line limit to the same `Market.addToCart`, and
+  the two changing `fetch` were folded into one line. A real Claude Code session with the current hook, editing
+  `addToCart` there, was told unasked that agent-2 was changing `Market.addToCart` to enforce the 99-unit limit, and
+  judged its own edit wouldn't conflict.
+- **Queue**: with one slot busy, an attempt pushed twice: the first push waited, then dropped itself as stale once the
+  second arrived; the second waited its turn and ran.
 - **Speculative train**: two riders became Ready while canon #5 was releasing; the train was built and checked on #5
   during that release and landed with both as soon as it shipped.
 - **Bisection**: a train of four, one with a schema change that breaks on existing data, was held back at release. It
@@ -250,8 +257,9 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   shows which ones no fact noticed. Next, concurrency and retry breaks: two requests at once, a repeated request.
 - **Reviewer track record**: a charter can already route the reviewer's `risk` notes to the owner (`reviewRisk`).
   Next, show how often its notes turned out right, so owners can tell when to trust it more.
-- **Fair scheduling**: today the queue is first come, first served. Next, share CI between agents by the value of
-  their claims, and cancel work a newer canon has made pointless.
+- **Value-aware scheduling**: today a project's six verification slots go to the agent with the fewest builds running,
+  and a queued push made obsolete by a newer one is dropped. Next, weigh claims by the value of the fact they serve,
+  and share capacity across projects on one account.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Canary traffic**: today a new canon runs every fact on a full release candidate, then (for Workers without Durable
   Objects) on the production URL at 0% traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,

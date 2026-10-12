@@ -66,8 +66,9 @@ export default {
       }
       if (route === "POST /claims") return json(await referee.declare(await request.json<DeclareRequest>()), 201);
       if (route === "POST /overlaps") {
-        const body = await request.json<{ attempt?: string; paths?: string[] }>().catch(() => ({}) as { attempt?: string; paths?: string[] });
-        return json(await referee.overlaps(String(body.attempt ?? ""), Array.isArray(body.paths) ? body.paths : []));
+        const body = await request.json<{ attempt?: string; paths?: string[]; files?: Record<string, string> }>().catch(() => ({}) as { attempt?: string; paths?: string[]; files?: Record<string, string> });
+        const files = body.files && typeof body.files === "object" ? body.files : {};
+        return json(await referee.overlaps(String(body.attempt ?? ""), Array.isArray(body.paths) ? body.paths : [], files));
       }
       if ((match = route.match(/^GET \/attempts\/([\w-]+)\/verdict$/))) {
         const verdict = await referee.verdict(match[1]);

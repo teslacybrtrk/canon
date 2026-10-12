@@ -260,15 +260,25 @@ async function verdict() {
 async function overlap() {
   const ctx = attemptContext();
   const run = (argv) => { try { return execFileSync("git", argv, { cwd: ctx.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch { return ""; } };
-  const local = new Set([...run(["diff", "--name-only", "HEAD"]).split("\n"), ...run(["diff", "--name-only", "origin/main", "HEAD"]).split("\n"), ...run(["ls-files", "--others", "--exclude-standard"]).split("\n")].filter(Boolean));
-  const o = await api("POST", "/overlaps", { attempt: ctx.attemptId, paths: [...local] });
+  const local = [...new Set([...run(["diff", "--name-only", "HEAD"]).split("\n"), ...run(["diff", "--name-only", "origin/main", "HEAD"]).split("\n"), ...run(["ls-files", "--others", "--exclude-standard"]).split("\n")].filter(Boolean))];
+  // The working copies of changed code files, so the judge can tell which functions you're changing.
+  const files = {};
+  for (const p of local.filter((p) => /\.(ts|tsx|js|jsx|mjs)$/.test(p)).slice(0, 20)) {
+    try { const text = readFileSync(join(ctx.root, p), "utf8"); if (text.length < 400_000) files[p] = text; } catch {}
+  }
+  const o = await api("POST", "/overlaps", { attempt: ctx.attemptId, paths: local, files });
   if (!o.paths.length) return console.log("You haven't changed any files yet.");
   if (!o.overlaps.length) return console.log(`No other attempt in flight changes ${o.paths.slice(0, 6).join(", ")}${o.paths.length > 6 ? " and the rest" : ""}.`);
-  console.log("Others changing the same files:");
-  for (const x of o.overlaps.slice(0, 8)) console.log(`  ${x.agent} (${x.status}) is making "${x.sentence}" true and changes ${x.files.join(", ")}`);
-  if (o.overlaps.length > 8) console.log(`  …and ${o.overlaps.length - 8} more`);
-  console.log("Overlapping files are fine when the behaviours agree. If yours could break one of theirs, change course now, or say why in your claim.");
-  if (o.headsUp.length + o.clashes.length) console.log(`${o.headsUp.length + o.clashes.length} of these already conflict in behaviour: see HEADS-UP / CLASH in canon verdict.`);
+  const close = o.overlaps.filter((x) => x.symbols?.length);
+  const near = o.overlaps.filter((x) => !x.symbols?.length);
+  if (close.length) {
+    console.log("Others changing the same code:");
+    for (const x of close.slice(0, 8)) console.log(`  ${x.agent} (${x.status}) is changing ${x.symbols.slice(0, 3).join(", ")}, to make "${x.sentence}" true`);
+    if (close.length > 8) console.log(`  …and ${close.length - 8} more`);
+  }
+  if (near.length) console.log(`${close.length ? "Also in the same files, but other functions" : "Others change the same files, but other functions"}: ${near.slice(0, 5).map((x) => x.agent).join(", ")}${near.length > 5 ? ` and ${near.length - 5} more` : ""}.`);
+  if (close.length) console.log("If yours could break one of theirs, change course now, or say why in your claim.");
+  if (o.headsUp.length + o.clashes.length) console.log(`${o.headsUp.length + o.clashes.length} already conflict in behaviour: see HEADS-UP / CLASH in canon verdict.`);
 }
 
 async function why(factId) {

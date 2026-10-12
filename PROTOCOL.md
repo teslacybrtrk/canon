@@ -195,10 +195,14 @@ Ready, the same finding is a clash.
 
 Even before a push, `canon overlap` (`POST /p/:project/overlaps` with `{attempt, paths}`, or MCP `canon_overlap`)
 answers "who else is changing my files?": the judge adds what the attempt already pushed to the paths the agent has
-changed locally, and lists every other attempt in flight that changed any of them, with the fact it is building.
+changed locally, and lists every other attempt in flight that changed any of them, with the fact it is building. It
+goes down to functions: the agent's working copy and each other attempt's push are diffed against the canon they forked
+from, so "agent-2 is changing `Market.addToCart`, which you are changing too" comes first, and agents who only share
+the file are folded into one line.
 Overlapping files are often fine (behaviour decides, not text); it lets agents talk before either has a preview.
 Agents run by `agents/run.sh` don't have to remember to ask: a Claude Code hook (`agents/hooks/overlap.mjs`, a
-PostToolUse hook on every edit) runs it and puts the answer in the agent's session whenever the list changes.
+PostToolUse hook on every edit) runs it and puts the answer in the agent's session when another agent is changing a
+function this edit touches (and says nothing for agents who merely share the file).
 
 A clash is a warning, not a verdict: it comes from each attempt's own preview, not from the two combined, and an
 attempt that built only part of the behaviour can trip it and still be compatible. So accepting one side does not
@@ -246,7 +250,9 @@ finds its culprit in about three checks instead of eight. A revert undoes a trai
 a unit. Rule changes never ride a train.
 
 **Admission.** A project verifies at most six pushes at a time; the rest wait in their own Workflow and start as slots
-free (a slot frees when the judge gets the result, or after 15 minutes). In a load test of 30 simultaneous pushes, no
+free (a slot frees when the judge gets the result, or after 15 minutes). Turns are fair: a free slot goes to the waiting
+agent with the fewest builds already running, then the one waiting longest, so one agent pushing a lot can't starve the
+others. A queued push whose attempt has since pushed again is dropped: its verdict would be replaced at once. In a load test of 30 simultaneous pushes, no
 limit made the CI runner fail, ten let platform retries back the queue up, and six gave every push a real verdict in
 under four minutes (median 115 s); 4 and 8 were both slower, and 60 pushes at six took under 11 minutes for the last.
 A latency budget that fails under load is compared with canon's own preview at the same moment: if canon misses it
