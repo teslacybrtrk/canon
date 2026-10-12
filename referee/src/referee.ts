@@ -860,6 +860,29 @@ export class Referee extends DurableObject<Env> {
   private async keepCanonReleased() {
     const cur = this.currentCanon();
     if (!cur?.accepted_fact || cur.reverts) return;
+    // A release that never reported back (its Workflow ended without recording, e.g. an RPC that kept failing): ask
+    // production. The facts it accepted fail on the old code (that's what made them new), so if they hold there, it
+    // went out; if not, it didn't, and canon goes back.
+    if (cur.deployed === 0 && Date.now() - Number(cur.at) > 15 * 60_000) {
+      let ended = true;
+      try {
+        const run = await this.env.PROMOTE_WORKFLOW.get(`promote-${cur.seq}-${String(cur.sha).slice(0, 12)}`);
+        ended = ["errored", "terminated", "complete"].includes((await run.status()).status);
+      } catch {
+        ended = true; // no such run: nothing is releasing it
+      }
+      if (!ended) return;
+      const url = this.env.PRODUCTION_URL.replace("{project}", this.requireProject());
+      const ids = cur.facts_json ? (JSON.parse(cur.facts_json as string) as string[]) : [cur.accepted_fact as string];
+      const probes = ids.map((id) => this.fact(id)).filter((f): f is Fact => f?.check.kind === "probe");
+      const live = probes.length > 0 && (await Promise.all(probes.map((f) => runCheck(f.check as ProbeCheck, url)))).every((r) => r.held);
+      if (live) this.sql.exec(`UPDATE canon SET deployed = 1 WHERE seq = ?`, cur.seq);
+      else {
+        this.sql.exec(`UPDATE canon SET deployed = -1, health_detail = ? WHERE seq = ?`, "its release never finished, and production still runs the previous canon", cur.seq);
+        await this.revertCanon(cur.seq as number, null);
+      }
+      return;
+    }
     if (cur.deployed === -1 || cur.health === "held" || cur.health === "rolled-back") {
       await this.revertCanon(cur.seq as number, cur.health === "held" || cur.health === "rolled-back" ? (cur.health_detail as string) : null);
     }
@@ -875,7 +898,7 @@ export class Referee extends DurableObject<Env> {
     const url = this.env.CANDIDATE_URL.replace("{project}", project);
     // The candidate was deployed seconds ago: let its rollout settle (Durable Objects pick up new code eventually).
     await new Promise((ok) => setTimeout(ok, 20_000));
-    const broke = await this.factsOn(seq, url, {});
+    const broke = await this.factsOn(seq, url, {}, undefined, true);
     if (!broke.length) return true;
     const what = `broke “${broke[0].fact.sentence}” on its release candidate (a full copy with production’s config): ${broke[0].detail}`;
     this.sql.exec(`UPDATE canon SET health = 'held', health_detail = ? WHERE seq = ?`, `${what}. Held back: production never served it.`, seq);
@@ -887,7 +910,7 @@ export class Referee extends DurableObject<Env> {
    * Every canon probe fact on `url` (with `extra` headers), each re-tried once. The accepted fact fails on the old code
    * (that's what made it a new fact), so the run waits until it holds: proof the new code is the code answering.
    */
-  private async factsOn(seq: number, url: string, extra: Record<string, string>, seedPrefix?: string): Promise<Array<{ fact: Fact; detail: string }>> {
+  private async factsOn(seq: number, url: string, extra: Record<string, string>, seedPrefix?: string, firstOnly = false): Promise<Array<{ fact: Fact; detail: string }>> {
     // With a seed prefix, every fact draws the same inputs on every run (so two runs can be compared exactly).
     const seedOf = (f: Fact) => (seedPrefix ? `${seedPrefix}:${f.id}` : undefined);
     const acceptedId = this.rows(`SELECT accepted_fact FROM canon WHERE seq = ?`, seq)[0]?.accepted_fact;
@@ -914,6 +937,8 @@ export class Referee extends DurableObject<Env> {
         r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
       }
       if (!r.held) broke.push({ fact: f, detail: r.detail });
+      // One fact that fails every time is enough to hold a release back; checking the rest only delays the verdict.
+      if (firstOnly && broke.length) return broke;
     }
     return broke;
   }
