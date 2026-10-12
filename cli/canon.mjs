@@ -209,7 +209,9 @@ async function verdict() {
   if (v.previewUrl) console.log(`preview  ${v.previewUrl}`);
   for (const id of v.kept) console.log(`  kept     ${id}`);
   for (const l of v.lost) console.log(`  LOST     ${l.factId}: ${l.detail}`);
-  for (const l of v.stale ?? []) console.log(`  NEWER    ${l.factId} became canon after you forked: ${l.detail}`);
+  for (const l of v.stale ?? []) console.log(l.clash
+    ? `  CLASHED  ${l.factId} became canon after you forked, and your attempt built it the other way: ${l.detail}. The judge re-applies your change on the new canon; the combined code decides.`
+    : `  NEWER    ${l.factId} became canon after you forked: ${l.detail}`);
   for (const id of v.retires ?? []) console.log(`  RETIRES  ${id} (your claim revises this rule on purpose; a person decides)`);
   if (v.skipped?.length) console.log(`  skipped  ${v.skipped.join(", ")} (out of scope: you changed none of their files)`);
   console.log(`  claimed  ${v.claimed.factId}: ${v.claimed.held ? "holds" : v.claimed.detail}`);
@@ -219,7 +221,7 @@ async function verdict() {
       ? `  CLASH    ${c.with.agent}'s attempt ${c.with.attemptId} breaks your fact: ${c.detail}`
       : `  CLASH    your attempt breaks ${c.with.agent}'s fact ${c.factId}: ${c.detail}`);
   }
-  if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.${v.clashes?.length ? " Your attempt and the one it clashes with can't both land: accepting one rejects the other." : ""}`);
+  if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.${v.clashes?.length ? " Your attempt and the one it clashes with likely can't both land: once one is accepted, the other is re-applied on top of it and rejected if the combined code still breaks the accepted fact." : ""}`);
   if (v.outcome === "contradicts") {
     const lostIds = v.lost.map((l) => l.factId).filter((id) => id !== "canon.json");
     console.log(`\nThis attempt contradicts canon. Make the lost facts hold again and push.`);

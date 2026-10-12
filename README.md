@@ -12,10 +12,10 @@ judge checks every canon fact against a live Workers Preview of that attempt. A 
 the facts, and the accepted attempt becomes canon.
 
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
-- **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the
-  judge replays an attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that
-  breaks a fact is not. Two Ready attempts that built the same behaviour opposite ways are flagged as a clash before anyone accepts either; a
-  feature that is simply missing from the other attempt is not a clash.
+- **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the judge replays an
+  attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that breaks a fact is
+  not. Two Ready attempts that built the same behaviour opposite ways are flagged as a clash before anyone accepts
+  either; once one lands, the other is re-applied on top of it and the combined code decides.
 - **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check.
 - **Why**: the fact chain. Every fact links to the attempt that made it true and to the attempts that failed it.
   Failed attempts stay clonable, so they remain the project's memory.
@@ -120,8 +120,6 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Accepted, deployed, healthy**: three separate states. A change lands in canon, rolls out in stages with health
   gates, and only counts as done once production keeps every fact, with a recovery plan if it doesn't.
-- **Clashes settled on the combined code**: the losing side of a clash is re-applied on the new canon and rejected only
-  if the combined code still breaks the fact, instead of on the evidence of its own preview.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
 
 ## Where the code lives

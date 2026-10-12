@@ -224,7 +224,7 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
   if (v.previewUrl) out.push(`preview ${v.previewUrl}`);
   for (const id of v.kept) out.push(`  kept     ${id}`);
   for (const l of v.lost) out.push(`  LOST     ${l.factId}: ${l.detail}`);
-  for (const l of v.stale ?? []) out.push(`  NEWER    ${l.factId} became canon after you forked: ${l.detail}`);
+  for (const l of v.stale ?? []) out.push(l.clash ? `  CLASHED  ${l.factId} became canon after you forked, and your attempt built it the other way: ${l.detail}. The judge re-applies your change on the new canon; the combined code decides.` : `  NEWER    ${l.factId} became canon after you forked: ${l.detail}`);
   for (const id of v.retires ?? []) out.push(`  RETIRES  ${id} (your claim revises this rule on purpose; a person decides)`);
   out.push(`  claimed  ${v.claimed.factId}: ${v.claimed.held ? "holds" : v.claimed.detail}`);
   for (const c of v.clashes ?? []) {

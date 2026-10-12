@@ -641,8 +641,9 @@ export class Referee extends DurableObject<Env> {
 
   /**
    * Two Ready claims can each keep canon and still be impossible together. Before anyone accepts either, each one's
-   * fact runs on the other's preview: if the other attempt built that behaviour the other way, they clash, and
-   * accepting one rejects the other. A plain text conflict is not a clash; the judge's refresh handles those.
+   * fact runs on the other's preview: if the other attempt built that behaviour the other way, they clash. Accepting
+   * one re-applies the other on the new canon, and the combined code decides: it is rejected only if it still breaks
+   * the accepted fact. A plain text conflict is not a clash; the judge's refresh handles those.
    */
   private async findClashes(claimId: string) {
     const claim = this.claim(claimId);
@@ -834,9 +835,10 @@ export class Referee extends DurableObject<Env> {
     const judged = canonFacts.filter((f) => results.has(f.id) && f.id !== retiring);
     const failed = judged.filter((f) => !results.get(f.id)!.held).map((f) => ({ fact: f, detail: results.get(f.id)!.detail }));
     // Breaking a fact that was canon when this attempt forked is a contradiction. Failing a fact accepted after
-    // the fork usually only means the attempt is behind: it predates that code, and the judge refreshes it onto
-    // the current canon. But an attempt that built the very behaviour the fact tests, the other way, contradicts
-    // it outright: no refresh can make both true.
+    // the fork means the attempt is behind: it predates that code, and the judge refreshes it onto the current canon.
+    // That holds even for an attempt that built the very behaviour the fact tests, the other way (a clash): its own
+    // preview is only a signal. The verdict that counts comes from the combined code, after the refresh: if the
+    // re-applied attempt still breaks the fact, then it contradicts it.
     const newer = (x: { fact: Fact }) => (x.fact.acceptedAt ?? 0) > attempt.createdAt;
     const forkedFrom = attempt.baseAttempt ? (this.attempt(attempt.baseAttempt)?.previewUrl ?? null) : null;
     const opposed = new Map<string, string>();
@@ -848,8 +850,8 @@ export class Referee extends DurableObject<Env> {
         }),
       );
     }
-    const lost = failed.filter((x) => !newer(x) || opposed.has(x.fact.id)).map((x) => ({ factId: x.fact.id, detail: opposed.get(x.fact.id) ?? x.detail }));
-    const stale = failed.filter((x) => newer(x) && !opposed.has(x.fact.id)).map((x) => ({ factId: x.fact.id, detail: x.detail }));
+    const lost = failed.filter((x) => !newer(x)).map((x) => ({ factId: x.fact.id, detail: x.detail }));
+    const stale = failed.filter(newer).map((x) => (opposed.has(x.fact.id) ? { factId: x.fact.id, detail: opposed.get(x.fact.id)!, clash: true } : { factId: x.fact.id, detail: x.detail }));
     const ledger: Ledger = forced ? { status: "ok", detail: "not read: build failed" } : await this.checkLedger(attempt, sha, claimedFact, canonFacts, retiring);
     if (ledger.status === "tampered") lost.push({ factId: "canon.json", detail: ledger.detail });
     const claimed = claim ? results.get(claim.factId) : undefined;

@@ -855,7 +855,7 @@
         const other = s.claims.find((x) => x.id === w.claimId);
         const tip = cs.map((c) => `${c.breaks === "mine" ? `This fact on ${w.agent}’s attempt` : `“${other?.sentence ?? c.factId}” on this attempt`}: ${c.detail}`).join("\n");
         const how = cs.length > 1 ? "Each attempt breaks the other’s new fact" : cs[0].breaks === "mine" ? `${esc(w.agent)}’s attempt breaks this one’s fact` : `This attempt breaks ${esc(w.agent)}’s fact`;
-        return `<div class="clash" title="${esc(tip)}"><b>Clashes with ${esc(w.agent)}’s “${esc(other?.sentence ?? w.factId)}”.</b> ${how}, so only one can land. Accepting either rejects the other.</div>`;
+        return `<div class="clash" title="${esc(tip)}"><b>Clashes with ${esc(w.agent)}’s “${esc(other?.sentence ?? w.factId)}”.</b> ${how}, so likely only one can land. Accept one, and the other is re-applied on top of it: the combined code decides.</div>`;
       }).join("");
     };
 
@@ -902,7 +902,9 @@
         case "open": return them("the agent", "It’s writing the change.");
         case "checking": return them("the judge", cl.refreshedFrom ? "It’s checking the re-applied attempt on a live preview." : "It’s building a live preview and running every fact on it.");
         case "unproven": return them("the agent", "It makes its own fact hold and pushes again. Nothing for you.");
-        case "behind": return cl.refresh && cl.refresh !== "started" ? them("the agent", "Its change conflicts with the new canon’s code; it refreshes and resolves that.") : them("the judge", "It’s re-applying this on the new canon.");
+        case "behind": return cl.refresh && cl.refresh !== "started" ? them("the agent", "Its change conflicts with the new canon’s code; it refreshes and resolves that.")
+          : v?.stale?.some((l) => l.clash) ? them("the judge", `It clashed with “${esc(sentence(v.stale.find((l) => l.clash).factId))}”, now canon. It’s re-applying this on top of it; the combined code decides.`)
+          : them("the judge", "It’s re-applying this on the new canon.");
         case "contradicts": {
           const broke = v?.lost?.[0];
           return them("the agent", `${broke ? `It broke “${esc(broke.factId === "canon.json" ? "canon.json" : sentence(broke.factId))}”. ` : ""}It fixes that, or gives up. Nothing for you.`);
@@ -930,7 +932,7 @@
       if (!v) return `<ol class="trail"><li>Nothing judged yet: ${cl.status === "checking" ? "the preview of its latest push is still building." : "the agent hasn’t pushed."}</li></ol>`;
       const ran = [
         ...v.lost.filter((l) => l.factId !== "canon.json").map((l) => [l.factId, false, l.detail]),
-        ...(v.stale ?? []).map((l) => [l.factId, false, "built before this fact existed"]),
+        ...(v.stale ?? []).map((l) => [l.factId, false, l.clash ? `built it the other way: ${l.detail}. Re-applying on the new canon to judge the combined code` : "built before this fact existed"]),
         ...v.kept.map((id) => [id, true, ""]),
       ];
       const steps = [
@@ -1005,7 +1007,7 @@
           <p class="reason"><span class="k">Why</span> <q>${esc(x.why)}</q></p>
           <div class="links">${x.verdict?.previewUrl ? `<a href="${esc(x.verdict.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(x.attemptId))}">Clone attempt</button></div>
         </details>
-        <p class="then">Choosing this makes it canon and rejects ${esc(other.agent)}’s attempt.</p>
+        <p class="then">Choosing this makes it canon. ${esc(other.agent)}’s attempt is then re-applied on top, and rejected if the combined code still breaks it.</p>
         <button class="accept" data-accept="${esc(x.id)}" data-chosen>Choose this one</button>
       </article>`;
     };
@@ -1183,7 +1185,7 @@
       if (!key) key = prompt(`Accepting deploys this fact to ${project}’s production, so only its maintainer can. Paste the owner key.\n\n(Just looking? canon.rodeo/demo lets you play the maintainer on sample data.)`)?.trim() ?? "";
       const cl = state.claims.find((x) => x.id === accept.dataset.accept);
       const rivals = [...new Set((cl?.clashes ?? []).filter((c) => state.claims.find((x) => x.id === c.with.claimId)?.status === "ready").map((c) => c.with.agent))];
-      if (rivals.length && !accept.hasAttribute("data-chosen") && !confirm(`This attempt clashes with ${rivals.join(" and ")}’s: they can’t both be true. Accepting it rejects theirs. Accept?`)) return;
+      if (rivals.length && !accept.hasAttribute("data-chosen") && !confirm(`This attempt clashes with ${rivals.join(" and ")}’s: they likely can’t both be true. Accepting it re-applies theirs on top, and the combined code decides. Accept?`)) return;
       if (MOCK) return demoAccept(cl.id);
       if (!key) return;
       accept.disabled = true;
@@ -1393,8 +1395,9 @@
       x.verdict = { ...template, attemptId: x.attemptId, outcome: "unproven", claimed: { factId: x.factId, held: false, detail: "step 2: the page doesn’t include “Open”" }, offers: [], lost: [], stale: [], retires: [], judgedAt: Date.now() };
     });
   }
-  // What the judge does when a person accepts: canon moves and deploys; an attempt that clashed is rejected; the
-  // rest were built before the new fact, so the judge re-applies each one on the new canon and judges it again.
+  // What the judge does when a person accepts: canon moves and deploys; every other attempt was built before the new
+  // fact, so the judge re-applies each one on the new canon and judges it again. One that clashed is rejected only if
+  // the combined code still breaks the fact.
   // The judge re-applies attempts that fell behind on the current canon as new attempts, then judges them again.
   function reapply(behind) {
     const s = state;
@@ -1421,7 +1424,7 @@
             fresh.verdict = { ...old.verdict, attemptId: fresh.attemptId, outcome: "behind", judgedAt: Date.now() };
             return reapply([fresh]);
           }
-          if (breaksCanon(fresh)) return say(["rejected", `${esc(fresh.agent)}’s attempt rejected`, `Re-applied on the new canon, it breaks “${sentenceOf(fresh.verdict.lost[0].factId)}”, which it clashed with.`]);
+          if (breaksCanon(fresh)) return (left--, say(["rejected", `${esc(fresh.agent)}’s attempt rejected`, `Re-applied on the new canon, the combined code still breaks “${sentenceOf(fresh.verdict.lost[0].factId)}”, which it clashed with. Nobody read its code.`]));
           fresh.status = old.was === "ready" ? "ready" : "unproven";
           fresh.verdict = { ...demoVerdict(fresh), retires: old.verdict?.retires ?? [], claimed: old.verdict?.claimed ?? { factId: fresh.factId, held: true, detail: "ok" }, outcome: fresh.status };
           fresh.verdict.kept = fresh.verdict.kept.filter((id) => !fresh.verdict.retires.includes(id));
@@ -1636,24 +1639,18 @@
         // Open and checking attempts get their verdict on the new canon anyway; behind ones are already being re-applied.
         if (SETTLED.includes(x.status) || !x.verdict || ["open", "checking", "contradicts", "behind"].includes(x.status)) continue;
         x.verdict = { ...x.verdict, canonSeq: seq, judgedAt: Date.now() };
-        if (rivals.has(x.id)) {
-          x.status = x.verdict.outcome = "contradicts";
-          x.verdict.lost = [{ factId: cl.factId, detail: rivals.get(x.id) }];
-          rejected.push(x);
-        } else {
-          x.was = x.status;
-          x.status = x.verdict.outcome = "behind";
-          x.verdict.stale = [{ factId: cl.factId, detail: "built before it existed" }];
-          behind.push(x);
-        }
+        x.was = x.status;
+        x.status = x.verdict.outcome = "behind";
+        x.verdict.stale = [rivals.has(x.id) ? { factId: cl.factId, detail: rivals.get(x.id), clash: true } : { factId: cl.factId, detail: "built before it existed" }];
+        (rivals.has(x.id) ? rejected : behind).push(x);
       }
       const cards = [
-        ...(rejected.length ? [["rejected", `${names(rejected.map((x) => esc(x.agent)))}’s attempt rejected`, "It breaks the fact you just accepted, as the clash warned. Nobody read its code."]] : []),
+        ...(rejected.length ? [["behind", `Re-checking ${names(rejected.map((x) => esc(x.agent)))}’s attempt`, "It clashed with the fact you just accepted. The judge re-applies it on top of the new canon: the combined code decides, not the warning."]] : []),
         ...(behind.length && !auto ? [["behind", `${behind.length} attempt${behind.length === 1 ? "" : "s"} behind`, `${behind.length === 1 ? "It was" : "They were"} built before this fact existed, so ${behind.length === 1 ? "it lacks" : "they lack"} its code. Nothing is wrong with ${behind.length === 1 ? "it" : "them"}.`],
           ["check", "Re-applying", `The judge re-applies ${behind.length === 1 ? "it" : "each one"} on the new canon, in CI, and judges again. No agent needed.`]] : []),
       ];
       if (cards.length) say(...cards);
-      reapply(behind);
+      reapply([...rejected, ...behind]);
     });
     soon(5200, () => {
       demo.deploying = false;

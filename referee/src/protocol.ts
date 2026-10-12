@@ -220,7 +220,9 @@ export interface Verdict {
   lost: Array<{ factId: string; detail: string }>; // facts canon at the fork that broke: a contradiction
   retires: string[]; // canon facts this attempt deliberately replaces (a revision): allowed to break
   skipped: string[]; // scoped facts not judged: this attempt changes none of their files
-  stale: Array<{ factId: string; detail: string }>; // facts accepted after the fork that fail: refresh needed
+  // Facts accepted after the fork that fail: refresh needed. `clash`: the attempt built that behaviour the other way, so
+  // the judge re-applies it on the new canon and rejects it only if the combined code still breaks the fact.
+  stale: Array<{ factId: string; detail: string; clash?: boolean }>;
   claimed: { factId: string; held: boolean; detail: string };
   offers: string[]; // other proposed facts this attempt happens to make true
   ledger: Ledger; // the attempt's canon.json against canon

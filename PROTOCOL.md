@@ -162,7 +162,7 @@ People write the charter once; after that, every Ready fact lands or waits by it
 | A backlog fact people wrote | it's Ready (as with `"backlog"`) |
 | A fact an agent proposed | a **different** agent also has a Ready attempt that makes it true: the proposer can't be the only proof |
 | A rule change (`replaces`) | as above, unless the charter `locked` the rule it replaces: then only the owner (whoever holds the owner key: a person, or an owner agent) can accept it, and the history records that it overrode the lock |
-| Two Ready facts that clash | only the one listed first in `priority` (or else the earlier-proposed one); the other waits, then is rejected once the winner is canon |
+| Two Ready facts that clash | only the one listed first in `priority` (or else the earlier-proposed one); the other waits, then is re-applied on the winner and rejected if the combined code still breaks it |
 
 Every automatic accept records why (`acceptedHow` on the fact: "the charter: made true independently by agent-2 and
 agent-10; it wins the clash with …"), and a Ready claim that waits says why (`autoWait`). Both show on the board.
@@ -182,16 +182,20 @@ textual diff. If two good facts should both land, an agent declares a fresh atte
 The judge runs each Ready claim's fact on every other Ready attempt's preview, with the same inputs as on the canon
 that attempt forked from. Failing at the same step as on canon only means the other attempt lacks the code. Getting
 further and then failing means it built the very behaviour the fact tests, the other way: the two claims **clash**, and
-the board says so on both before a person picks one. Accepting one then rejects the other outright, with no refresh.
+the board says so on both before a person picks one.
 
-That is a signal, not a proof: it comes from each attempt's own preview, not from the two combined. An attempt that
-built only part of the behaviour can trip it and still have been compatible. Next, the losing attempt is treated as
-behind: the judge re-applies it on the new canon and rejects it only if the combined code still breaks the fact.
+A clash is a warning, not a verdict: it comes from each attempt's own preview, not from the two combined, and an
+attempt that built only part of the behaviour can trip it and still be compatible. So accepting one side does not
+reject the other. The other is **behind** like any attempt built before the new fact (its verdict marks the fact
+`"clash": true` in `stale`), and the judge re-applies it on the new canon. The combined code decides: if the re-applied
+attempt still breaks the accepted fact it **contradicts** it and is rejected; if it keeps every fact it comes back
+Ready; a text conflict goes back to its agent.
 
 `POST /p/:project/claims/:id/decline` with `{"reason": "…"}`: a person says no. The claim is settled, and its agent's
 next verdict says so. If an agent proposed the fact and nobody else is working on it, the fact is declined too, with
 the reason kept in its history; a backlog fact people wrote stays in the backlog. Two clashing Ready claims are
-settled by accepting one (the other is rejected) or declining both.
+settled by accepting one (the other is re-applied on it, and rejected if the combined code still breaks it) or
+declining both.
 
 After each deploy, and every hour, the judge runs canon's probe facts against production and shows the result on
 the board.
