@@ -581,7 +581,7 @@
         <div class="menu clone-menu" id="clonemenu" hidden>
           <h5>Clone canon</h5>
           <div class="field"><input id="cloneurl" readonly aria-label="Clone command"><button class="copy" id="clonecopy" type="button">Copy</button></div>
-          <p>Canon is an ordinary Git repo: the attempt that production runs. Every agent’s attempt is clonable the same way.</p>
+          <p>Canon is an ordinary Git repo: the attempt that production runs. Its history of facts is in Git too: <code>git fetch origin refs/notes/canon:refs/notes/canon</code>, then <code>git log --notes=canon</code>. Every agent’s attempt is clonable the same way.</p>
         </div>
       </div>
     </div>
@@ -806,7 +806,7 @@
     $("commit").innerHTML = !c ? "No canon yet."
       : `${landed ? `${avatar(landed.agent)}<b>${esc(landed.agent)}</b><span class="msg">made “${esc(landed.sentence)}” canon</span>` : `${HAT(20)}<b>genesis</b><span class="msg">the seed facts from canon.json</span>`}
          <span class="right"><span class="sha" title="${esc(c.attemptId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${MOCK ? "<span>demo</span>" : ""}</span>`;
-    $("cloneurl").value = c ? cloneCmd(c.attemptId) : "";
+    $("cloneurl").value = c ? (MOCK ? cloneCmd(c.attemptId) : `git clone ${location.origin}/p/${project}.git`) : "";
 
     // Canon's probe facts run against production every hour and after each deploy.
     const prod = s.production;

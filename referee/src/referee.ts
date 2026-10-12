@@ -740,6 +740,87 @@ export class Referee extends DurableObject<Env> {
     }
   }
 
+  /**
+   * The fact chain, written into Git: one note per canon commit (refs/notes/canon) saying which fact it made canon,
+   * who made it true and how it was checked, who accepted it and why, and every attempt that broke it. All of them are
+   * regenerated on each promotion (earlier facts gain their later history) and pushed to the canon attempt, so
+   * `git clone https://canon.rodeo/p/<project>.git` then `git log --notes=canon` reads the history with no Canon tools.
+   */
+  async noteJob(seq: number): Promise<Record<string, string> | null> {
+    const row = this.rows(`SELECT * FROM canon WHERE seq = ?`, seq)[0];
+    const target = row ? this.attempt(row.attempt_id as string) : null;
+    if (!row || !target) return null;
+    const origin = "https://canon.rodeo";
+    const iso = (t: unknown) => new Date(Number(t)).toISOString().replace(/\.\d+Z$/, "Z");
+    const short = (s: unknown) => String(s ?? "").slice(0, 7);
+    const howChecked = (f: Fact) =>
+      f.check.kind === "command" ? [`  $ ${f.check.run}`]
+        : f.check.steps.map((s) => `  ${s.method ?? "GET"} ${s.path}${s.body ? ` ${JSON.stringify(s.body)}` : ""}${s.expect?.status ? ` -> ${s.expect.status}` : ""}`);
+    const notes: Array<{ sha: string; text: string }> = [];
+    for (const c of this.rows(`SELECT * FROM canon WHERE seq <= ? ORDER BY seq`, seq)) {
+      const lines: string[] = [];
+      if (!c.accepted_fact) {
+        const seeds = this.rows(`SELECT * FROM facts WHERE origin = 'seed'`).map(toFact);
+        lines.push(`Canon #${c.seq}: genesis, the seed facts from canon.json`, "");
+        for (const f of seeds) lines.push(`- ${f.sentence} (${f.id})`);
+      } else {
+        const w = this.why(c.accepted_fact as string);
+        const f = w.fact;
+        const by = w.madeTrueBy?.claim;
+        const v = this.latestVerdict(c.attempt_id as string);
+        lines.push(`Canon #${c.seq}: ${f.sentence}`, "", `fact: ${f.id}`);
+        if (w.replaces) lines.push(`replaces: "${w.replaces.sentence}" (${w.replaces.id}), on purpose`);
+        lines.push(`accepted: by ${f.acceptedHow ?? "the owner"}, ${iso(c.at)}`);
+        if (by) lines.push(`made true by: ${by.agent}, attempt ${c.attempt_id} @ ${short(c.sha)}`);
+        if (w.proposer) lines.push(`why: "${w.proposer.why}" (${w.proposer.agent})`);
+        if (v) lines.push(`verdict: kept ${v.kept.length} canon facts and made its own true${v.seed ? ` (inputs from seed ${v.seed})` : ""}`);
+        if (v?.previewUrl) lines.push(`preview: ${v.previewUrl}`);
+        lines.push("check:", ...howChecked(f));
+        const trial = (t: Row) => `- ${t.agent ?? "?"}, ${t.attempt_id} @ ${short(t.sha)}: ${String(t.detail).slice(0, 220)}`;
+        const rejected = w.rejected as Row[];
+        const broke = rejected.filter((t) => t.kind !== "behind");
+        const before = rejected.filter((t) => t.kind === "behind");
+        const clashed = this.rows(`SELECT DISTINCT c.agent, c.fact_id FROM clashes k JOIN claims c ON c.id = k.other_claim_id WHERE k.fact_id = ?`, f.id);
+        for (const k of clashed) lines.push(`clashed with: ${k.agent}'s "${this.fact(k.fact_id as string)?.sentence ?? k.fact_id}" (${k.fact_id}), flagged before anyone accepted`);
+        if (broke.length) lines.push("", `broke it, and were rejected or sent back (${broke.length}):`, ...broke.map(trial));
+        if (before.length) lines.push("", `built before it existed, then re-applied by the judge (${before.length}):`, ...before.map(trial));
+        if (f.retiredAt) lines.push("", `retired: ${iso(f.retiredAt)}, replaced on purpose by attempt ${f.retiredBy}`);
+      }
+      lines.push("", `Every attempt stays clonable: git clone ${origin}/a/<attempt>.git`, `Canon-Seq: ${c.seq}`, ...(c.accepted_fact ? [`Canon-Fact: ${c.accepted_fact}`] : []));
+      notes.push({ sha: c.sha as string, text: lines.join("\n") + "\n" });
+    }
+    const prev = this.rows(`SELECT attempt_id FROM canon WHERE seq < ? AND attempt_id != ? ORDER BY seq DESC LIMIT 1`, seq, row.attempt_id)[0];
+    const prevAttempt = prev ? this.attempt(prev.attempt_id as string) : null;
+    return {
+      CANON_URL: await this.tokenUrl(target, "write"),
+      PREV_URL: prevAttempt ? await this.tokenUrl(prevAttempt, "read") : "",
+      NOTES: base64(new TextEncoder().encode(JSON.stringify(notes))),
+    };
+  }
+
+  private async tokenUrl(a: Attempt, scope: "read" | "write") {
+    using repo = await this.env.ARTIFACTS.get(a.id);
+    const token = await repo.createToken(scope, 30 * 60);
+    const u = new URL(a.remote);
+    u.username = "x";
+    u.password = token.plaintext;
+    return u.toString();
+  }
+
+  /** The repo production runs: the current canon's attempt (for the stable clone URL /p/<project>.git). */
+  canonRepo(): string | null {
+    return (this.currentCanon()?.attempt_id as string | undefined) ?? null;
+  }
+
+  /** Re-runs the current canon's promotion (the same commit redeploys), which rewrites the Git notes. Owner only. */
+  async republish() {
+    const canon = this.currentCanon();
+    if (!canon || !canon.accepted_fact) throw new ProtocolError(409, "nothing accepted yet");
+    const id = `promote-${canon.seq}-${String(canon.sha).slice(0, 12)}-r${Date.now().toString(36)}`;
+    await this.env.PROMOTE_WORKFLOW.create({ id, params: this.ciParams(canon.attempt_id as string, canon.sha as string) });
+    return { workflow: id };
+  }
+
   /** What the refresh Workflow needs: where to read the old change, where to push it, and the new canon.json. */
   async refreshJob(attemptId: string): Promise<Record<string, string> | null> {
     const attempt = this.attempt(attemptId);

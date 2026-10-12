@@ -1,8 +1,10 @@
+import { refereeForProject } from "./stub";
 import type { Env } from "./env";
 
 // canon.rodeo serves Canon's own source from Artifacts, and every attempt, read-only:
 //   git clone https://canon.rodeo/canon.git               Canon's source (namespace canon-src)
 //   git clone https://canon.rodeo/a/<attempt-id>.git        any attempt, including rejected ones
+//   git clone https://canon.rodeo/p/<project>.git          the canon: the attempt production runs, with refs/notes/canon
 //   https://canon.rodeo/src                               browse Canon's source
 // The Worker mints a short-lived read token per request; pushes are always refused.
 
@@ -12,9 +14,12 @@ const READ_TOKEN_TTL_S = 300;
 
 export async function serveGit(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
-  const m = url.pathname.match(/^\/(?:(canon)|(?:a|w)\/([\w.-]+))\.git(\/.*)$/);
+  const m = url.pathname.match(/^\/(?:(canon)|(?:a|w)\/([\w.-]+)|p\/([a-z0-9]+))\.git(\/.*)$/);
   if (!m) return null;
-  const [, isSource, attempt, rest] = m;
+  const [, isSource, named, project, rest] = m;
+  // /p/<project>.git is the canon: the attempt production runs right now, notes and all.
+  const attempt = project ? await refereeForProject(env, project).canonRepo() : named;
+  if (project && !attempt) return new Response("no canon yet\n", { status: 404 });
   if (isSource && env.SOURCE_PUBLIC !== "true") return new Response("not found\n", { status: 404 });
   if (rest.includes("git-receive-pack") || url.searchParams.get("service") === "git-receive-pack") {
     return new Response("canon.rodeo is read-only: push to your own attempt's remote instead.\n", { status: 403 });
@@ -25,7 +30,7 @@ export async function serveGit(request: Request, env: Env): Promise<Response | n
   let remote: string;
   let token: string;
   try {
-    using repo = await ns.get(isSource ? SOURCE_REPO : attempt);
+    using repo = await ns.get(isSource ? SOURCE_REPO : (attempt as string));
     remote = (await repo.info()).remote;
     token = (await repo.createToken("read", READ_TOKEN_TTL_S)).plaintext.split("?expires=")[0];
   } catch {

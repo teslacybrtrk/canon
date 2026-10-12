@@ -213,6 +213,21 @@ that file by hand.
 (with the agent's own "why"), and every attempt that failed it, each with its preview. Commits in an attempt carry
 `Canon-Fact`, `Canon-Claim` and `Canon-Agent` trailers.
 
+The same chain is written into Git, so it survives without Canon. On every promotion the judge writes one note per
+canon commit to `refs/notes/canon` on the canon repo: the fact it made canon, who accepted it and how, who made it
+true, the agent's why, the check, the clash it won, and the attempts that broke it. Earlier notes are rewritten with
+their later history.
+
+```bash
+git clone https://canon.rodeo/p/farmstand.git          # the canon: the attempt production runs
+git fetch origin refs/notes/canon:refs/notes/canon
+git log --notes=canon
+```
+
+`GET /p/:project/stats` is the run report, counted from the judge's own records: agents, attempts, pushes, verdicts,
+fact checks run, rejections (and how many on the combined code after a clash), clashes caught, attempts re-applied by
+the judge, accepts by a person or by policy, and the median and p90 time from push to verdict.
+
 ## Checks
 
 One deterministic evaluator: HTTP steps against the preview with assertions.

@@ -114,8 +114,33 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       ok = false;
     }
     await step.do("record promotion", () => referee.promoted(seq, ok));
+    // The fact chain goes into Git as notes on the canon commits. Best effort: the deploy above is what counts.
+    try {
+      const env = await step.do("notes job", async () => {
+        const job = await referee.noteJob(seq);
+        return job ? (Object.fromEntries(Object.entries(job)) as Record<string, string>) : null;
+      });
+      if (env) await ci.runner({ name: "write notes", command: NOTES_SCRIPT, env, config: { retries: { limit: 1, delay: 10_000 }, timeout: 3 * 60_000 } });
+    } catch {
+      // The notes are rewritten in full on the next promotion.
+    }
   }
 }
+
+// Runs in the CI container: writes refs/notes/canon (one note per canon commit) and pushes it to the canon attempt.
+// The previous canon's notes are fetched first, so a note the judge could not regenerate is still carried forward.
+const NOTES_SCRIPT = [
+  `set -e`,
+  `rm -rf /tmp/canon-notes && git init -q /tmp/canon-notes && cd /tmp/canon-notes`,
+  `git config user.name "Canon judge" && git config user.email "judge@canon.rodeo"`,
+  `git fetch -q "$CANON_URL" main`,
+  `git fetch -q "$CANON_URL" refs/notes/canon:refs/notes/canon 2>/dev/null || { [ -n "$PREV_URL" ] && git fetch -q "$PREV_URL" refs/notes/canon:refs/notes/canon 2>/dev/null; } || true`,
+  `printf %s "$NOTES" | base64 -d > /tmp/canon-notes.json`,
+  `node -e 'const n=require("/tmp/canon-notes.json");n.forEach((x,i)=>require("fs").writeFileSync("/tmp/canon-note-"+i,x.sha+"\\n"+x.text))'`,
+  `for f in /tmp/canon-note-*; do sha=$(head -n 1 "$f"); tail -n +2 "$f" > /tmp/canon-note-body; git notes --ref=canon add -f -F /tmp/canon-note-body "$sha" 2>/dev/null || echo "skipped $sha"; done`,
+  `git push -q -f "$CANON_URL" refs/notes/canon:refs/notes/canon`,
+  `echo CANON_NOTES_PUSHED`,
+].join("\n");
 
 // Started by the judge when canon moved under an attempt. The judge already declared a new attempt from the current
 // canon for the same agent and fact; this re-applies the old attempt's change there and pushes it (what `canon refresh`

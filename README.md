@@ -18,7 +18,8 @@ the facts, and the accepted attempt becomes canon.
   either; once one lands, the other is re-applied on top of it and the combined code decides.
 - **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check.
 - **Why**: the fact chain. Every fact links to the attempt that made it true and to the attempts that failed it.
-  Failed attempts stay clonable, so they remain the project's memory.
+  Failed attempts stay clonable, so they remain the project's memory. The chain is in Git too, as notes on the canon
+  commits: `git clone https://canon.rodeo/p/farmstand.git`, fetch `refs/notes/canon`, then `git log --notes=canon`.
 
 The facts live in the repo as `canon.json`, so the canon survives outside Cloudflare. A fact works like a
 required check in branch protection, but it checks behaviour on a live preview. As in a merge queue, only a tested
