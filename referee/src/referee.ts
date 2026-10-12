@@ -28,7 +28,7 @@ import {
   type Mutant,
   type Mutation,
 } from "./protocol";
-import { platformFailure } from "./platform";
+import { edgeFailure, platformFailure } from "./platform";
 import { SCHEMA, UPGRADES } from "./schema";
 import { ground, parseAnswer, REVIEW_SCHEMA, reviewPrompt, type Review, type ReviewFile } from "./review";
 
@@ -703,8 +703,23 @@ export class Referee extends DurableObject<Env> {
         if (again.held) results[f.id] = { held: true, detail: again.detail };
       }
       const broke = facts.filter((f) => !results[f.id].held);
-      if (!broke.length) this.sql.exec(`UPDATE canon SET health = 'healthy', health_detail = NULL WHERE seq = ?`, live.seq);
-      else {
+      // Only Cloudflare's edge (or nobody) answered: the app wasn't reached, so nothing is known about the code. Look
+      // again every minute for ten minutes; rolling back can't fix an edge that isn't serving yet.
+      const tries = Number(this.meta("verifyTries") ?? 0);
+      if (broke.length && broke.every((f) => edgeFailure(results[f.id].detail))) {
+        if (tries < 10) {
+          this.setMeta("verifyTries", String(tries + 1));
+          this.setMeta("verifyDeploy", String(live.seq));
+          this.setMeta("production", JSON.stringify({ at: Date.now(), url, results }));
+          return void (await this.scheduleProductionCheck(60_000));
+        }
+        this.setMeta("verifyTries", "0");
+        this.sql.exec(`UPDATE canon SET health = 'unverified', health_detail = ? WHERE seq = ?`, `production didn't answer for ten minutes (${results[broke[0].id].detail}); nothing was rolled back`, live.seq);
+      } else if (!broke.length) {
+        this.setMeta("verifyTries", "0");
+        this.sql.exec(`UPDATE canon SET health = 'healthy', health_detail = NULL WHERE seq = ?`, live.seq);
+      } else {
+        this.setMeta("verifyTries", "0");
         const what = `broke “${broke[0].sentence}” in production: ${results[broke[0].id].detail}`;
         this.sql.exec(`UPDATE canon SET health = 'broken', health_detail = ? WHERE seq = ?`, what, live.seq);
         await this.rollBack(live, what);
@@ -812,6 +827,7 @@ export class Referee extends DurableObject<Env> {
     }
     const before = this.currentCanon()?.seq;
     await this.keepCanonReleased();
+    this.setMeta("rejudge", "1"); // Ready claims are judged (and autopiloted) again, under the rules as they are now
     await this.ctx.storage.setAlarm(Date.now() + 1_000); // and run the rest of the alarm's work (retries, mutation runs) now
     return { canonSeq: this.currentCanon()?.seq, reverted: this.currentCanon()?.seq !== before };
   }
@@ -881,6 +897,11 @@ export class Referee extends DurableObject<Env> {
     const broke: Array<{ fact: Fact; detail: string }> = [];
     for (const f of facts) {
       let r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
+      // Cloudflare's edge answering for the app (a new hostname coming up) never counts: wait for the app, ~2 minutes.
+      for (let i = 0; !r.held && edgeFailure(r.detail) && i < 8; i++) {
+        await new Promise((ok) => setTimeout(ok, 15_000));
+        r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
+      }
       if (!r.held) {
         await new Promise((ok) => setTimeout(ok, 3_000));
         r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);

@@ -847,6 +847,7 @@
       : rolled ? `Canon #${dep.seq} ${(dep.detail ?? "broke a fact in production").split(": ")[0]}${dep.revertedBy ? `; canon went back (#${dep.revertedBy})` : ""}. ${/rolled back to ([^.]+)/.exec(dep.detail ?? "") ? `Production rolled back to ${/rolled back to ([^.]+)/.exec(dep.detail)[1]}.` : dep.health === "rolled-back" ? "Production rolled back." : ""}`
       : dep?.health === "held" ? `Canon #${dep.seq} held back before release: it ${(dep.detail ?? "broke a fact").split(": ")[0]}. No visitor ever got it${dep.revertedBy ? `, and canon went back (#${dep.revertedBy})` : ""}.`
       : dep?.deployed === "failed" ? `Canon #${dep.seq} couldn’t deploy; production stays on the last good version`
+      : dep?.health === "unverified" ? `Canon #${dep.seq} is deployed, but production didn’t answer the checks; nothing was rolled back`
       : !prod ? "Production is checked every hour"
       : failing ? `${failing} fact${failing === 1 ? "" : "s"} failed on production ${ago(prod.at)}`
       : dep?.health === "healthy" && dep.factId ? `Canon #${dep.seq} is deployed and healthy: every fact held on production ${ago(prod.at)}`

@@ -15,3 +15,11 @@ const PLATFORM = [
 export function platformFailure(detail: string): boolean {
   return PLATFORM.some((p) => p.test(detail));
 }
+
+/**
+ * Whether a failed check never reached the app: Cloudflare's edge answered for it (520-530, e.g. 530 while a new
+ * workers.dev hostname comes up) or the request got no answer at all. The app's own 500 is the code; these are not.
+ */
+export function edgeFailure(detail: string): boolean {
+  return /returned 5(2\d|30)\b/.test(detail) || / failed: /.test(detail);
+}
