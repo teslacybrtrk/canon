@@ -111,6 +111,18 @@ second train landed two more facts, and, after one more fix (a repaired attempt 
 re-applied), the last one landed alone. In all: eight of eight facts, three releases, no wrong rejections, nothing held
 back, 14 attempts re-applied by the judge, 9 of them repaired.
 
+Then the same test again on a fresh project, with both fixes in and nobody touching it:
+
+| Run | Facts landed | Time to all landed | Releases | Wrong rejections | Held back | Re-applied by the judge | Repaired (peak) |
+|---|---|---|---|---|---|---|---|
+| 1 (repair built mid-run) | 8 of 8 | (stalled, then fixed) | 3 | 0 | 0 | 14 | 9 |
+| 2 (untouched) | **8 of 8** | **21 min** (3 at 7 min, 5 at 12, 7 at 18, 8 at 20) | 4 (trains of 3, 2, 2, then one alone) | **0** | **0** | 31 | 6 |
+
+Run 2's compute, from Workflows' own records: 143 workflow runs, 161 minutes of work once their time waiting in the
+queue is taken out (13,876 s of wall time, 4,230 s of it queued): about 20 container-minutes per landed fact, and at
+most $1.07 for the run (every busy second priced as a fully busy `standard-4` at list price), so about 13 cents per
+landed fact. Still one project and scripted agents: the next measurement is real agents, more of them.
+
 One thing the load did break: under it, a correct change missed the 400 ms page-speed fact (p95 1.7 s) and was
 rejected. Now a speed fact that fails also runs on canon's own preview at that moment; if canon is just as slow, the
 verdict is a platform error the judge retries, not a rejection. Not measured yet: hundreds of agents, or several busy
