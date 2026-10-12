@@ -241,6 +241,102 @@ export class TrainAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   }
 }
 
+// Checks that are checked. Started by the judge when a claim is Ready: in the attempt's checkout, deliberately break its
+// own change (drop a one-line guard, flip a comparison, swap an error status for 200), at most six ways, and build each
+// break as a preview of its own. The judge then runs the facts on every one: a break no fact notices is code no check
+// covers. The previews are deleted afterwards.
+export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
+  protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
+    const { repo, sha } = event.payload;
+    const referee = refereeForRepo(this.env, repo);
+    const base = await step.do("mutation job", async () => (await referee.mutationJob(repo))?.base ?? null);
+    if (!base) return;
+    const prefix = `${repo}-mut`;
+    let built: Array<{ file: string; line: number; op: string; before: string; after: string; preview: string | null }> = [];
+    try {
+      const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
+      const ran = await deps.runner({
+        name: "build mutants",
+        command: MUTANT_SCRIPT,
+        env: { BASE: base, PREFIX: prefix, MAX: "6", MUTATOR: btoa(MUTATOR_JS) },
+        cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+        config: { retries: { limit: 0, delay: 1_000 }, timeout: 12 * 60_000 },
+      });
+      const out = typeof ran.logs.stdout === "string" ? ran.logs.stdout : "";
+      const line = out.split("\n").find((l) => l.startsWith("CANON_MUTANTS "));
+      built = line ? JSON.parse(line.slice("CANON_MUTANTS ".length)) : [];
+    } catch {
+      built = [];
+    }
+    await step.do("judge mutants", { timeout: "15 minutes" }, () => referee.mutantsBuilt(repo, sha, built));
+    try {
+      await ci.runner({
+        name: "delete mutant previews",
+        command: built.filter((m) => m.preview).map((m) => `npx wrangler preview delete --name ${m.preview} >/dev/null 2>&1 || true`).join("\n") || "true",
+        cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+      });
+    } catch {
+      // Leftover previews are harmless; scripts/reset-project.sh removes them too.
+    }
+  }
+}
+
+// In the attempt's checkout: list the lines the attempt added (git diff from where it forked), make up to MAX simple
+// breaks of them, and build each as a preview named PREFIX<n>, restoring the file after each. The generator is a
+// small Node script (MUTATOR_JS, passed base64) so no shell quoting touches it; it prints one CANON_MUTANTS JSON line.
+const MUTATOR_JS = String.raw`const fs = require("fs");
+const [cmd, arg] = process.argv.slice(2);
+const MAX = +process.env.MAX || 6;
+if (cmd === "gen") {
+  const d = fs.readFileSync("/tmp/canon-mut.diff", "utf8").split("\n");
+  let file = null, ln = 0;
+  const added = [];
+  for (const l of d) {
+    if (l.startsWith("+++ b/")) file = l.slice(6);
+    else if (l.startsWith("@@")) { const m = /\+(\d+)/.exec(l); ln = m ? +m[1] : 0; }
+    else if (l.startsWith("+") && !l.startsWith("+++")) { added.push({ file, line: ln, text: l.slice(1) }); ln++; }
+  }
+  const out = [], used = new Set();
+  const add = (a, op, after) => { const k = a.file + ":" + a.line; if (used.has(k)) return; used.add(k); out.push({ file: a.file, line: a.line, op, before: a.text.trim(), after: after.trim() }); };
+  for (const a of added) {
+    const t = a.text, s = t.trim();
+    if (!s || s.startsWith("//") || s.startsWith("*")) continue;
+    if (/^if\s*\(.*\)\s*return\b.*;$/.test(s)) { add(a, "removed the guard", ""); continue; }
+    const st = /\b(409|400|403|404|422)\b/.exec(t);
+    if (st && /status|Response/.test(t)) { add(a, st[1] + " \u2192 200", t.replace(st[1], "200")); continue; }
+    for (const [f, r] of [["!==", "==="], ["===", "!=="], [">=", ">"], ["<=", "<"], [" > ", " >= "], [" < ", " <= "], ["&&", "||"]]) {
+      if (t.includes(f)) { add(a, f.trim() + " \u2192 " + r.trim(), t.replace(f, r)); break; }
+    }
+  }
+  fs.writeFileSync("/tmp/canon-mutants.json", JSON.stringify(out.slice(0, MAX)));
+  console.log(out.slice(0, MAX).length);
+} else if (cmd === "apply") {
+  const m = JSON.parse(fs.readFileSync("/tmp/canon-mutants.json", "utf8"))[+arg];
+  const L = fs.readFileSync(m.file, "utf8").split("\n");
+  L[m.line - 1] = m.after ? L[m.line - 1].replace(m.before, m.after) : "";
+  fs.writeFileSync(m.file, L.join("\n"));
+} else if (cmd === "report") {
+  const ms = JSON.parse(fs.readFileSync("/tmp/canon-mutants.json", "utf8"));
+  const ok = new Set(fs.readFileSync("/tmp/canon-mutants.out", "utf8").split("\n").filter((l) => l.endsWith(" ok")).map((l) => +l.split(" ")[0]));
+  console.log("CANON_MUTANTS " + JSON.stringify(ms.map((m, i) => ({ ...m, preview: ok.has(i) ? process.env.PREFIX + i : null }))));
+}
+`;
+const MUTANT_SCRIPT = [
+  `set +e`,
+  `printf %s "$MUTATOR" | base64 -d > /tmp/canon-mutator.js`,
+  `git cat-file -e "$BASE^{commit}" 2>/dev/null || git fetch -q --unshallow 2>/dev/null || true`,
+  `git diff -U0 "$BASE" HEAD -- src > /tmp/canon-mut.diff`,
+  `n=$(node /tmp/canon-mutator.js gen)`,
+  `i=0; : > /tmp/canon-mutants.out`,
+  `while [ "$i" -lt "\${n:-0}" ]; do`,
+  `  node /tmp/canon-mutator.js apply "$i"`,
+  `  if npx wrangler preview --name "$PREFIX$i" --json > /tmp/canon-mut-$i.log 2>&1; then echo "$i ok" >> /tmp/canon-mutants.out; else echo "$i no" >> /tmp/canon-mutants.out; fi`,
+  `  git checkout -q -- src`,
+  `  i=$((i+1))`,
+  `done`,
+  `node /tmp/canon-mutator.js report`,
+].join("\n");
+
 // Runs in the CI container: applies each rider's change (everything since it forked, except canon.json) in order.
 const TRAIN_SCRIPT = [
   `set -e`,

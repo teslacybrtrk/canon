@@ -48,7 +48,8 @@
     { "name": "canon-verify", "binding": "CI_WORKFLOW", "class_name": "VerifyAttempt" },
     { "name": "canon-promote", "binding": "PROMOTE_WORKFLOW", "class_name": "PromoteAttempt" },
     { "name": "canon-refresh", "binding": "REFRESH_WORKFLOW", "class_name": "RefreshAttempt" },
-    { "name": "canon-train", "binding": "TRAIN_WORKFLOW", "class_name": "TrainAttempt" }
+    { "name": "canon-train", "binding": "TRAIN_WORKFLOW", "class_name": "TrainAttempt" },
+    { "name": "canon-mutate", "binding": "MUTATE_WORKFLOW", "class_name": "MutateAttempt" }
   ],
   "r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "canon-ci-snapshots" }],
 
@@ -57,7 +58,7 @@
     // Bump to give every project a fresh referee (see scripts/reset-project.sh).
     // "true" publishes canon.rodeo/canon.git and /src (setup.sh sets it to "false" for your own Canon).
     "SOURCE_PUBLIC": "true",
-    "REFEREE_EPOCH": "15",
+    "REFEREE_EPOCH": "16",
     "BACKUP_BUCKET_NAME": "canon-ci-snapshots",
     "CLOUDFLARE_ACCOUNT_ID": "2d9aba350caa70abf3ce6c910950ffd0",
     // Previews are "<preview-name>-<worker-name>.<subdomain>.workers.dev"; production for each project is its

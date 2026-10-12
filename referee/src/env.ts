@@ -9,6 +9,7 @@ export type Env = CiBindings & {
   PROMOTE_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   REFRESH_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   TRAIN_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
+  MUTATE_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   ASSETS: Fetcher;
   SOURCE: Artifacts; // namespace canon-src: Canon's own source
   SOURCE_PUBLIC: string; // "true" publishes canon.git and /src

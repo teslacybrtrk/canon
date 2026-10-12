@@ -100,6 +100,16 @@ CREATE TABLE IF NOT EXISTS trains (
   created_at INTEGER NOT NULL
 );
 
+-- Checks that are checked: deliberate breaks of an attempt's own change (mutants), each built as a preview and run
+-- against the facts. A break no fact notices is code no check covers.
+CREATE TABLE IF NOT EXISTS mutations (
+  attempt_id TEXT NOT NULL,
+  sha        TEXT NOT NULL,
+  json       TEXT NOT NULL,            -- { status, total, caught, survivors: [...], mutants: [...] }
+  at         INTEGER NOT NULL,
+  PRIMARY KEY (attempt_id, sha)
+);
+
 -- Every push the judge heard, for the run report's push-to-verdict times.
 CREATE TABLE IF NOT EXISTS pushes (
   attempt_id TEXT NOT NULL,

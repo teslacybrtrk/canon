@@ -25,6 +25,8 @@ import {
   type AutoAccept,
   type Charter,
   type ProbeCheck,
+  type Mutant,
+  type Mutation,
 } from "./protocol";
 import { SCHEMA, UPGRADES } from "./schema";
 import { diffTrees, inScope } from "./scope";
@@ -100,7 +102,9 @@ export class Referee extends DurableObject<Env> {
     const sentences = new Map(facts.map((f) => [f.id, f.sentence]));
     const claims = this.rows(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 200`).map((r) => {
       const claim = toClaim(r);
-      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict: this.latestVerdict(claim.attemptId), clashes: this.clashesFor(claim.id) };
+      const verdict = this.latestVerdict(claim.attemptId);
+      const m = verdict ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, verdict.sha)[0] : null;
+      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict, clashes: this.clashesFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null };
     });
     return {
       project: this.meta("project") ?? "",
@@ -957,6 +961,7 @@ export class Referee extends DurableObject<Env> {
     if (!claimId) return;
     try {
       if (verdict.outcome === "ready") await this.findClashes(claimId);
+      if (verdict.outcome === "ready") await this.startMutation(claimId, verdict);
       if (verdict.outcome === "behind") await this.autoRefresh(claimId);
     } catch {
       // Best effort: the verdict stands either way.
@@ -1217,6 +1222,68 @@ export class Referee extends DurableObject<Env> {
     }
   }
 
+  // ---- Checks that are checked: mutation testing ---------------------------------------------------------------
+
+  /** A Ready claim with a probe fact gets its checks tested once per commit: CI builds deliberate breaks of its change. */
+  private async startMutation(claimId: string, verdict: Verdict) {
+    const claim = this.claim(claimId);
+    const attempt = claim ? this.attempt(claim.attemptId) : null;
+    if (!claim || !attempt?.baseSha || this.fact(claim.factId)?.check.kind !== "probe") return;
+    if (this.rows(`SELECT 1 FROM mutations WHERE attempt_id = ? AND sha = ?`, attempt.id, verdict.sha).length) return;
+    const running: Mutation = { status: "running", total: 0, caught: 0, mutants: [], at: Date.now() };
+    this.sql.exec(`INSERT INTO mutations (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, attempt.id, verdict.sha, JSON.stringify(running), Date.now());
+    try {
+      await this.env.MUTATE_WORKFLOW.create({ id: `mutate-${attempt.id}-${verdict.sha.slice(0, 12)}`, params: this.ciParams(attempt.id, verdict.sha) });
+    } catch {
+      this.sql.exec(`UPDATE mutations SET json = ? WHERE attempt_id = ? AND sha = ?`, JSON.stringify({ ...running, status: "none" }), attempt.id, verdict.sha);
+    }
+  }
+
+  /** What the mutation Workflow needs: where the attempt forked from (its own change is the diff since then). */
+  mutationJob(repo: string): { base: string } | null {
+    const attempt = this.attempt(repo);
+    return attempt?.baseSha ? { base: attempt.baseSha } : null;
+  }
+
+  /**
+   * The mutants are built: run the attempt's own fact and every canon probe fact on each. A mutant is caught when any
+   * fact fails on it; one that every fact still passes is a change to the code that no check notices.
+   */
+  async mutantsBuilt(repo: string, sha: string, built: Array<Omit<Mutant, "caught" | "by"> & { preview: string | null }>) {
+    const attempt = this.attempt(repo);
+    const claim = attempt?.claimId ? this.claim(attempt.claimId) : null;
+    const own = claim ? this.fact(claim.factId) : null;
+    if (!attempt || !own) return;
+    const facts = [own, ...this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact)].filter((f) => f.check.kind === "probe");
+    const mutants: Mutant[] = [];
+    for (const m of built) {
+      if (!m.preview) {
+        mutants.push({ file: m.file, line: m.line, op: m.op, before: m.before, after: m.after, caught: null });
+        continue;
+      }
+      const url = this.env.PREVIEW_URL_TEMPLATE.replace("{name}", m.preview);
+      try {
+        await waitForPreview(url);
+      } catch {
+        mutants.push({ file: m.file, line: m.line, op: m.op, before: m.before, after: m.after, caught: null });
+        continue;
+      }
+      let by: string | undefined;
+      for (const f of facts) {
+        const r = await runCheck(f.check as ProbeCheck, url);
+        if (!r.held && !/failed:|returned 5\d\d/.test(r.detail)) { by = f.id; break; }
+      }
+      mutants.push({ file: m.file, line: m.line, op: m.op, before: m.before, after: m.after, caught: !!by, ...(by ? { by } : {}) });
+    }
+    const checked = mutants.filter((m) => m.caught !== null);
+    const result: Mutation = { status: checked.length || mutants.length ? "done" : "none", total: checked.length, caught: checked.filter((m) => m.caught).length, mutants, at: Date.now() };
+    this.sql.exec(`INSERT OR REPLACE INTO mutations (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, repo, sha, JSON.stringify(result), Date.now());
+    this.broadcast();
+    // With a charter threshold, autopilot was waiting for this.
+    const v = this.latestVerdict(repo);
+    if (claim && v && v.sha === sha) await this.autopilot(claim.id, v);
+  }
+
   // ---- Merge trains ----------------------------------------------------------------------------------------------
 
   /** When the boarding window closes: two or more riders leave as a merge train, one leaves on its own. */
@@ -1394,6 +1461,15 @@ export class Referee extends DurableObject<Env> {
     if (heldTimes >= 2) return { wait: `it was held back at release ${heldTimes} times, so autopilot leaves it to the owner` };
     if (fact.origin !== "backlog" && policy !== "charter") return { wait: "an agent proposed this fact, and autopilot only lands facts people wrote" };
     if (fact.replaces && charter.locked?.includes(fact.replaces)) return { wait: `it changes “${this.fact(fact.replaces)?.sentence ?? fact.replaces}”, which the charter locks` };
+    if (typeof charter.mutation === "number") {
+      const v = this.latestVerdict(claim.attemptId);
+      const row = v ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, v.sha)[0] : null;
+      const m = row ? (JSON.parse(row.json as string) as Mutation) : null;
+      if (!m || m.status === "running") return { wait: "the judge is testing its checks first (deliberate breaks of its change)" };
+      if (m.status === "done" && m.total > 0 && m.caught / m.total < charter.mutation) {
+        return { wait: `its facts caught ${m.caught} of ${m.total} deliberate breaks of its change, and the charter wants ${Math.round(charter.mutation * 100)}%` };
+      }
+    }
     const touched = this.latestVerdict(claim.attemptId)?.review ?? [];
     if (touched.length) return { wait: `it changes ${touched.slice(0, 3).join(", ")}${touched.length > 3 ? " and more" : ""}, which the charter routes to review` };
     const reasons: string[] = [fact.origin === "backlog" ? "a backlog fact people wrote" : ""];

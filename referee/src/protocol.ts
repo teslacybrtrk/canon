@@ -69,6 +69,9 @@ export type AutoAccept = "off" | "backlog" | "charter";
 export interface Charter {
   locked?: string[]; // canon facts no automatic decision may retire: only a person changes them
   priority?: string[]; // when two Ready facts clash, the one listed first wins (unlisted: the earlier-proposed fact)
+  // Checks that are checked: the share of deliberate breaks (mutants) of an attempt's change its facts must catch
+  // before autopilot lands it, from 0 to 1. Unset: the score is shown but never blocks.
+  mutation?: number;
   // File globs no automatic decision may land: an attempt that changes one (auth, migrations, deploy config...) waits
   // for the owner, a person or an owner agent, however good its verdict. Facts settle behaviour; these get a reviewer.
   review?: string[];
@@ -172,11 +175,29 @@ export interface Attempt {
 
 // ---- Move 1: read ---------------------------------------------------------------
 
+// A deliberate break of an attempt's own change, built as a preview and run against the facts.
+export interface Mutant {
+  file: string;
+  line: number;
+  op: string; // what was broken, e.g. "removed the guard", "409 → 200", "=== → !=="
+  before: string;
+  after: string;
+  caught: boolean | null; // a fact failed on it; null: it didn't build or couldn't be checked
+  by?: string; // the fact that caught it
+}
+export interface Mutation {
+  status: "running" | "done" | "none";
+  total: number; // mutants that built and were checked
+  caught: number;
+  mutants: Mutant[];
+  at: number;
+}
+
 export interface CanonState {
   project: string;
   canon: { attemptId: string; sha: string; seq: number; previewUrl: string | null } | null;
   facts: Fact[]; // canon + proposed
-  claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[] }>;
+  claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[]; mutation?: Mutation | null }>;
   policy: { autoAccept: AutoAccept; charter: Charter | null };
   // The last time every canon probe fact ran against production (hourly, and after each deploy).
   production: { at: number; url: string; results: Record<string, { held: boolean; detail: string }> } | null;
