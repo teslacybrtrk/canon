@@ -12,9 +12,10 @@ judge checks every canon fact against a live Workers Preview of that attempt. A 
 the facts, and the accepted attempt becomes canon.
 
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
-- **Conflicts**: a conflict is a contradiction between attempts. Overlapping edits that keep the facts are fine (the
+- **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the
   judge replays an attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that
-  breaks a fact is not. Two Ready attempts that can't both land are flagged as a clash before anyone accepts either.
+  breaks a fact is not. Two Ready attempts that built the same behaviour opposite ways are flagged as a clash before anyone accepts either; a
+  feature that is simply missing from the other attempt is not a clash.
 - **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check.
 - **Why**: the fact chain. Every fact links to the attempt that made it true and to the attempts that failed it.
   Failed attempts stay clonable, so they remain the project's memory.
@@ -110,6 +111,11 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   inside lines it can't move.
 - **Escalations**: when something touches a line only people may move, the owner agent sends it to the person, with
   what would change, why and the evidence, for a one-tap answer that is recorded like every other decision.
+- **Checks that are checked**: the judge breaks an implementation on purpose (removes the guard, skips the
+  transaction) to confirm a fact's check notices, and draws random inputs only after a commit is frozen. A fact is only
+  as strong as its check; this makes the strength visible.
+- **Design review where it matters**: changes to auth, schemas or deploy config also need a reviewer's sign-off,
+  recorded beside the facts.
 - **Merge trains**: batch and speculate accepts, as merge queues do, for hundreds of agents.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
