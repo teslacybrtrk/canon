@@ -61,6 +61,9 @@ price (a bulk discount nobody approved merged without a conflict and broke "The 
 other 7 stopped at text conflicts for a person to resolve. Reproduce it with `node scripts/baseline.mjs`; the report is
 [docs/baseline.md](docs/baseline.md). Canon's own numbers come from the judge's records, live at [canon.rodeo/p/farmstand/stats](https://canon.rodeo/p/farmstand/stats) and [canon.rodeo/p/rodeo/stats](https://canon.rodeo/p/rodeo/stats).
 
+One run is evidence, not a benchmark. Not measured yet: compute cost per landed fact, a comparison with a
+conventional merge queue, and scale beyond 18 agents.
+
 ## How it compares
 
 | | Merge queue | AI review of the diff | Held-out tests | Canon |
