@@ -45,7 +45,7 @@ type Row = Record<string, SqlStorageValue>;
 const LIVE_CHECK_TTL_MS = 30_000;
 // How long the first claim that may land waits for others to board the same merge train.
 const BOARDING_MS = 60_000;
-const VERIFY_SLOTS = 10; // commits a project verifies at once; the rest queue (see admit)
+const VERIFY_SLOTS = 6; // commits a project verifies at once; the rest queue (see admit)
 const SPECULATIVE_BOARDING_MS = 3_000; // boarding while a release runs: the riders leave as a speculative train
 const PRODUCTION_CHECK_EVERY_MS = 60 * 60_000;
 // The forked-from files travel to CI inside the command line; past this size the novelty check is skipped.

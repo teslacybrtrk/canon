@@ -16,7 +16,8 @@ candidate; if not, canon steps back.
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
 - **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the judge replays an
   attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that breaks a fact is
-  not. Two attempts that build the same behaviour opposite ways get a heads-up while they are still being written,
+  not. Before a push, `canon overlap` lists the other attempts changing the same files and what each is building.
+  Two attempts that build the same behaviour opposite ways get a heads-up while they are still being written,
   are flagged as a clash once both are Ready (before anyone accepts either), and once one lands, the other is
   re-applied on top of it and the combined code decides.
 - **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check. The
@@ -76,7 +77,24 @@ setup included, so they run higher than the judge's own records (59 verdicts, 26
 The judge's stats keep a running `computeUsdEstimate` of the part it times itself (push to verdict and timed mutation
 runs; $0.33 for the run), which is why it's lower than the full Workflows total.
 
-One run is evidence, not a benchmark. Not measured yet: scale beyond 18 agents.
+One run is evidence, not a benchmark.
+
+## Load test: 30 pushes at once
+
+Thirty agents' attempts on a throwaway project each pushed a commit within the same second (autopilot off, so every
+push is a pure verification: a container install, a Workers Preview, the command facts, every probe). Same 30 commits,
+three judge configurations:
+
+| Verification slots per project | Verdicts | Platform errors | First | Median | p90 | Last |
+|---|---|---|---|---|---|---|
+| unlimited | most failed | the CI runner's RPC sessions shut down, and retries failed again | | | | |
+| 10 | 30 | 3 (retried) | | 803 s | 879 s | 904 s |
+| **6** (the default now) | **30** | **0** | 48 s | 115 s | 215 s | 231 s |
+
+With no limit the platform buckles. At 10, a few builds stuck in platform retries hold their slots and the queue backs
+up. At 6, every push gets a real verdict in under four minutes. So the judge now admits six verifications per project
+at a time and queues the rest in their own Workflows (`admit` in referee.ts). Not measured yet: hundreds of agents, or
+several busy projects sharing one account's container limit.
 
 ## Live tests after the run
 
@@ -202,7 +220,7 @@ to wrangler, so give the agent key only to agents you run.
 
 Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
 (for example, Previews that pin Durable Object code per commit, version overrides that reach Durable Objects, and
-Workers Builds for forks). All twenty-three are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+Workers Builds for forks). All twenty-four are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
 ## Roadmap
 

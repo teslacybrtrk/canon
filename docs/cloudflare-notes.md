@@ -120,6 +120,13 @@ Found while building, October 2026.
     were less often right. A 24,000-token budget fixed it. Llama 3.3 70B in JSON mode returned an empty list for the
     same prompt. Kimi also answered "3040: Capacity temporarily exceeded" once. *We did:* retry, then fall back to
     Kimi K2.6.
+24. **The CI runner fails under concurrent load well below the container limit.** With `max_instances` at 40, thirty
+    simultaneous verifications (each an install, a `wrangler preview` and a command run through `@cloudflare/ci`) mostly
+    failed with "RPCTransportError: RPC session was shut down by disposing the main stub" and, twice, "The request
+    exceeded the maximum Workers subrequest depth" — and retries failed again. Ten at a time still hit a few. Six at a
+    time ran clean. *We did:* admission control in the judge (six per project, the rest queue in their Workflow).
+    *Would help:* a documented safe concurrency for `@cloudflare/ci`, or backpressure from the runner instead of a
+    dropped session.
 
 ## Things that worked especially well
 

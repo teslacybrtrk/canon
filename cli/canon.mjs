@@ -265,7 +265,8 @@ async function overlap() {
   if (!o.paths.length) return console.log("You haven't changed any files yet.");
   if (!o.overlaps.length) return console.log(`No other attempt in flight changes ${o.paths.slice(0, 6).join(", ")}${o.paths.length > 6 ? " and the rest" : ""}.`);
   console.log("Others changing the same files:");
-  for (const x of o.overlaps) console.log(`  ${x.agent} (${x.status}) is making "${x.sentence}" true and changes ${x.files.join(", ")}`);
+  for (const x of o.overlaps.slice(0, 8)) console.log(`  ${x.agent} (${x.status}) is making "${x.sentence}" true and changes ${x.files.join(", ")}`);
+  if (o.overlaps.length > 8) console.log(`  …and ${o.overlaps.length - 8} more`);
   console.log("Overlapping files are fine when the behaviours agree. If yours could break one of theirs, change course now, or say why in your claim.");
   if (o.headsUp.length + o.clashes.length) console.log(`${o.headsUp.length + o.clashes.length} of these already conflict in behaviour: see HEADS-UP / CLASH in canon verdict.`);
 }

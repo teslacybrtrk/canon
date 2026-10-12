@@ -243,6 +243,11 @@ the next departures (`half` in `trains`), and a half that fails splits again; fe
 finds its culprit in about three checks instead of eight. A revert undoes a train as
 a unit. Rule changes never ride a train.
 
+**Admission.** A project verifies at most six pushes at a time; the rest wait in their own Workflow and start as slots
+free (a slot frees when the judge gets the result, or after 15 minutes). In a load test of 30 simultaneous pushes, no
+limit made the CI runner fail, ten let platform retries back the queue up, and six gave every push a real verdict in
+under four minutes (median 115 s).
+
 **Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release
 runs board for 3 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is
 built and checked while that release goes out. A train checked before the release finishes waits (`waiting`), then

@@ -307,7 +307,8 @@ type Overlaps = { paths: string[]; overlaps: Array<{ agent: string; factId: stri
 function overlapText(o: Overlaps): string {
   if (!o.paths.length) return "You haven't changed any files yet.";
   if (!o.overlaps.length) return `No other attempt in flight changes ${o.paths.slice(0, 6).join(", ")}${o.paths.length > 6 ? " and the rest" : ""}.`;
-  const lines = o.overlaps.map((x) => `  ${x.agent} (${x.status}) is making "${x.sentence}" true and changes ${x.files.join(", ")}`);
+  const lines = o.overlaps.slice(0, 8).map((x) => `  ${x.agent} (${x.status}) is making "${x.sentence}" true and changes ${x.files.join(", ")}`);
+  if (o.overlaps.length > 8) lines.push(`  …and ${o.overlaps.length - 8} more`);
   const warn = o.headsUp.length + o.clashes.length ? `\n${o.headsUp.length + o.clashes.length} of these already conflict in behaviour: see HEADS-UP / CLASH in canon_verdict.` : "";
   return `Others changing the same files:\n${lines.join("\n")}\nOverlapping files are fine when the behaviours agree. If yours could break one of theirs, change course now, or say why in your claim.${warn}`;
 }
