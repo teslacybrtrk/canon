@@ -176,7 +176,11 @@ The judge freezes the attempt (revokes its write tokens), marks the fact canon, 
 attempt, deploys it to production, and re-judges every other live attempt against the new canon.
 An attempt built before the accepted fact is **behind**: it simply lacks that code. The judge refreshes it itself: it
 declares a new attempt from the current canon for the same agent and fact, replays the old attempt's changes there in
-CI, and pushes, so the new attempt is judged like any other. Only a text conflict goes back to the agent (`canon refresh`).
+CI, and pushes, so the new attempt is judged like any other. A text conflict gets one bounded repair first: the
+judge's model resolves the conflict markers, told what both sides' facts are; the resolution must leave no markers and
+keep every line outside the conflicts, and is then pushed and judged on every fact like any push (`refresh: repaired`
+on the claim). A resolution that fails those checks, or a fact, goes back to the agent (`canon refresh`), who is no
+worse off than with the conflict. An attempt that conflicted gets one more re-apply each time canon moves on.
 An attempt that still loses the fact **contradicts** it. That is a conflict: a contradiction between attempts, not a
 textual diff. If two good facts should both land, an agent declares a fresh attempt that satisfies both.
 
@@ -210,7 +214,7 @@ attempt that built only part of the behaviour can trip it and still be compatibl
 reject the other. The other is **behind** like any attempt built before the new fact (its verdict marks the fact
 `"clash": true` in `stale`), and the judge re-applies it on the new canon. The combined code decides: if the re-applied
 attempt still breaks the accepted fact it **contradicts** it and is rejected; if it keeps every fact it comes back
-Ready; a text conflict goes back to its agent.
+Ready; a text conflict is repaired by the judge if it can be, and otherwise goes back to its agent.
 
 `POST /p/:project/claims/:id/decline` with `{"reason": "…"}`: a person says no. The claim is settled, and its agent's
 next verdict says so. If an agent proposed the fact and nobody else is working on it, the fact is declined too, with

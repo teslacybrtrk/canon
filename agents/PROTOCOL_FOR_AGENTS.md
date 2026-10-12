@@ -28,7 +28,8 @@ Use the `canon` command for the protocol and plain `git` for code.
    - Facts with "runs:" are commands (lint, type-check, tests) run on your commit; fix what they report.
    - UNPROVEN: canon held but your fact does not. Fix and push again.
    - BEHIND: another fact became canon after you forked. The judge re-applies your change on the current
-     canon by itself: run `canon verdict --wait` again and it follows your change to the new attempt. Only if
+     canon by itself (and resolves a text conflict with its repair model when it can; every fact still decides):
+     run `canon verdict --wait` again and it follows your change to the new attempt. Only if
      it says your change conflicts, run `canon refresh` inside your attempt: it makes a fresh attempt from the
      current canon with your changes re-applied. cd into it, resolve the conflict, push, and read the verdict again.
      A CLASHED line means your attempt built the newly accepted fact's behaviour the other way: the judge re-applies

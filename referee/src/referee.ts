@@ -1359,7 +1359,8 @@ export class Referee extends DurableObject<Env> {
   private async autoRefresh(claimId: string) {
     const claim = this.claim(claimId);
     const old = claim ? this.attempt(claim.attemptId) : null;
-    if (claim?.status !== "behind" || claim.refresh || !old?.headSha || !old.baseSha) return;
+    // A refresh under way or handed back blocks another; a repaired one is done (its attempt can fall behind again).
+    if (claim?.status !== "behind" || (claim.refresh && claim.refresh !== "repaired") || !old?.headSha || !old.baseSha) return;
     this.sql.exec(`UPDATE claims SET refresh = 'started' WHERE id = ?`, claim.id);
     let fresh: Declared | null = null;
     try {
@@ -1624,7 +1625,7 @@ export class Referee extends DurableObject<Env> {
   private async retryConflicts() {
     const seen = JSON.parse(this.meta("conflictSeq") ?? "{}") as Record<string, number>;
     const seq = this.canonSeq();
-    for (const c of this.rows(`SELECT * FROM claims WHERE status = 'behind' AND refresh LIKE 'conflict%' LIMIT 10`).map(toClaim)) {
+    for (const c of this.rows(`SELECT * FROM claims WHERE status = 'behind' AND (refresh LIKE 'conflict%' OR refresh = 'repaired') LIMIT 10`).map(toClaim)) {
       if ((seen[c.id] ?? 0) >= seq) continue;
       seen[c.id] = seq;
       this.sql.exec(`UPDATE claims SET refresh = NULL WHERE id = ?`, c.id);

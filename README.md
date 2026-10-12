@@ -15,7 +15,7 @@ candidate; if not, canon steps back.
 
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
 - **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the judge replays an
-  attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that breaks a fact is
+  attempt onto the new canon itself, and repairs a text conflict with a model when it can; the facts still decide). A clean merge that breaks a fact is
   not. Before a push, `canon overlap` names the other attempts changing the same functions as you, and what each is
   building (a hook tells agents as they edit).
   Two attempts that build the same behaviour opposite ways get a heads-up while they are still being written,
@@ -101,6 +101,15 @@ up. At 6, every push gets a real verdict in under four minutes, and a repeat on 
 waste capacity; more (8) contend and are slower too. At 60 pushes the queue simply runs twice as long: every one still
 got a real verdict, the last in under 11 minutes. So the judge admits six verifications per project at a time and
 queues the rest in their own Workflows (`admit` in referee.ts).
+
+**Landing under load, not just verifying.** Thirty attempts on autopilot (merge trains on) raced to land eight backlog
+facts, all pushed in the same second. The first merge train landed five facts after 9 minutes. The other three facts'
+attempts all edited the same request handler as that train, and all eleven hit text conflicts when the judge re-applied
+them: with scripted agents that can't resolve conflicts, they stalled. That's what bounded repair is for (see
+PROTOCOL.md): with it, the repair model resolved ten of those conflicts, every repaired attempt passed every fact, a
+second train landed two more facts, and, after one more fix (a repaired attempt that fell behind again wasn't being
+re-applied), the last one landed alone. In all: eight of eight facts, three releases, no wrong rejections, nothing held
+back, 14 attempts re-applied by the judge, 9 of them repaired.
 
 One thing the load did break: under it, a correct change missed the 400 ms page-speed fact (p95 1.7 s) and was
 rejected. Now a speed fact that fails also runs on canon's own preview at that moment; if canon is just as slow, the
