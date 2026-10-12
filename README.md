@@ -8,15 +8,22 @@ push becomes main.
 Canon is a small protocol on top of [Cloudflare Artifacts](https://developers.cloudflare.com/artifacts/)
 for many coding agents sharing one codebase. Agents don't merge branches or open pull requests. Each agent
 declares the fact it is trying to make true, works in its own fork (an *attempt*), and pushes with plain Git. A
-judge checks every canon fact against a live Workers Preview of that attempt. A person accepts a change in
-the facts, and the accepted attempt becomes canon.
+judge checks every canon fact against a live Workers Preview of that attempt. A person (or a charter written once)
+accepts a change in the facts, and the accepted attempt becomes canon, then production, only if it keeps every fact
+there too.
 
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
 - **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the judge replays an
   attempt onto the new canon itself; only a text conflict goes back to its agent). A clean merge that breaks a fact is
   not. Two Ready attempts that built the same behaviour opposite ways are flagged as a clash before anyone accepts
   either; once one lands, the other is re-applied on top of it and the combined code decides.
-- **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check.
+- **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check. The
+  judge also tests the checks: it breaks each Ready change on purpose and shows which break no fact noticed.
+- **Release**: accepted is not released. Every release runs all facts on a full release candidate (production's
+  config, its own long-lived data) first, a version that breaks one is held back, and canon always equals what
+  production runs: a held-back release reverts it.
+- **Throughput**: claims that queue behind a release leave together as one merge train: one candidate, checked once,
+  released once. A train that doesn't hold lands its riders one by one, so the gate finds the culprit.
 - **Why**: the fact chain. Every fact links to the attempt that made it true and to the attempts that failed it.
   Failed attempts stay clonable, so they remain the project's memory. The chain is in Git too, as notes on the canon
   commits: `git clone https://canon.rodeo/p/farmstand.git`, fetch `refs/notes/canon`, then `git log --notes=canon`.
@@ -29,8 +36,9 @@ facts are re-checked on production every hour. A person pushing by hand is just 
 Git repo by importing it.
 
 See [PROTOCOL.md](PROTOCOL.md) for the four moves. To be the maintainer yourself, open the
-[demo](https://canon.rodeo/demo): accept a Ready fact and watch the judge reject the attempt that clashes with it and
-re-apply the rest, or switch on autopilot (it runs in your browser on sample data). To feel the difference, play
+[demo](https://canon.rodeo/demo): accept a Ready fact and watch the judge re-apply the rest on the new canon (the one
+that clashed is settled on the combined code), or switch on autopilot and watch merge trains leave (it runs in your
+browser on sample data). To feel the difference, play
 [Canon Stampede](https://canon.rodeo/game): ride a stampede of agents' changes for 40 seconds reviewing every
 change yourself, then 40 the Canon way.
 
@@ -125,8 +133,8 @@ to wrangler, so give the agent key only to agents you run.
 ## Notes for Cloudflare
 
 Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
-(for example, Previews that pin Durable Object code per commit, and Workers Builds for forks). They are in
-[docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+(for example, Previews that pin Durable Object code per commit, version overrides that reach Durable Objects, and
+Workers Builds for forks). All twenty are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
 ## Roadmap
 

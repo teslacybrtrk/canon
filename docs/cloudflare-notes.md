@@ -1,6 +1,6 @@
 # Notes for the Cloudflare team
 
-Canon runs on Workers, Durable Objects, Workflows, Containers, R2, Workers Previews and Artifacts
+Canon runs on Workers, Durable Objects, Workflows, Containers, R2, Workers Previews, Workers versions and Artifacts
 (binding, Git protocol, event subscriptions). Building it surfaced a few places where the platform could
 make agent-scale Git workflows easier. Each note says what we hit, what we did, and what would help.
 Found while building, October 2026.
@@ -87,6 +87,26 @@ Found while building, October 2026.
     same deployment answers on `workers.dev` and production custom domains work. *We did:* keep Previews on
     `workers.dev`. *Would help:* custom-domain Previews reachable from Workers, as production custom domains are.
 
+17. **A version override can't reach a Durable Object.** With a new version staged at 0% and
+    `Cloudflare-Workers-Version-Overrides` pinning a request to it, the Worker code runs the new version but every
+    Durable Object it calls stays on the version its object was assigned (the old one, at 0%). For a Worker whose logic
+    lives in its objects, a 0% smoke test answers with old code, or with a new-Worker/old-object mix that fails even
+    when the new code is right (it held back two correct releases before we understood it). *We did:* for Workers with
+    Durable Objects, gate releases on a full release candidate (the commit deployed to its own Worker, with
+    production's config and its own long-lived data) and keep the 0% step for Workers without objects. *Would help:*
+    an override that also routes the request's Durable Object calls to the staged version, for fresh object ids.
+18. **`max_instances` on Containers fails loudly but late.** Eighteen agents plus mutation builds, merge trains and
+    releases passed the CI sandbox's `max_instances: 20`; runners then failed with `RPC session was shut down by
+    disposing the main stub` and, on the next call, `Maximum number of running container instances exceeded`. *We did:*
+    raise it to 40, cap mutation runs at two at a time, and have the judge retry platform errors itself. *Would help:*
+    a queueing mode (wait for a free instance) instead of failing the call, and a clearer first error.
+19. **`wrangler artifacts repos list` returns one page of 50 with no cursor in its output.** Cleanup scripts silently
+    missed repos (including `*-genesis`, so the next setup failed with "repo already exists"). *We did:* list and
+    delete in rounds until none are left. *Would help:* `--all`, or a `next` cursor in the JSON.
+20. **Version uploads can't carry Durable Object class changes** (they are applied atomically), so a release pipeline
+    built on `wrangler versions upload` needs a second path with `wrangler deploy` for those commits. That's
+    reasonable, but the upload error should name it plainly so a pipeline can branch on it.
+
 ## Things that worked especially well
 
 - `fork()` returns in about a second, and a fork's `source` field records lineage (`artifacts:canon/<parent>`),
@@ -95,4 +115,9 @@ Found while building, October 2026.
   frozen" a few lines each.
 - `readFile({ ref: <sha>, path })` from a Worker let the judge read `canon.json` at the exact judged commit.
 - Docker Hub images in `containers` meant deploying the CI sandbox needed no local Docker.
-- Push to verdict in about 40–50 seconds, including a container install and a Preview deploy.
+- Push to verdict in about 40–50 seconds, including a container install and a Preview deploy (median 48 s, p90 77 s
+  across twelve agents at once).
+- The Workers deployments API (`POST /workers/scripts/:name/deployments`) made rolling production back to a named
+  version, with an annotation saying why, one request from the judge.
+- A Workers Preview per mutant: building six deliberately broken versions of a change, each live, in a couple of
+  minutes, is what made "test the tests" practical.
