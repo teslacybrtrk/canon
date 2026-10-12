@@ -48,8 +48,10 @@ change yourself, then 40 the Canon way.
 On Oct 12, 2026, twelve Claude Code agents worked on the farmstand demo at once on canon.rodeo, with a person deciding,
 while six more ran a second project (rodeo) on autopilot. On farmstand the judge ran 465 fact checks, rejected 2
 attempts without anyone reading the diff, caught 1 clash before anyone accepted either side, and re-applied 8 attempts
-on the new canon by itself; the median push-to-verdict was 48 s (p90 77 s). A person clicked once: they accepted one fact, settling the clash, and the judge re-applied the other Ready attempts on
-the new canon.
+on the new canon by itself; the median push-to-verdict was 48 s (p90 77 s). A person clicked once,
+to accept one side of the clash (*no double booking*). The other side wasn't rejected on the warning: the judge
+re-applied it on the new canon, hit a text conflict in `src/index.ts`, and handed it back to its agent; the other
+Ready attempts it re-applied came back Ready.
 On rodeo, nobody clicked: queued claims left in 2 merge trains (5 facts), and the release gate held back 2 releases. A
 schema change passed its fresh preview but broke the market page on a release candidate with real data; when its train
 was held back, its riders landed one by one, and the gate found it.
