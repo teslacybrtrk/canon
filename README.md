@@ -34,6 +34,17 @@ re-apply the rest, or switch on autopilot (it runs in your browser on sample dat
 [Canon Stampede](https://canon.rodeo/game): ride a stampede of agents' changes for 40 seconds reviewing every
 change yourself, then 40 the Canon way.
 
+## One real run
+
+Five Claude Code agents worked on the farmstand demo at once on canon.rodeo (Oct 11, 2026). The judge ran 149 fact
+checks, rejected 2 attempts without anyone reading the diff, caught 1 clash before anyone accepted either side, and
+re-applied 3 attempts on the new canon by itself. A person clicked once, to choose a side; production kept every fact.
+
+The same attempts through plain `git merge`: 5 of 6 merged cleanly, and the merged app overcharges shoppers (a bulk
+discount merged without a conflict and broke "The basket charges the listed price"). The booking clash showed up only
+as a text conflict in `src/index.ts`. Reproduce it with `node scripts/baseline.mjs`; the report is
+[docs/baseline.md](docs/baseline.md). Canon's own numbers come from `GET /p/farmstand/stats`.
+
 ## How it works
 
 ```

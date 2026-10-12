@@ -154,6 +154,25 @@
   .vs-row b { display: block; font-size: 15px; margin-bottom: 2px; }
   .vs-row span { color: var(--ink-2); font-size: 14px; }
 
+  /* ---- Proof: one real run, and the same run through plain Git ------------------------ */
+  .proof { padding-top: 56px; padding-bottom: 8px; }
+  .proof-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; margin-top: 30px; }
+  .proof-card { border-radius: 16px; padding: 18px 20px 20px; border: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(10px); }
+  .proof-card h3 { font: 700 22px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; margin: 2px 0 14px; }
+  .proof-card.canon { border-color: rgb(253 111 22 / 0.45); box-shadow: 0 20px 50px -30px rgb(253 111 22 / 0.5); }
+  .proof-card.canon h3 { color: var(--brand); } .proof-card.git h3 { color: var(--muted); }
+  .tally { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .tally div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .tally b { display: block; font: 700 34px/1 var(--display); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .tally span { display: block; font-size: 13px; line-height: 1.35; color: var(--ink-2); margin-top: 4px; }
+  .proof-card ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .proof-card li { color: var(--ink-2); font-size: 14.5px; padding-left: 22px; position: relative; }
+  .proof-card li::before { content: "✕"; position: absolute; left: 0; color: var(--broke, #ff6b5b); font-weight: 700; }
+  .proof-card li.ok::before { content: "✓"; color: var(--held, #4cc38a); }
+  .proof-card li b { color: var(--ink); }
+  .proof .fine { margin-top: 14px; }
+  @media (max-width: 860px) { .proof-grid { grid-template-columns: 1fr; } .tally { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
   /* ---- How it works: the four moves -------------------------------------------------- */
   .how { padding-top: 56px; padding-bottom: 24px; }
   .moves { list-style: none; margin: 34px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; position: relative; }
@@ -334,6 +353,34 @@
       <div class="vs-row"><b>The fact chain is the memory</b><span>Every fact links to the attempt that made it true, the agent’s reason, and every attempt that failed it, each one still clonable.</span></div>
     </div>
   </div>
+</section>
+
+<section class="proof wrap" id="proof">
+  <p class="kicker">One real run</p>
+  <h2>Five agents, one evening. <em>Then the same run through plain Git.</em></h2>
+  <p class="sub">Five Claude Code agents worked on the farmstand app at once, each on its own fork, on canon.rodeo. Then we merged the very same attempts with <code>git merge</code> and ran canon’s facts on the result.</p>
+  <div class="proof-grid reveal">
+    <div class="proof-card canon">
+      <h3>Canon</h3>
+      <div class="tally">
+        <div><b>149</b><span>fact checks run by the judge</span></div>
+        <div><b>2</b><span>attempts rejected, with no diff read</span></div>
+        <div><b>1</b><span>clash caught before anyone accepted</span></div>
+        <div><b>3</b><span>attempts re-applied by the judge, no agent needed</span></div>
+        <div><b>1</b><span>click by a person: choosing a side</span></div>
+        <div><b>0</b><span>facts broken in production</span></div>
+      </div>
+    </div>
+    <div class="proof-card git">
+      <h3>Plain Git, same attempts</h3>
+      <ul>
+        <li class="ok"><b>5 of 6 merged cleanly.</b> No conflict, nothing for anyone to look at.</li>
+        <li><b>The merged app overcharges shoppers.</b> A bulk discount merged cleanly and broke “The basket charges the listed price”: 4 kale and 16 greens came to $76.80, not $84.00.</li>
+        <li><b>The booking conflict surfaced as text:</b> a conflict in <code>src/index.ts</code> for a person to read, not two rules that can’t both be true.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="fine">From the run of Oct 11, 2026. The Git side is reproducible: <a href="https://github.com/teslacybrtrk/canon/blob/main/docs/baseline.md">docs/baseline.md</a>, from <code>node scripts/baseline.mjs</code>. Canon’s numbers come from the judge’s own records (<code>GET /p/farmstand/stats</code>).</p>
 </section>
 
 <section class="how wrap" id="how">
