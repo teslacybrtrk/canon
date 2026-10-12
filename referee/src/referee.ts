@@ -112,7 +112,7 @@ export class Referee extends DurableObject<Env> {
         factId: (r.accepted_fact as string | null) ?? null,
         deployed: r.deployed === 1 ? "deployed" : r.deployed === -1 ? "failed" : "pending",
         versionId: (r.version_id as string | null) ?? null,
-        health: (r.health as "healthy" | "broken" | "rolled-back" | null) ?? null,
+        health: (r.health as "healthy" | "held" | "broken" | "rolled-back" | null) ?? null,
         detail: (r.health_detail as string | null) ?? null,
       })),
     };
@@ -585,6 +585,86 @@ export class Referee extends DurableObject<Env> {
       this.sql.exec(`UPDATE canon SET health = 'healthy' WHERE seq = ?`, live.seq);
     }
     this.setMeta("production", JSON.stringify({ at: Date.now(), url, results }));
+  }
+
+  /**
+   * Release step one: the release candidate. The accepted commit was deployed in full to its own Worker
+   * ({project}-candidate) with production's config, so every canon fact runs on all of its code, Durable Object code
+   * included, before production is touched. A fact that breaks there holds the canon back.
+   */
+  async candidateCheck(seq: number): Promise<boolean> {
+    const project = this.requireProject();
+    const url = this.env.CANDIDATE_URL.replace("{project}", project);
+    const broke = await this.factsOn(seq, url, {});
+    if (!broke.length) return true;
+    const what = `broke “${broke[0].fact.sentence}” on its release candidate (a full copy with production’s config): ${broke[0].detail}`;
+    this.sql.exec(`UPDATE canon SET health = 'held', health_detail = ? WHERE seq = ?`, `${what}. Held back: production never served it.`, seq);
+    this.broadcast();
+    return false;
+  }
+
+  /**
+   * Every canon probe fact on `url` (with `extra` headers), each re-tried once. The accepted fact fails on the old code
+   * (that's what made it a new fact), so the run waits until it holds: proof the new code is the code answering.
+   */
+  private async factsOn(seq: number, url: string, extra: Record<string, string>): Promise<Array<{ fact: Fact; detail: string }>> {
+    const acceptedId = this.rows(`SELECT accepted_fact FROM canon WHERE seq = ?`, seq)[0]?.accepted_fact;
+    const facts = this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).filter((f) => f.check.kind === "probe");
+    const accepted = facts.find((f) => f.id === acceptedId);
+    for (let i = 0; accepted && i < 6; i++) {
+      await new Promise((r) => setTimeout(r, i ? 5_000 : 3_000));
+      if ((await runCheck(accepted.check as ProbeCheck, url, undefined, extra)).held) break;
+    }
+    const broke: Array<{ fact: Fact; detail: string }> = [];
+    for (const f of facts) {
+      let r = await runCheck(f.check as ProbeCheck, url, undefined, extra);
+      if (!r.held) {
+        await new Promise((ok) => setTimeout(ok, 3_000));
+        r = await runCheck(f.check as ProbeCheck, url, undefined, extra);
+      }
+      if (!r.held) broke.push({ fact: f, detail: r.detail });
+    }
+    return broke;
+  }
+
+  /**
+   * Release step two, the gate. The accepted commit was uploaded as a new Worker version that serves nobody. Stage it at 0% next
+   * to the version production runs, run every canon fact on the production URL pinned to the new version (the Workers
+   * version-override header), and only then give it 100%. A version that breaks a fact is dropped: no visitor ever
+   * reached it. The accepted fact itself fails on the old version (that's what made it a new fact), so it holding here
+   * also proves the override reached the new version; until it does, the gate waits for the deployment to propagate.
+   * Code inside a Durable Object runs on the version its object was assigned, so a 0% test can't reach it: the release
+   * candidate (step one) already ran it, and the check right after the release is the last net, with its rollback.
+   */
+  async gate(seq: number, versionId: string): Promise<{ released: boolean; detail: string }> {
+    const project = this.requireProject();
+    const api = `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${project}/deployments`;
+    const headers = { authorization: `Bearer ${this.env.CF_TOKEN}`, "content-type": "application/json" };
+    const deploy = async (versions: Array<{ version_id: string; percentage: number }>, message: string) => {
+      const res = await fetch(api, { method: "POST", headers, body: JSON.stringify({ strategy: "percentage", versions, annotations: { "workers/message": message.slice(0, 100) } }) });
+      if (!res.ok) throw new Error(`deployments API returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    };
+    const list = await (await fetch(api, { headers })).json<{ result?: { deployments?: Array<{ versions: Array<{ version_id: string; percentage: number }> }> } }>();
+    const live = list.result?.deployments?.[0]?.versions ?? [];
+    const current = (live.find((v) => v.percentage === 100) ?? live[0])?.version_id;
+    if (!current || current === versionId) {
+      await deploy([{ version_id: versionId, percentage: 100 }], `Canon #${seq}: released (nothing to stage beside)`);
+      return { released: true, detail: "released with nothing to stage beside" };
+    }
+    await deploy([{ version_id: versionId, percentage: 0 }, { version_id: current, percentage: 100 }], `Canon #${seq}: staged at 0% for its smoke test`);
+    const url = this.env.PRODUCTION_URL.replace("{project}", project);
+    const pin = { "cloudflare-workers-version-overrides": `${project}="${versionId}"` };
+    const broke = await this.factsOn(seq, url, pin);
+    const facts = this.rows(`SELECT id FROM facts WHERE status = 'canon'`);
+    if (broke.length) {
+      const what = `broke “${broke[0].fact.sentence}” on production in its smoke test: ${broke[0].detail}`;
+      await deploy([{ version_id: current, percentage: 100 }], `Canon #${seq} held back: broke ${broke[0].fact.id} at 0%`);
+      this.sql.exec(`UPDATE canon SET health = 'held', health_detail = ? WHERE seq = ?`, `${what}. Held back: production never served it.`, seq);
+      this.broadcast();
+      return { released: false, detail: what };
+    }
+    await deploy([{ version_id: versionId, percentage: 100 }], `Canon #${seq}: released, ${facts.length} facts held at 0%`);
+    return { released: true, detail: `${facts.length} facts held on the staged version` };
   }
 
   /**

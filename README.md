@@ -54,7 +54,7 @@ as a text conflict in `src/index.ts`. Reproduce it with `node scripts/baseline.m
 | What a person reviews | code | the model's summary | a pass or fail | changes to the facts, in plain sentences |
 | Conflicts | text | text, plus an opinion | none | behaviour: clashes flagged before an accept, settled on the combined code |
 | Memory | PR threads | none | none | the fact chain, in Git notes; every failed attempt stays clonable |
-| After the deploy | nothing | nothing | nothing | every fact checked in production; a broken deploy rolls back |
+| Release | whatever merged | whatever merged | whatever passed | every fact on a full release candidate, then on the production URL at 0% traffic; a version that breaks one never serves anyone |
 
 ## How it works
 
@@ -141,9 +141,9 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   recorded beside the facts.
 - **Merge trains**: batch and speculate accepts, as merge queues do, for hundreds of agents.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
-- **Staged rollouts**: today each accepted canon deploys as a Worker version, is checked against every fact in
-  production, and is marked healthy or rolled back to the last healthy version. Next, it goes to a slice of traffic
-  first (Workers gradual deployments) before 100%.
+- **Canary traffic**: today a new canon runs every fact on a full release candidate, then on the production URL at 0%
+  traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,
+  with error rates as facts.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
 
 ## Where the code lives

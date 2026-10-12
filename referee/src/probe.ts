@@ -18,12 +18,13 @@ export function progress(detail: string): number {
 /**
  * Runs one check against an origin. Its random inputs are drawn from `seed`: the referee passes the commit, a
  * seed it draws after the push, and the fact, so an agent can't know them in advance and a verdict can be replayed
- * from the seed it records. Without a seed they are fresh.
+ * from the seed it records. Without a seed they are fresh. `extra` headers go on every request (e.g. a Workers
+ * version override, to smoke-test a staged version on the production URL).
  */
-export async function runCheck(check: ProbeCheck, origin: string, seed: string = crypto.randomUUID()): Promise<CheckResult> {
+export async function runCheck(check: ProbeCheck, origin: string, seed: string = crypto.randomUUID(), extra: Record<string, string> = {}): Promise<CheckResult> {
   const started = Date.now();
   for (let retry = 0; ; retry++) {
-    const failure = await runSamples(check, origin, seed);
+    const failure = await runSamples(check, origin, seed, extra);
     if (!failure) return { held: true, detail: "ok", ms: Date.now() - started };
     if (!failure.transient || retry >= TRANSIENT_RETRIES) {
       return { held: false, detail: failure.message, ms: Date.now() - started };
@@ -33,12 +34,12 @@ export async function runCheck(check: ProbeCheck, origin: string, seed: string =
 }
 
 // Each sample draws its own inputs and runs every step in a run of its own; all of them must hold.
-async function runSamples(check: ProbeCheck, origin: string, seed: string): Promise<StepFailure | null> {
+async function runSamples(check: ProbeCheck, origin: string, seed: string, extra: Record<string, string>): Promise<StepFailure | null> {
   const next = random(seed);
   const samples = check.samples ?? 1;
   for (let s = 0; s < samples; s++) {
     const inputs = draw(check.vars, next);
-    const failure = await runOnce(check, origin, inputs);
+    const failure = await runOnce(check, origin, inputs, extra);
     if (failure) {
       const given = Object.entries(inputs).map(([name, v]) => `${name} = ${label(v)}`).join(", ");
       return { ...failure, message: `${samples > 1 ? `sample ${s + 1}, ` : ""}${failure.message}${given ? ` (with ${given})` : ""}` };
@@ -47,12 +48,12 @@ async function runSamples(check: ProbeCheck, origin: string, seed: string): Prom
   return null;
 }
 
-async function runOnce(check: ProbeCheck, origin: string, inputs: Record<string, unknown>): Promise<StepFailure | null> {
+async function runOnce(check: ProbeCheck, origin: string, inputs: Record<string, unknown>, extra: Record<string, string>): Promise<StepFailure | null> {
   // An isolated run gets state of its own through the x-canon-run header; a visitor run sends no Canon header.
   const run = check.isolate === false ? null : crypto.randomUUID();
   const vars: Record<string, unknown> = { ...inputs };
   for (const [i, step] of check.steps.entries()) {
-    const failure = await runStep(step, origin, run, vars);
+    const failure = await runStep(step, origin, run, vars, extra);
     if (failure) return { ...failure, message: `step ${i + 1}: ${failure.message}` };
   }
   return null;
@@ -63,16 +64,17 @@ async function runStep(
   origin: string,
   run: string | null,
   vars: Record<string, unknown>,
+  extra: Record<string, string>,
 ): Promise<StepFailure | null> {
   const fail = (message: string, transient = false): StepFailure => ({ message, transient });
-  if (step.repeat && step.repeat > 1) return runRepeated(step, origin, run, vars, fail);
+  if (step.repeat && step.repeat > 1) return runRepeated(step, origin, run, vars, fail, extra);
   const method = step.method ?? "GET";
   const url = new URL(fill(step.path, vars) as string, origin);
   let res: Response;
   try {
     res = await fetch(url, {
       method,
-      headers: headersFor(run, step.body !== undefined),
+      headers: { ...headersFor(run, step.body !== undefined), ...extra },
       body: step.body === undefined ? undefined : JSON.stringify(fill(step.body, vars)),
       signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
     });
@@ -119,12 +121,13 @@ async function runRepeated(
   run: string | null,
   vars: Record<string, unknown>,
   fail: (message: string, transient?: boolean) => StepFailure,
+  extra: Record<string, string>,
 ): Promise<StepFailure | null> {
   const method = step.method ?? "GET";
   const url = new URL(fill(step.path, vars) as string, origin);
   const init = () => ({
     method,
-    headers: headersFor(run, step.body !== undefined),
+    headers: { ...headersFor(run, step.body !== undefined), ...extra },
     body: step.body === undefined ? undefined : JSON.stringify(fill(step.body, vars)),
     signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
   });

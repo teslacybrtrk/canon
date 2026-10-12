@@ -106,14 +106,37 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
       // Each project deploys under its own Worker name, so projects never share a production app.
       const project = repo.slice(0, repo.lastIndexOf("-"));
-      const deployed = await deps.runner({
-        name: "deploy",
-        command: `npx wrangler deploy --name ${project}`,
-        cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+      const creds = { accountId: this.env.CLOUDFLARE_ACCOUNT_ID };
+      // Step one, the release candidate: the whole commit on its own Worker with production's config, so every fact
+      // runs on all of its code (Durable Objects included) before production is touched.
+      await deps.runner({ name: "deploy release candidate", command: `npx wrangler deploy --name ${project}-candidate`, cloudflareCredentials: creds });
+      const candidateOk = await step.do("check release candidate", { timeout: "10 minutes" }, async () => await referee.candidateCheck(seq));
+      if (!candidateOk) throw new Error("held back: the release candidate broke a fact");
+      // Step two: upload the exact commit as a new Worker version that serves nobody yet; the judge's gate stages it at
+      // 0%, smoke-tests every fact on the production URL against it, and only then releases it.
+      let atomic = false;
+      const run = await deps.runner({ name: "upload version", command: `npx wrangler versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
+        // Only a Durable Object class change may skip the gate: Cloudflare can't upload it as a version (it's atomic).
+        // Any other upload failure stops the release.
+        const why = isCiRunnerFailure(err) ? err.message : String(err);
+        if (!/migration|lifecycle|durable object class/i.test(why)) throw err;
+        atomic = true;
+        return null;
       });
-      // The Worker version this deploy made: a broken deploy rolls back to the last healthy one by its id.
-      const out = typeof deployed.logs.stdout === "string" ? deployed.logs.stdout : "";
-      versionId = out.match(/Version ID:\s*([0-9a-f-]{36})/i)?.[1] ?? null;
+      if (atomic || !run) {
+        // The release candidate already ran this code in full; deploy it, and the check right after the release (and
+        // its rollback) is the net.
+        const deployed = await deps.runner({ name: "deploy", command: `npx wrangler deploy --name ${project}`, cloudflareCredentials: creds });
+        const out = typeof deployed.logs.stdout === "string" ? deployed.logs.stdout : "";
+        versionId = out.match(/Version ID:\s*([0-9a-f-]{36})/i)?.[1] ?? null;
+      } else {
+        const out = typeof run.logs.stdout === "string" ? run.logs.stdout : "";
+        versionId = out.match(/Version ID:\s*([0-9a-f-]{36})/i)?.[1] ?? null;
+        if (!versionId) throw new Error("no version id in the upload output");
+        const id = versionId;
+        const released = await step.do("release gate", { timeout: "10 minutes" }, async () => (await referee.gate(seq, id)).released);
+        ok = released;
+      }
     } catch {
       ok = false;
     }

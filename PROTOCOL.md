@@ -200,12 +200,22 @@ settled by accepting one (the other is re-applied on it, and rejected if the com
 declining both.
 
 After each deploy, and every hour, the judge runs canon's probe facts against production and shows the result on
-the board. Accepted, deployed and healthy are three states: each accepted canon deploys as a Worker version (recorded
-with it), and the first production check after the deploy decides its health. Every fact held: **healthy**. A fact
-broke, twice in a row: **broken**, and the judge rolls production back to the last healthy version through the Workers
-deployments API (**rolled-back**). The canon itself doesn't move: the fact was accepted, the deploy didn't hold, and
-the board and `deploys` in `GET /p/:project/canon` say so. Later hourly checks only report; a fact that breaks long
-after a deploy is not evidence against that deploy's code.
+the board. Accepted, deployed and healthy are three states, and a broken version never reaches visitors:
+
+1. **Release candidate.** The accepted commit is deployed in full to its own Worker (`<project>-candidate`) with
+   production's config, and every canon fact runs on it: all of its code, Durable Objects included.
+2. **Release gate.** The commit is uploaded as a new Worker version that serves nobody, staged at 0% beside the version
+   production runs, and every fact runs on the production URL pinned to it (the `Cloudflare-Workers-Version-Overrides`
+   header): the real hostname, routes and config. The accepted fact fails on the old version, so it holding there also
+   proves the requests reached the new one. Only then does the new version get 100%.
+3. A fact that breaks in step 1 or 2 holds the canon back (**held**): production never served it, and the board and
+   `deploys` in `GET /p/:project/canon` say which fact and why. The canon itself doesn't move; the fact was accepted.
+4. **Last net.** The first production check after the release decides its health (**healthy**). If a fact still broke
+   (twice in a row: **broken**), the judge rolls production back to the last healthy version through the Workers
+   deployments API (**rolled-back**). Later hourly checks only report.
+
+A Durable Object class change can't be uploaded as a version (Cloudflare applies it atomically), so that one release
+skips step 2: the release candidate has run its code, and step 4 is the net.
 
 ## MCP
 

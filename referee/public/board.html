@@ -816,15 +816,17 @@
     // Accepted, deployed, healthy: the newest deploy's state, then the latest production check.
     const dep = (s.deploys ?? [])[0];
     const rolled = dep?.health === "rolled-back" || dep?.health === "broken";
-    $("prodline").className = `prod ${rolled ? "bad" : prod ? (failing ? "bad" : "good") : ""}`;
+    const held = dep?.health === "held";
+    $("prodline").className = `prod ${rolled ? "bad" : held ? "warn" : prod ? (failing ? "bad" : "good") : ""}`;
     $("prodtext").textContent = demo.deploying || dep?.deployed === "pending" ? `Deploying canon #${c.seq} to production…`
       : rolled ? `Canon #${dep.seq} ${(dep.detail ?? "broke a fact in production").split(": ")[0]}. ${/rolled back to ([^.]+)/.exec(dep.detail ?? "") ? `Production rolled back to ${/rolled back to ([^.]+)/.exec(dep.detail)[1]}.` : dep.health === "rolled-back" ? "Production rolled back." : ""}`
+      : dep?.health === "held" ? `Canon #${dep.seq} held back before release: it ${(dep.detail ?? "broke a fact").replace(/^broke/, "broke").split(": ")[0]}. No visitor ever got it.`
       : dep?.deployed === "failed" ? `Canon #${dep.seq} couldn’t deploy; production stays on the last good version`
       : !prod ? "Production is checked every hour"
       : failing ? `${failing} fact${failing === 1 ? "" : "s"} failed on production ${ago(prod.at)}`
       : dep?.health === "healthy" && dep.factId ? `Canon #${dep.seq} is deployed and healthy: every fact held on production ${ago(prod.at)}`
       : `All facts held on production ${ago(prod.at)}`;
-    $("prodline").title = rolled && dep.detail ? dep.detail : dep?.versionId ? `Worker version ${dep.versionId}` : "";
+    $("prodline").title = (rolled || held) && dep.detail ? dep.detail : dep?.versionId ? `Worker version ${dep.versionId}` : "";
     const prodUrl = prod?.url ?? c?.previewUrl;
     $("prodlinkrow").hidden = $("prodbtn").hidden = !prodUrl;
     if (prodUrl) { $("prodlink").href = $("prodbtn").href = prodUrl; $("prodlink").textContent = new URL(prodUrl).host; }
