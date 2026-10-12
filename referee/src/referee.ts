@@ -1250,10 +1250,26 @@ export class Referee extends DurableObject<Env> {
     }
   }
 
-  /** What the mutation Workflow needs: where the attempt forked from (its own change is the diff since then). */
-  mutationJob(repo: string): { base: string } | null {
+  /**
+   * What the mutation Workflow needs: each source file the attempt changed, as it was where the attempt forked (null for
+   * a new file). CI checkouts have no Git history, so the workflow diffs these against the checkout itself.
+   */
+  async mutationJob(repo: string): Promise<string | null> {
     const attempt = this.attempt(repo);
-    return attempt?.baseSha ? { base: attempt.baseSha } : null;
+    if (!attempt?.baseSha || !attempt.headSha) return null;
+    const changed = (await this.changedPaths(attempt, attempt.headSha))?.filter((p) => /^src\/.*\.(ts|js|mjs)$/.test(p)) ?? [];
+    if (!changed.length) return null;
+    using artifacts = await this.env.ARTIFACTS.get(attempt.id);
+    const files: Array<{ path: string; b64: string | null }> = [];
+    let size = 0;
+    for (const path of changed) {
+      const blob = await artifacts.readFile({ ref: attempt.baseSha, path });
+      const b64 = blob ? base64(new Uint8Array(await blob.arrayBuffer())) : null;
+      size += b64?.length ?? 0;
+      if (size > NOVELTY_MAX_B64) break;
+      files.push({ path, b64 });
+    }
+    return JSON.stringify(files);
   }
 
   /**

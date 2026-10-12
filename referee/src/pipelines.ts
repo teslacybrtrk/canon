@@ -249,8 +249,8 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
     const { repo, sha } = event.payload;
     const referee = refereeForRepo(this.env, repo);
-    const base = await step.do("mutation job", async () => (await referee.mutationJob(repo))?.base ?? null);
-    if (!base) return;
+    const files = await step.do("mutation job", async () => await referee.mutationJob(repo));
+    if (!files) return;
     const prefix = `${repo}-mut`;
     let built: Array<{ file: string; line: number; op: string; before: string; after: string; preview: string | null }> = [];
     try {
@@ -258,7 +258,7 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       const ran = await deps.runner({
         name: "build mutants",
         command: MUTANT_SCRIPT,
-        env: { BASE: base, PREFIX: prefix, MAX: "6", MUTATOR: btoa(MUTATOR_JS) },
+        env: { FILES: btoa(files), PREFIX: prefix, MAX: "6", MUTATOR: btoa(MUTATOR_JS) },
         cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
         config: { retries: { limit: 0, delay: 1_000 }, timeout: 12 * 60_000 },
       });
@@ -281,20 +281,25 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   }
 }
 
-// In the attempt's checkout: list the lines the attempt added (git diff from where it forked), make up to MAX simple
+// In the attempt's checkout: list the lines the attempt added (against FILES, its changed files where it forked), make up to MAX simple
 // breaks of them, and build each as a preview named PREFIX<n>, restoring the file after each. The generator is a
 // small Node script (MUTATOR_JS, passed base64) so no shell quoting touches it; it prints one CANON_MUTANTS JSON line.
 const MUTATOR_JS = String.raw`const fs = require("fs");
 const [cmd, arg] = process.argv.slice(2);
 const MAX = +process.env.MAX || 6;
 if (cmd === "gen") {
-  const d = fs.readFileSync("/tmp/canon-mut.diff", "utf8").split("\n");
-  let file = null, ln = 0;
+  // The lines the attempt added: lines of each changed file that its forked-from version doesn't have.
+  const files = JSON.parse(fs.readFileSync("/tmp/canon-mut-files.json", "utf8"));
   const added = [];
-  for (const l of d) {
-    if (l.startsWith("+++ b/")) file = l.slice(6);
-    else if (l.startsWith("@@")) { const m = /\+(\d+)/.exec(l); ln = m ? +m[1] : 0; }
-    else if (l.startsWith("+") && !l.startsWith("+++")) { added.push({ file, line: ln, text: l.slice(1) }); ln++; }
+  for (const f of files) {
+    if (!fs.existsSync(f.path)) continue;
+    const before = f.b64 ? Buffer.from(f.b64, "base64").toString("utf8").split("\n") : [];
+    const left = new Map();
+    for (const l of before) left.set(l, (left.get(l) || 0) + 1);
+    fs.readFileSync(f.path, "utf8").split("\n").forEach((text, i) => {
+      const n = left.get(text) || 0;
+      if (n) left.set(text, n - 1); else added.push({ file: f.path, line: i + 1, text });
+    });
   }
   const out = [], used = new Set();
   const add = (a, op, after) => { const k = a.file + ":" + a.line; if (used.has(k)) return; used.add(k); out.push({ file: a.file, line: a.line, op, before: a.text.trim(), after: after.trim() }); };
@@ -312,9 +317,13 @@ if (cmd === "gen") {
   console.log(out.slice(0, MAX).length);
 } else if (cmd === "apply") {
   const m = JSON.parse(fs.readFileSync("/tmp/canon-mutants.json", "utf8"))[+arg];
+  fs.copyFileSync(m.file, "/tmp/canon-mut-backup");
   const L = fs.readFileSync(m.file, "utf8").split("\n");
   L[m.line - 1] = m.after ? L[m.line - 1].replace(m.before, m.after) : "";
   fs.writeFileSync(m.file, L.join("\n"));
+} else if (cmd === "restore") {
+  const m = JSON.parse(fs.readFileSync("/tmp/canon-mutants.json", "utf8"))[+arg];
+  fs.copyFileSync("/tmp/canon-mut-backup", m.file);
 } else if (cmd === "report") {
   const ms = JSON.parse(fs.readFileSync("/tmp/canon-mutants.json", "utf8"));
   const ok = new Set(fs.readFileSync("/tmp/canon-mutants.out", "utf8").split("\n").filter((l) => l.endsWith(" ok")).map((l) => +l.split(" ")[0]));
@@ -324,14 +333,13 @@ if (cmd === "gen") {
 const MUTANT_SCRIPT = [
   `set +e`,
   `printf %s "$MUTATOR" | base64 -d > /tmp/canon-mutator.js`,
-  `git cat-file -e "$BASE^{commit}" 2>/dev/null || git fetch -q --unshallow 2>/dev/null || true`,
-  `git diff -U0 "$BASE" HEAD -- src > /tmp/canon-mut.diff`,
+  `printf %s "$FILES" | base64 -d > /tmp/canon-mut-files.json`,
   `n=$(node /tmp/canon-mutator.js gen)`,
   `i=0; : > /tmp/canon-mutants.out`,
   `while [ "$i" -lt "\${n:-0}" ]; do`,
   `  node /tmp/canon-mutator.js apply "$i"`,
   `  if npx wrangler preview --name "$PREFIX$i" --json > /tmp/canon-mut-$i.log 2>&1; then echo "$i ok" >> /tmp/canon-mutants.out; else echo "$i no" >> /tmp/canon-mutants.out; fi`,
-  `  git checkout -q -- src`,
+  `  node /tmp/canon-mutator.js restore "$i"`,
   `  i=$((i+1))`,
   `done`,
   `node /tmp/canon-mutator.js report`,
