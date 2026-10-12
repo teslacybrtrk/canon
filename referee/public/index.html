@@ -375,10 +375,10 @@
       </div>
     </div>
     <div class="proof-card git">
-      <h3>Plain Git, same attempts</h3>
+      <h3>Plain Git and a merge queue, same attempts</h3>
       <ul>
         <li class="ok"><b>6 of 13 merged cleanly.</b> No conflict, nothing for anyone to look at.</li>
-        <li><b>The merged app charges the wrong price.</b> A bulk discount nobody approved merged cleanly and broke “The basket charges the listed price”: 3 kale and 13 duck eggs came to $85.05, not the listed $93.50.</li>
+        <li><b>The merged app charges the wrong price.</b> A bulk discount nobody approved merged cleanly and broke “The basket charges the listed price”: 16 kale and 9 duck eggs came to $101.70, not the listed $106.50. A merge queue that also ran CI and each author’s own test lands the same 6 and ships the same bug: the discount’s own test passes.</li>
         <li><b>The other 7 stopped at text conflicts</b> in <code>src/index.ts</code>, each for a person to resolve by reading the code.</li>
         <li><b>On autopilot, a schema change</b> passed its fresh preview but broke the market page on a copy with real data. Canon held back the train, then the change on its own, and named it as the cause; a gate that only tests fresh copies would have shipped it.</li>
       </ul>

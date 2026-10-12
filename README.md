@@ -58,11 +58,13 @@ was held back, its riders landed one by one, and the gate found it.
 
 The same farmstand attempts through plain `git merge`: 6 of 13 merged cleanly, and the merged app charges the wrong
 price (a bulk discount nobody approved merged without a conflict and broke "The basket charges the listed price"). The
-other 7 stopped at text conflicts for a person to resolve. Reproduce it with `node scripts/baseline.mjs`; the report is
+other 7 stopped at text conflicts for a person to resolve. A conventional merge queue that also gates each attempt on
+the repo's CI (type-check, lint) and the author's own test on the merged tree lands the same 6 and ships the same bug:
+the discount's own test passes, because the discount is what its author meant. Reproduce it with `node scripts/baseline.mjs`; the report is
 [docs/baseline.md](docs/baseline.md). Canon's own numbers come from the judge's records, live at [canon.rodeo/p/farmstand/stats](https://canon.rodeo/p/farmstand/stats) and [canon.rodeo/p/rodeo/stats](https://canon.rodeo/p/rodeo/stats).
 
-One run is evidence, not a benchmark. Not measured yet: compute cost per landed fact, a comparison with a
-conventional merge queue, and scale beyond 18 agents.
+One run is evidence, not a benchmark. Not measured yet: compute cost per landed fact and scale beyond 18
+agents.
 
 ## How it compares
 

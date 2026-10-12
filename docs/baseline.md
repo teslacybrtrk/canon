@@ -27,7 +27,7 @@ queue whose only gate is "it merges" would. Then canon's 9 facts and the agents'
 | The market page lists every stall | holds |
 | All six products are for sale with a price | holds |
 | A new shopper's basket is empty | holds |
-| The basket charges the listed price for every unit | **broken**: sample 1, step 3: totalCents is 8505, expected 9350 (with qty1 = 3, item1 = kale, qty2 = 13, item2 = duck-eggs) |
+| The basket charges the listed price for every unit | **broken**: sample 1, step 3: totalCents is 10170, expected 10650 (with qty1 = 16, item1 = kale, qty2 = 9, item2 = duck-eggs) |
 | A product that does not exist cannot be added | holds |
 | The market page answers in under 400 ms (p95 of 20 requests) | holds |
 | The code type-checks, with no errors silenced | holds |
@@ -47,6 +47,31 @@ queue whose only gate is "it merges" would. Then canon's 9 facts and the agents'
 | Each product has its own API page with its price | does not hold: step 1: GET /api/products/honey returned 404, expected 200 |
 | The basket rounds every price down to the whole dollar | does not hold: step 2: items.0.unitCents is 650, expected 600 |
 | The basket charges the listed price, with 10% off any line of 10 or more | holds |
+
+## A conventional merge queue, same attempts
+
+The same attempts in the same order, through a queue that lands one only if it merges and the repo's own CI
+(the code type-checks, with no errors silenced; the code passes the linter, with no rules silenced) and the author's own test pass on the merged tree.
+
+**6 of 13 landed. The queued app breaks 1 of canon's 9 facts: "The basket charges the listed price for every unit".**
+
+| Agent | Claimed | Merge queue |
+|---|---|---|
+| agent-1 | Buying 10 or more of one item takes 10% off that line | landed |
+| agent-3 | Two vendors can share a stall on the same market day | landed |
+| agent-2 | A stall cannot be double-booked | bounced: text conflict in canon.json, src/index.ts |
+| agent-5 | Shoppers can search products by name | landed |
+| agent-7 | Each stall lists its own products | bounced: text conflict in canon.json, src/index.ts |
+| agent-4 | A sold-out product cannot be added to the basket | landed |
+| agent-6 | Each stall lists its own products | landed |
+| agent-11 | Every basket line says which stall it comes from | bounced: text conflict in canon.json, src/index.ts |
+| agent-9 | Shoppers can remove an item from the basket | bounced: text conflict in canon.json, src/index.ts |
+| agent-12 | Each product has its own API page with its price | bounced: text conflict in canon.json, src/index.ts |
+| agent-10 | Every basket line says which stall it comes from | bounced: text conflict in canon.json, src/index.ts |
+| agent-8 | The basket rounds every price down to the whole dollar | bounced: text conflict in canon.json, src/index.ts |
+| agent-1 | The basket charges the listed price, with 10% off any line of 10 or more | landed |
+
+- **The basket charges the listed price for every unit**: broken on the queued app: sample 1, step 3: totalCents is 10170, expected 10650 (with qty1 = 16, item1 = kale, qty2 = 9, item2 = duck-eggs)
 
 Canon, on the same attempts: each was judged on its own live preview against every canon fact, so the ones that
 broke a fact were rejected before anything merged, and clashing attempts were flagged before anyone accepted either.
