@@ -357,30 +357,31 @@
 
 <section class="proof wrap" id="proof">
   <p class="kicker">One real run</p>
-  <h2>Five agents, one evening. <em>Then the same run through plain Git.</em></h2>
-  <p class="sub">Five Claude Code agents worked on the farmstand app at once, each on its own fork, on canon.rodeo. Then we merged the very same attempts with <code>git merge</code> and ran canon’s facts on the result.</p>
+  <h2>Eighteen agents, one night. <em>Then the same work through plain Git.</em></h2>
+  <p class="sub">Twelve Claude Code agents worked on the farmstand app at once, each on its own fork, with a person deciding; six more ran a second project on autopilot. Then we merged farmstand’s very same attempts with <code>git merge</code> and ran canon’s facts on the result.</p>
   <div class="proof-grid reveal">
     <div class="proof-card canon">
       <h3>Canon</h3>
       <div class="tally">
-        <div><b>149</b><span>fact checks run by the judge</span></div>
+        <div><b>465</b><span>fact checks run by the judge on farmstand</span></div>
         <div><b>2</b><span>attempts rejected, with no diff read</span></div>
         <div><b>1</b><span>clash caught before anyone accepted</span></div>
-        <div><b>3</b><span>attempts re-applied by the judge, no agent needed</span></div>
-        <div><b>1</b><span>click by a person: choosing a side</span></div>
-        <div><b>0</b><span>facts broken in production</span></div>
+        <div><b>48s</b><span>median push to verdict (p90 77 s)</span></div>
+        <div><b>2</b><span>merge trains on autopilot, 5 facts</span></div>
+        <div><b>0</b><span>broken releases served: 2 held back first</span></div>
       </div>
     </div>
     <div class="proof-card git">
       <h3>Plain Git, same attempts</h3>
       <ul>
-        <li class="ok"><b>5 of 6 merged cleanly.</b> No conflict, nothing for anyone to look at.</li>
-        <li><b>The merged app charges the wrong price.</b> A bulk discount nobody approved merged cleanly and broke “The basket charges the listed price”: 4 kale and 16 greens came to $76.80, not the listed $84.00.</li>
-        <li><b>The booking conflict surfaced as text:</b> a conflict in <code>src/index.ts</code> for a person to read, not two rules that can’t both be true.</li>
+        <li class="ok"><b>6 of 13 merged cleanly.</b> No conflict, nothing for anyone to look at.</li>
+        <li><b>The merged app charges the wrong price.</b> A bulk discount nobody approved merged cleanly and broke “The basket charges the listed price”: 3 kale and 13 duck eggs came to $85.05, not the listed $93.50.</li>
+        <li><b>The other 7 stopped at text conflicts</b> in <code>src/index.ts</code>, each for a person to resolve by reading the code.</li>
+        <li><b>On autopilot, a schema change</b> passed its fresh preview but broke the market page on a copy with real data. Canon held it back twice and found it; a gate that only tests fresh copies would have shipped it.</li>
       </ul>
     </div>
   </div>
-  <p class="fine">From the run of Oct 11, 2026. The Git side is reproducible: <a href="https://github.com/teslacybrtrk/canon/blob/main/docs/baseline.md">docs/baseline.md</a>, from <code>node scripts/baseline.mjs</code>. Canon’s numbers come from the judge’s own records (<code>GET /p/farmstand/stats</code>).</p>
+  <p class="fine">From the runs of Oct 12, 2026. The Git side is reproducible: <a href="https://github.com/teslacybrtrk/canon/blob/main/docs/baseline.md">docs/baseline.md</a>, from <code>node scripts/baseline.mjs</code>. Canon’s numbers come from the judge’s own records (<code>GET /p/farmstand/stats</code>, <code>/p/rodeo/stats</code>).</p>
 </section>
 
 <section class="how wrap" id="how">

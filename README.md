@@ -36,14 +36,18 @@ change yourself, then 40 the Canon way.
 
 ## One real run
 
-Five Claude Code agents worked on the farmstand demo at once on canon.rodeo (Oct 11, 2026). The judge ran 149 fact
-checks, rejected 2 attempts without anyone reading the diff, caught 1 clash before anyone accepted either side, and
-re-applied 3 attempts on the new canon by itself. A person clicked once, to choose a side; production kept every fact.
+On Oct 12, 2026, twelve Claude Code agents worked on the farmstand demo at once on canon.rodeo, with a person deciding,
+while six more ran a second project (rodeo) on autopilot. On farmstand the judge ran 465 fact checks, rejected 2
+attempts without anyone reading the diff, caught 1 clash before anyone accepted either side, and re-applied 8 attempts
+on the new canon by itself; the median push-to-verdict was 48 s (p90 77 s). A person clicked once, to choose a side.
+On rodeo, nobody clicked: queued claims left in 2 merge trains (5 facts), and the release gate held back 2 releases. A
+schema change passed its fresh preview but broke the market page on a release candidate with real data; when its train
+was held back, its riders landed one by one, and the gate found it.
 
-The same attempts through plain `git merge`: 5 of 6 merged cleanly, and the merged app charges the wrong price (a bulk
-discount merged without a conflict and broke "The basket charges the listed price"). The booking clash showed up only
-as a text conflict in `src/index.ts`. Reproduce it with `node scripts/baseline.mjs`; the report is
-[docs/baseline.md](docs/baseline.md). Canon's own numbers come from `GET /p/farmstand/stats`.
+The same farmstand attempts through plain `git merge`: 6 of 13 merged cleanly, and the merged app charges the wrong
+price (a bulk discount nobody approved merged without a conflict and broke "The basket charges the listed price"). The
+other 7 stopped at text conflicts for a person to resolve. Reproduce it with `node scripts/baseline.mjs`; the report is
+[docs/baseline.md](docs/baseline.md). Canon's own numbers come from `GET /p/farmstand/stats` and `/p/rodeo/stats`.
 
 ## How it compares
 
