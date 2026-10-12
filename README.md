@@ -162,7 +162,8 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   route into a helper that calls `market.addToCart(...)`: each was told about the other, from its own side ("calls
   Market.addToCart, which you are changing" / "is changing Market.addToCart, which your change calls").
 - **Queue**: with one slot busy, an attempt pushed twice: the first push waited, then dropped itself as stale once the
-  second arrived; the second waited its turn and ran.
+  second arrived; the second waited its turn and ran. With one slot busy, an agent-proposed fact queued first and a
+  backlog fact people wrote queued 11 seconds later: the backlog fact got the next slot (2 turns waited, against 6).
 - **Speculative train**: two riders became Ready while canon #5 was releasing; the train was built and checked on #5
   during that release and landed with both as soon as it shipped.
 - **Bisection**: a train of four, one with a schema change that breaks on existing data, was held back at release. It
