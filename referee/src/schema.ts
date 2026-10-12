@@ -15,6 +15,7 @@ export const UPGRADES = [
   `ALTER TABLE facts ADD COLUMN decline_reason TEXT`,
   `ALTER TABLE facts ADD COLUMN accepted_how TEXT`,
   `ALTER TABLE claims ADD COLUMN auto_wait TEXT`,
+  `ALTER TABLE verdicts ADD COLUMN first_at INTEGER`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];
@@ -81,6 +82,14 @@ CREATE TABLE IF NOT EXISTS verdicts (
   sha      TEXT NOT NULL,
   json     TEXT NOT NULL,
   at       INTEGER NOT NULL,
+  PRIMARY KEY (attempt_id, sha)
+);
+
+-- Every push the judge heard, for the run report's push-to-verdict times.
+CREATE TABLE IF NOT EXISTS pushes (
+  attempt_id TEXT NOT NULL,
+  sha        TEXT NOT NULL,
+  at         INTEGER NOT NULL,
   PRIMARY KEY (attempt_id, sha)
 );
 

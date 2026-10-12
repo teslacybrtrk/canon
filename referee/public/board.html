@@ -398,6 +398,12 @@
   .side section:last-child { border-bottom: 0; }
   .side h4 { margin: 0 0 12px; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
   .side h4 .ct { font-weight: 500; }
+  .runstats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .runstats div { border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; background: var(--panel-2, transparent); min-width: 0; }
+  .runstats b { display: block; font: 700 22px/1.1 var(--display, inherit); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .runstats span { display: block; font-size: 12px; line-height: 1.35; color: var(--muted); margin-top: 3px; }
+  .runstats .wide { grid-column: 1 / -1; }
+  .runnote { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
   .side p { margin: 0 0 12px; color: var(--ink-2); font-size: 15px; line-height: 1.5; }
   .side ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; color: var(--muted); }
   .side li { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -645,6 +651,11 @@
         <div class="bar" id="vbar"></div>
         <div class="bar-key" id="vkey"></div>
       </section>
+      <section id="runreport" hidden>
+        <h4>This run</h4>
+        <div class="runstats" id="runstats"></div>
+        <p class="runnote" id="runnote">Counted from the judge’s own records, not estimated.</p>
+      </section>
       <section>
         <h4>Reading a claim</h4>
         <div class="legend">
@@ -765,6 +776,7 @@
     $("st-flight").textContent = live.length;
     $("st-ready").textContent = ready.length;
     $("st-rejected").textContent = live.filter((c) => c.status === "contradicts").length;
+    runReport(s);
     $("tabfacts").textContent = canonFacts.length;
     $("tabclaims").textContent = live.length;
     $("opencount").textContent = live.length;
@@ -1447,6 +1459,40 @@
   function demoVerdict(x) {
     const kept = state.facts.filter((f) => f.status === "canon" && f.id !== "tooling-locked").map((f) => f.id);
     return { attemptId: x.attemptId, sha: hex(20), previewUrl: "https://farmstand.canon.rodeo", canonSeq: state.canon.seq, outcome: "ready", kept, lost: [], stale: [], retires: [], skipped: ["tooling-locked"], offers: [], claimed: { factId: x.factId, held: true, detail: "ok" }, ledger: { status: "ok", detail: "ok" }, judgedAt: Date.now(), seed: hex(4) };
+  }
+
+  // ---- The run report ------------------------------------------------------------------------------------------
+  let statsAt = 0, statsTimer = 0;
+  function runReport(s) {
+    if (MOCK) return drawRunReport({
+      agents: new Set(s.claims.map((c) => c.agent)).size,
+      attempts: s.claims.length,
+      checksRun: s.claims.reduce((n, c) => n + (c.verdict ? c.verdict.kept.length + c.verdict.lost.length + (c.verdict.stale?.length ?? 0) + 1 : 0), 0),
+      rejected: s.claims.filter((c) => c.status === "contradicts").length,
+      clashesCaught: new Set(s.claims.flatMap((c) => (c.clashes ?? []).map((k) => [c.factId, k.factId].sort().join("|")))).size,
+      reappliedByJudge: s.claims.filter((c) => c.refreshedFrom).length,
+      medianSecondsToVerdict: null,
+    }, "In this demo, counted from what just happened in your browser.");
+    // Live: at most every few seconds, after the board settles.
+    clearTimeout(statsTimer);
+    statsTimer = setTimeout(async () => {
+      statsAt = Date.now();
+      try { drawRunReport(await (await fetch(`/p/${project}/stats`)).json()); } catch {}
+    }, Math.max(1500, 6000 - (Date.now() - statsAt)));
+  }
+  function drawRunReport(t, note) {
+    if (!t || !t.attempts) return void ($("runreport").hidden = true);
+    if (note) $("runnote").textContent = note;
+    const tile = (n, label, wide = false) => `<div${wide ? ' class="wide"' : ""}><b>${n}</b><span>${label}</span></div>`;
+    $("runstats").innerHTML = [
+      tile(t.agents, `agent${t.agents === 1 ? "" : "s"}, ${t.attempts} attempt${t.attempts === 1 ? "" : "s"}`),
+      tile(t.checksRun, "fact checks run by the judge"),
+      tile(t.rejected, "rejected, with no diff read"),
+      tile(t.clashesCaught, `clash${t.clashesCaught === 1 ? "" : "es"} caught before an accept`),
+      tile(t.reappliedByJudge, "re-applied by the judge, no agent needed"),
+      t.medianSecondsToVerdict != null ? tile(`${t.medianSecondsToVerdict}s`, `median push to verdict${t.p90SecondsToVerdict != null ? ` (p90 ${t.p90SecondsToVerdict}s)` : ""}`) : tile(t.acceptedByPerson ?? 0, "accepted by a person"),
+    ].join("");
+    $("runreport").hidden = false;
   }
 
   // ---- Demo autopilot: people wrote the backlog; agents land it, and nobody clicks. ----------------------------

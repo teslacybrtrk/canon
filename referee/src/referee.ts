@@ -181,6 +181,7 @@ export class Referee extends DurableObject<Env> {
     const claim = attempt.claimId ? this.claim(attempt.claimId) : null;
     if (claim && claim.status !== "open" && !LIVE.includes(claim.status)) return null;
     this.sql.exec(`UPDATE attempts SET head_sha = ? WHERE id = ?`, sha, repo);
+    this.sql.exec(`INSERT OR IGNORE INTO pushes (attempt_id, sha, at) VALUES (?, ?, ?)`, repo, sha, Date.now());
     if (attempt.claimId) this.setClaimStatus(attempt.claimId, "checking");
     this.broadcast();
     return repo;
@@ -441,6 +442,44 @@ export class Referee extends DurableObject<Env> {
     if (factDeclined) this.sql.exec(`UPDATE facts SET status = 'declined', declined_at = ?, decline_reason = ? WHERE id = ?`, Date.now(), note || null, fact.id);
     this.broadcast();
     return { claim: this.claim(claim.id), factDeclined };
+  }
+
+  /**
+   * The run report: what happened on this board, counted from the judge's own records. Nothing here is sampled or
+   * estimated; every number is a row the judge wrote while judging.
+   */
+  stats() {
+    const one = (q: string) => Number(this.rows(q)[0]?.n ?? 0);
+    const claims = this.rows(`SELECT agent, status, refreshed_from, created_at FROM claims`);
+    const facts = this.rows(`SELECT status, origin, accepted_how FROM facts`);
+    const waits = this.rows(
+      `SELECT v.first_at - p.at AS ms FROM pushes p JOIN verdicts v ON v.attempt_id = p.attempt_id AND v.sha = p.sha
+       WHERE v.first_at IS NOT NULL AND v.first_at >= p.at ORDER BY ms`,
+    ).map((r) => Number(r.ms));
+    const pct = (p: number) => (waits.length ? Math.round(waits[Math.min(waits.length - 1, Math.floor(p * waits.length))] / 1000) : null);
+    const pairs = new Set(this.rows(`SELECT claim_id, other_claim_id FROM clashes`).map((r) => [r.claim_id, r.other_claim_id].sort().join("|")));
+    const accepted = facts.filter((f) => f.status === "canon" && f.origin !== "seed");
+    const firstClaim = Math.min(...claims.map((c) => Number(c.created_at)));
+    const lastVerdict = one(`SELECT MAX(at) AS n FROM verdicts`);
+    return {
+      agents: new Set(claims.map((c) => c.agent)).size,
+      claims: claims.filter((c) => !c.refreshed_from).length,
+      attempts: one(`SELECT COUNT(*) AS n FROM attempts WHERE claim_id IS NOT NULL`),
+      pushes: one(`SELECT COUNT(*) AS n FROM pushes`),
+      verdicts: one(`SELECT COUNT(*) AS n FROM verdicts`),
+      checksRun: one(`SELECT COUNT(*) AS n FROM results`),
+      rejected: claims.filter((c) => c.status === "contradicts").length,
+      rejectedOnCombinedCode: claims.filter((c) => c.status === "contradicts" && c.refreshed_from).length,
+      clashesCaught: pairs.size,
+      reappliedByJudge: claims.filter((c) => c.refreshed_from).length,
+      acceptedByPerson: accepted.filter((f) => String(f.accepted_how ?? "the owner").startsWith("the owner")).length,
+      acceptedByPolicy: accepted.filter((f) => !String(f.accepted_how ?? "the owner").startsWith("the owner")).length,
+      canonFacts: facts.filter((f) => f.status === "canon").length,
+      medianSecondsToVerdict: pct(0.5),
+      p90SecondsToVerdict: pct(0.9),
+      minutes: Number.isFinite(firstClaim) && lastVerdict > firstClaim ? Math.round((lastVerdict - firstClaim) / 6000) / 10 : null,
+      since: Number.isFinite(firstClaim) ? firstClaim : null,
+    };
   }
 
   /** The current canon's number: a deploy of an older one is skipped. */
@@ -877,7 +916,12 @@ export class Referee extends DurableObject<Env> {
       judgedAt: now,
       seed,
     };
-    this.sql.exec(`INSERT OR REPLACE INTO verdicts (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, attempt.id, sha, JSON.stringify(verdict), now);
+    // first_at keeps the first verdict's time for the run report; a re-judge only replaces the verdict itself.
+    this.sql.exec(
+      `INSERT INTO verdicts (attempt_id, sha, json, at, first_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (attempt_id, sha) DO UPDATE SET json = excluded.json, at = excluded.at`,
+      attempt.id, sha, JSON.stringify(verdict), now, now,
+    );
     // Re-read the claim: the checks above awaited the network, and meanwhile another attempt may have been
     // accepted (superseding this claim). Never resurrect a settled claim with a stale status.
     const current = claim ? this.claim(claim.id) : null;
