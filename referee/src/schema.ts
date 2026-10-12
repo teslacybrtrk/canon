@@ -20,6 +20,7 @@ export const UPGRADES = [
   `ALTER TABLE canon ADD COLUMN health TEXT`,
   `ALTER TABLE canon ADD COLUMN health_detail TEXT`,
   `ALTER TABLE canon ADD COLUMN reverts INTEGER`,
+  `ALTER TABLE canon ADD COLUMN facts_json TEXT`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];
@@ -87,6 +88,16 @@ CREATE TABLE IF NOT EXISTS verdicts (
   json     TEXT NOT NULL,
   at       INTEGER NOT NULL,
   PRIMARY KEY (attempt_id, sha)
+);
+
+-- Merge trains: Ready claims the judge combines into one candidate (its own attempt), verifies once and releases once.
+CREATE TABLE IF NOT EXISTS trains (
+  id         TEXT PRIMARY KEY,         -- the train's attempt id
+  claims     TEXT NOT NULL,            -- JSON: claim ids riding it (after the build: the ones that applied)
+  hows       TEXT NOT NULL,            -- JSON: claim id -> why the policy lets it land
+  status     TEXT NOT NULL,            -- building | judging | landed | failed
+  detail     TEXT,
+  created_at INTEGER NOT NULL
 );
 
 -- Every push the judge heard, for the run report's push-to-verdict times.

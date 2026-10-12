@@ -398,6 +398,11 @@
   .side section:last-child { border-bottom: 0; }
   .side h4 { margin: 0 0 12px; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
   .side h4 .ct { font-weight: 500; }
+  .train { margin: 0 0 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgb(253 111 22 / 0.45); background: rgb(253 111 22 / 0.07); }
+  .train b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .train .cars { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .train .cars span { font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2, transparent); }
+  .train.failed { border-color: var(--line); background: transparent; }
   .runstats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .runstats div { border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; background: var(--panel-2, transparent); min-width: 0; }
   .runstats b { display: block; font: 700 22px/1.1 var(--display, inherit); color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -804,8 +809,14 @@
     const c = s.canon;
     const landed = c && s.claims.find((x) => x.status === "accepted" && x.attemptId === c.attemptId);
     const landedAt = c && s.facts.filter((f) => f.madeTrueBy === c.attemptId && f.acceptedAt).map((f) => f.acceptedAt)[0];
+    // A merge train lands several facts at once; a revert goes back to the code production runs.
+    const thisDeploy = MOCK ? null : (s.deploys ?? []).find((d) => d.seq === c?.seq);
+    const trainFacts = MOCK ? (c?.trainFacts ?? []) : (thisDeploy?.facts ?? []);
+    const sentenceOf2 = (id) => s.facts.find((f) => f.id === id)?.sentence ?? id;
     $("commit").innerHTML = !c ? "No canon yet."
-      : `${landed ? `${avatar(landed.agent)}<b>${esc(landed.agent)}</b><span class="msg">made “${esc(landed.sentence)}” canon</span>` : `${HAT(20)}<b>genesis</b><span class="msg">the seed facts from canon.json</span>`}
+      : `${thisDeploy?.reverts ? `${HAT(20)}<b>judge</b><span class="msg">reverted canon #${thisDeploy.reverts}: it wasn’t released, and canon is what production runs</span>`
+        : trainFacts.length > 1 ? `${icon("merged")}<b>merge train</b><span class="msg">made ${trainFacts.length} facts canon in one release: ${trainFacts.map((id) => `“${esc(sentenceOf2(id))}”`).join(", ")}</span>`
+        : landed ? `${avatar(landed.agent)}<b>${esc(landed.agent)}</b><span class="msg">made “${esc(landed.sentence)}” canon</span>` : `${HAT(20)}<b>genesis</b><span class="msg">the seed facts from canon.json</span>`}
          <span class="right"><span class="sha" title="${esc(c.attemptId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${MOCK ? "<span>demo</span>" : ""}</span>`;
     $("cloneurl").value = c ? (MOCK ? cloneCmd(c.attemptId) : `git clone ${location.origin}/p/${project}.git`) : "";
 
@@ -921,6 +932,8 @@
           const d = MOCK ? demoDecide(cl) : cl.autoWait ? { wait: cl.autoWait } : null;
           if (d?.wait === "confirm" || /second agent/.test(d?.wait ?? "")) return them("another agent", "The charter lands it once a second agent makes it true independently.");
           if (/locks/.test(d?.wait ?? "")) return `<p class="next you"><b>Next: the owner</b> (you, or an owner agent). It changes a rule the charter locks, and only the owner can change a locked rule. Accept it, or decline.</p>`;
+          if (/riding merge train/.test(d?.wait ?? "")) return them("the judge", "It rides a merge train: the judge checks it together with the others as one candidate, then releases them once.");
+          if (/merge train .* is being checked first|being released first/.test(d?.wait ?? "")) return them("the judge", `${esc(d.wait.replace(/^./, (c) => c.toUpperCase()))}. It lands after that, maybe in the next train.`);
           if (/routes to review/.test(d?.wait ?? "")) return `<p class="next you"><b>Next: a reviewer</b> (you, or an owner agent). Its verdict is clean, but ${esc(d.wait.replace(/, which.*$/, "").replace(/^it /, "it "))}: the charter wants eyes on those files before it lands. Open the code, then accept or decline.</p>`;
           if (d?.wait) return you(`Autopilot won’t land this: ${d.wait}. Accept it, or decline.`);
           return you(v?.retires?.length ? "Accept the rule change, or decline it." : "Accept it, or decline.");
@@ -985,6 +998,7 @@
       return `<article class="pr s-${cl.status} ${motion}" id="claim-${esc(cl.id)}">
         <div class="pr-top">
           <span class="state s-${cl.status}">${icon(STATUS_ICON[cl.status] ?? "dot")}${LABEL[cl.status] ?? esc(cl.status)}</span>
+          ${cl.status === "ready" && /riding merge train/.test(autoWaitOf(cl) ?? "") ? `<span class="state s-checking" title="Checked together with other attempts as one candidate, released once.">${icon("merged")}Merge train</span>` : ""}
           ${cl.status === "ready" && /routes to review/.test(autoWaitOf(cl) ?? "") ? `<span class="state s-locked" title="The charter routes changes to these files to a reviewer, however clean the verdict.">${icon("eye")}Review: ${esc((cl.verdict?.review ?? DEMO_REVIEW[cl.factId] ?? [""])[0].split("/").pop())}</span>` : ""}
           ${cl.status === "ready" && /locks/.test(autoWaitOf(cl) ?? "") ? `<span class="state s-locked" title="The charter locks the rule this changes. No agent, and no automatic decision, may change it: only the owner (you, or an owner agent).">${icon("key")}Locked: owner decides</span>` : ""}
           <span class="pr-agent">${avatar(cl.agent, 18)}${esc(cl.agent)}</span>
@@ -1063,7 +1077,22 @@
       if (key === "rejected") return `<details class="gfold"${foldOpen || $("search").value ? " open" : ""}><summary class="divider group g-${key}">${head}</summary>${rows.map(row).join("")}</details>`;
       return `<div class="divider group g-${key}">${head}</div>${key === "ready" ? readyRows(rows) : rows.map(row).join("")}`;
     }).join("");
-    $("claims").innerHTML = grouped(live) || none;
+    // A merge train being built or checked (or just landed / failed): one banner above the arena.
+    const t = (MOCK ? demo.train : (s.trains ?? [])[0]) ?? null;
+    const fresh = t && (["building", "judging"].includes(t.status) || Date.now() - (t.createdAt ?? 0) < 90_000);
+    const sentenceOfClaim = (c) => s.facts.find((f) => f.id === c.factId)?.sentence ?? c.factId;
+    const trainHtml = fresh ? `<div class="train ${t.status}"><b>${{
+      building: `Merge train: ${t.claims.length} attempts leave together`,
+      judging: `Merge train: checking ${t.claims.length} changes as one candidate`,
+      landed: `Merge train landed: ${t.claims.length} facts, one release`,
+      failed: "Merge train didn’t hold: its riders land one at a time",
+    }[t.status]}</b>${{
+      building: "They were waiting behind the last release. The judge applies each one’s own change onto canon, in order, as a single candidate.",
+      judging: "One live preview, every canon fact and every rider’s fact. If it all holds, they land together and the release gate runs once.",
+      landed: "One candidate checked once, one release instead of one each.",
+      failed: esc(t.detail ?? ""),
+    }[t.status]}<div class="cars">${t.claims.map((c) => `<span>${esc(c.agent)} · ${esc(sentenceOfClaim(c))}</span>`).join("")}</div></div>` : "";
+    $("claims").innerHTML = trainHtml + (grouped(live) || (trainHtml ? "" : none));
     $("claimlist").innerHTML = (filter === "open" ? grouped(live) : settled.map(row).join(""))
       || (filter === "open" ? none : `<div class="empty"><b>Nothing settled yet.</b>Accepted and replaced attempts land here.</div>`);
     for (const x of s.claims) seen.set(x.id, x.status);
@@ -1374,13 +1403,13 @@
   }
 
   // ---- Demo: the judge's moves, played in this browser. Nothing is sent anywhere; a refresh starts over. ----------
-  const demo = { deploying: false, log: [], auto: false, landed: 0, confirming: new Set() };
+  const demo = { deploying: false, log: [], auto: false, landed: 0, confirming: new Set(), train: null, trainFailed: new Set() };
   const soon = (ms, fn) => setTimeout(() => { fn(); render(); }, ms);
   const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
   const names = (list) => list.join(" and ").replace(/ and (?=.* and )/g, ", ");
   // What just happened, as small cards: one per thing, newest first. `cards` is [kind, title, sentence] triples.
   const KIND = { canon: "Canon", deploy: "Production", check: "Judge", replaced: "Replaced", rejected: "Rejected", behind: "Behind",
-    reapplied: "Re-applied", judged: "Judged", autopilot: "Autopilot", backlog: "Backlog", you: "You", declined: "Declined", done: "Done" };
+    reapplied: "Re-applied", judged: "Judged", autopilot: "Autopilot", backlog: "Backlog", you: "You", declined: "Declined", done: "Done", train: "Merge train" };
   const evCard = (c, i = 0) => `<div class="ev ev-${c.kind}" style="animation-delay:${i * 90}ms"><span class="ev-k">${KIND[c.kind] ?? c.kind}</span><b>${c.title}</b><p>${c.body}</p></div>`;
   function say(...cards) {
     demo.log = [{ at: Date.now(), cards: cards.map(([kind, title, body]) => ({ kind, title, body })) }, ...demo.log].slice(0, 12);
@@ -1506,6 +1535,7 @@
       tile(t.rejected, "rejected, with no diff read"),
       tile(t.clashesCaught, `clash${t.clashesCaught === 1 ? "" : "es"} caught before an accept`),
       tile(t.reappliedByJudge, "re-applied by the judge, no agent needed"),
+      ...(t.trainsLanded ? [tile(t.factsByTrain, `facts landed in ${t.trainsLanded} merge train${t.trainsLanded === 1 ? "" : "s"}`)] : []),
       t.medianSecondsToVerdict != null ? tile(`${t.medianSecondsToVerdict}s`, `median push to verdict${t.p90SecondsToVerdict != null ? ` (p90 ${t.p90SecondsToVerdict}s)` : ""}`) : tile(t.acceptedByPerson ?? 0, "accepted by a person"),
     ].join("");
     $("runreport").hidden = false;
@@ -1528,6 +1558,8 @@
     const mode = state.policy?.autoAccept ?? "off";
     const fact = state.facts.find((f) => f.id === x.factId);
     if (mode === "off" || x.status !== "ready" || fact?.status !== "proposed") return null;
+    if (demo.train && ["building", "judging"].includes(demo.train.status)) return { wait: demo.train.claims.some((c) => c.claimId === x.id) ? "it's riding merge train: checked together with the others, released once" : "the merge train is being checked first" };
+    if (demo.deploying) return { wait: `canon #${state.canon.seq} is being released first (one release at a time)` };
     if (fact.origin !== "backlog" && mode !== "charter") return { wait: "an agent proposed this fact, and Backlog autopilot only lands facts people wrote" };
     if (fact.replaces && CHARTER.locked.includes(fact.replaces)) return { wait: `it changes “${sentenceOf(fact.replaces)}”, which the charter locks` };
     const touched = x.verdict?.review ?? (mode === "charter" ? DEMO_REVIEW[fact.id] : null) ?? [];
@@ -1585,16 +1617,16 @@
       ["you", "Locked rules stay yours", "The charter locks “The basket charges the listed price”: no automatic change can retire it."],
       ["canon", "Clashes by priority", "The charter ranks “A stall cannot be double-booked” above shared stalls, so it wins."]);
   }
-  // Every couple of seconds: an idle agent picks up a backlog fact nobody is working on (two at a time).
+  // Every couple of seconds: an idle agent picks up a backlog fact nobody is working on (four at a time).
   function tick() {
     if (!demo.auto) return;
     // A rejected agent is fixing its attempt, so its fact is still taken.
     const working = (id) => state.claims.some((x) => x.factId === id && !["superseded", "accepted"].includes(x.status) && (x.auto || x.status !== "contradicts"));
     const todo = state.facts.filter((f) => f.status === "proposed" && f.origin === "backlog" && !working(f.id));
     const busy = state.claims.filter((x) => x.auto && ["open", "checking", "behind", "contradicts"].includes(x.status)).length;
-    if (todo.length && busy < 2) spawn(todo[0]);
+    if (todo.length && busy < 4) spawn(todo[0]);
     const left = state.facts.some((f) => f.status === "proposed" && f.origin === "backlog");
-    const moving = state.claims.some((x) => x.auto && ["open", "checking", "behind"].includes(x.status)) || demo.landing;
+    const moving = state.claims.some((x) => x.auto && ["open", "checking", "behind"].includes(x.status)) || demo.landing || !!demo.boardingTimer || ["building", "judging"].includes(demo.train?.status);
     if (!left && !moving && !demo.doneSaid) {
       demo.doneSaid = true;
       const waits = state.claims.filter((x) => x.status === "ready").map((x) => [x, waitText(demoDecide(x))]).filter(([, w]) => w);
@@ -1652,13 +1684,8 @@
       }
       return;
     }
-    if (demo.landing) return void soon(1500, () => autoLand(x));
-    demo.landing = true;
-    soon(1100, () => {
-      demo.landing = false;
-      const now = demoDecide(x);
-      if (now?.how) { demo.landed++; demoAccept(x.id, true, now.how); }
-    });
+    // Boarding: wait a moment, so others that become Ready meanwhile leave with it as one merge train.
+    if (!demo.boardingTimer) demo.boardingTimer = setTimeout(() => { demo.boardingTimer = null; departQueue(); }, 4200);
   }
 
   // The how-to cards fold to one line after the first move (once); Show tips and Hide tips switch them any time.
@@ -1671,7 +1698,38 @@
     demo.folded = true;
     tips(false);
   }
-  function demoAccept(id, auto = false, how = "the owner") {
+  // When a release finishes, what queued behind it leaves: two or more as one merge train, one on its own.
+  function departQueue() {
+    if (!["backlog", "charter"].includes(state.policy?.autoAccept)) return;
+    const seen = new Set();
+    const riders = state.claims.filter((x) => {
+      const f = state.facts.find((g) => g.id === x.factId);
+      if (x.status !== "ready" || f?.replaces || seen.has(x.factId) || demo.trainFailed.has(x.id)) return false;
+      const d = demoDecide(x);
+      if (!d?.how) return false;
+      seen.add(x.factId);
+      return true;
+    });
+    if (riders.length === 1) { demo.landed++; return demoAccept(riders[0].id, true, demoDecide(riders[0]).how); }
+    if (!riders.length) return;
+    const hows = Object.fromEntries(riders.map((r) => [r.id, demoDecide(r).how]));
+    demo.train = { status: "building", createdAt: Date.now(), claims: riders.map((r) => ({ claimId: r.id, agent: r.agent, factId: r.factId })) };
+    say(["train", "Merge train", `${riders.length} attempts were waiting on the last release. The judge applies each one’s own change onto canon as one candidate.`]);
+    render();
+    soon(2600, () => {
+      demo.train.status = "judging";
+      say(["check", "Checking the train", "One live preview of the combined code: every canon fact, and every rider’s fact."]);
+      render();
+      soon(3200, () => {
+        const still = riders.filter((r) => r.status === "ready" && state.facts.find((f) => f.id === r.factId)?.status === "proposed");
+        demo.train.status = "landed";
+        demo.landed += still.length;
+        if (still.length) demoAccept(still[0].id, true, hows[still[0].id], still.slice(1).map((r) => [r.id, hows[r.id]]));
+      });
+    });
+  }
+
+  function demoAccept(id, auto = false, how = "the owner", ride = []) {
     if (!auto) acted();
     const s = state;
     const cl = s.claims.find((x) => x.id === id);
@@ -1680,18 +1738,30 @@
     if (fact?.status !== "proposed") { cl.status = "superseded"; return render(); }
     const now = Date.now();
     // On a rival's attempt, the accepted fact got further than on canon and then failed: that's the clash.
-    const rivals = new Map(s.claims.filter((c) => c.factId === cl.factId).flatMap((c) => c.clashes ?? []).filter((c) => c.breaks === "mine").map((c) => [c.with.claimId, c.detail]));
+    const rivals = new Map(s.claims.filter((c) => c.factId === cl.factId || ride.some(([rid]) => s.claims.find((r) => r.id === rid)?.factId === c.factId)).flatMap((c) => c.clashes ?? []).filter((c) => c.breaks === "mine").map((c) => [c.with.claimId, c.detail]));
     if (how === "the owner" && fact.replaces && state.policy?.autoAccept === "charter" && CHARTER.locked.includes(fact.replaces)) how = "the owner, overriding the charter’s lock";
     Object.assign(fact, { status: "canon", acceptedAt: now, madeTrueBy: cl.attemptId, acceptedHow: how });
     if (fact.replaces) Object.assign(s.facts.find((f) => f.id === fact.replaces) ?? {}, { status: "retired", retiredBy: cl.attemptId, retiredAt: now });
     cl.status = "accepted";
-    s.canon = { attemptId: cl.attemptId, sha: hex(20), seq: s.canon.seq + 1, previewUrl: cl.verdict?.previewUrl ?? s.canon.previewUrl };
+    // Merge-train riders land with it: their facts are canon too, in the same canon number and the same release.
+    const riders = ride.flatMap(([rid, rhow]) => {
+      const r = s.claims.find((x) => x.id === rid);
+      const f = r && s.facts.find((g) => g.id === r.factId);
+      if (!r || r.status !== "ready" || f?.status !== "proposed") return [];
+      Object.assign(f, { status: "canon", acceptedAt: now, madeTrueBy: r.attemptId, acceptedHow: `${rhow}; landed in a merge train with ${esc(cl.agent)}` });
+      r.status = "accepted";
+      return [r];
+    });
+    if (riders.length) fact.acceptedHow = `${how}; landed in a merge train with ${names(riders.map((r) => esc(r.agent)))}`;
+    s.canon = { attemptId: riders.length ? `farmstand-${hex(3)}` : cl.attemptId, sha: hex(20), seq: s.canon.seq + 1, previewUrl: cl.verdict?.previewUrl ?? s.canon.previewUrl, trainFacts: riders.length ? [cl.factId, ...riders.map((r) => r.factId)] : [] };
     const seq = s.canon.seq;
-    const same = s.claims.filter((x) => x !== cl && x.factId === cl.factId && !SETTLED.includes(x.status));
+    const landedIds = new Set([cl.factId, ...riders.map((r) => r.factId)]);
+    const same = s.claims.filter((x) => x !== cl && !riders.includes(x) && landedIds.has(x.factId) && !SETTLED.includes(x.status));
     for (const x of same) x.status = "superseded";
     demo.deploying = true;
     s.canon.fact = cl.factId;
-    if (auto) say(["autopilot", `Landed: canon #${seq}`, `“${esc(cl.sentence)}”, with no click.`], ["check", "Why it could land", `${how.replace(/^(the charter|autopilot): /, "")}.`], ["deploy", "Deploying", `${esc(cl.agent)}’s attempt is going to production.`]);
+    if (auto && riders.length) say(["autopilot", `Landed together: canon #${seq}`, `${riders.length + 1} facts in one merge train, with no click: ${[cl, ...riders].map((r) => `“${esc(r.sentence)}”`).join(", ")}.`], ["deploy", "One release", `The combined commit goes through the release gate once, instead of ${riders.length + 1} times.`]);
+    else if (auto) say(["autopilot", `Landed: canon #${seq}`, `“${esc(cl.sentence)}”, with no click.`], ["check", "Why it could land", `${how.replace(/^(the charter|autopilot): /, "")}.`], ["deploy", "Deploying", `${esc(cl.agent)}’s attempt is going to production.`]);
     else say(
       ["canon", `Canon #${seq}`, `“${esc(cl.sentence)}” is canon now: a fact production must keep from here on.`],
       ["deploy", "Deploying", `${esc(cl.agent)}’s attempt, the exact commit the judge checked, is going to production.`],
@@ -1720,6 +1790,7 @@
     });
     soon(5200, () => {
       demo.deploying = false;
+      soon(400, departQueue);
       if (!auto) say(["deploy", "In production", `Canon #${seq} is live, and every canon fact holds there.`]);
       s.production = { at: Date.now(), url: s.production?.url ?? "https://farmstand.canon.rodeo", results: {} };
     });

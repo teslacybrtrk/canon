@@ -75,6 +75,9 @@ export interface Charter {
 }
 export interface Policy {
   autoAccept?: AutoAccept;
+  // Merge trains: when several Ready claims may land at once (typically the queue behind a release), the judge
+  // combines them into one candidate, verifies it once and releases it once. A train that fails lands them one by one.
+  batch?: boolean;
   charter?: Charter;
 }
 
@@ -180,7 +183,8 @@ export interface CanonState {
   // Accepted, deployed and healthy are three different things. Each accepted canon is uploaded as a Worker version,
   // staged at 0% and smoke-tested on the production URL before any visitor gets it: a version that breaks a fact is
   // held back (production never served it). The first check after the release is a second net: broken, it rolls back.
-  deploys: Array<{ seq: number; reverts?: number | null; factId: string | null; deployed: "pending" | "deployed" | "failed"; versionId: string | null; health: "healthy" | "held" | "broken" | "rolled-back" | null; detail: string | null }>;
+  trains: Array<{ id: string; status: "building" | "judging" | "landed" | "failed"; detail: string | null; createdAt: number; claims: Array<{ claimId: string; agent: string; factId: string }> }>;
+  deploys: Array<{ seq: number; reverts?: number | null; facts?: string[]; factId: string | null; deployed: "pending" | "deployed" | "failed"; versionId: string | null; health: "healthy" | "held" | "broken" | "rolled-back" | null; detail: string | null }>;
 }
 
 // ---- Move 2: declare --------------------------------------------------------------

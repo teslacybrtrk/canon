@@ -204,6 +204,69 @@ export class RefreshAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   }
 }
 
+// Started by the judge when several Ready claims may land at once: a merge train. The judge forked the train's attempt
+// from canon; this applies each rider's own change to it in order (one that doesn't apply cleanly on the others is
+// dropped and lands on its own), commits a canon.json with every rider's fact, and pushes. The push event then judges
+// the combined code as one: every canon fact and every rider's fact must hold.
+export class TrainAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
+  protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
+    const { repo } = event.payload;
+    const referee = refereeForRepo(this.env, repo);
+    let env: Record<string, string> | null;
+    try {
+      env = await step.do("train job", async () => {
+        const job = await referee.trainJob(repo);
+        return job ? (Object.fromEntries(Object.entries(job)) as Record<string, string>) : null;
+      });
+    } catch (err) {
+      await step.do("record train", () => referee.trainBuilt(repo, "failed", [], String(err)));
+      return;
+    }
+    if (!env) return;
+    let outcome: "pushed" | "failed" = "failed";
+    let included: string[] = [];
+    let detail = "";
+    try {
+      const ran = await ci.runner({ name: "build train", command: TRAIN_SCRIPT, env, config: { retries: { limit: 1, delay: 15_000 }, timeout: 5 * 60_000 } });
+      const out = typeof ran.logs.stdout === "string" ? ran.logs.stdout : "";
+      const pushed = out.match(/CANON_TRAIN_PUSHED([^\n]*)/);
+      if (pushed) {
+        outcome = "pushed";
+        included = pushed[1].trim().split(/\s+/).filter(Boolean);
+      } else detail = out.includes("CANON_TRAIN_EMPTY") ? "no rider's change applied cleanly on canon" : "the train script didn't push";
+    } catch (err) {
+      detail = isCiRunnerFailure(err) ? err.message : String(err);
+    }
+    await step.do("record train", () => referee.trainBuilt(repo, outcome, included, detail));
+  }
+}
+
+// Runs in the CI container: applies each rider's change (everything since it forked, except canon.json) in order.
+const TRAIN_SCRIPT = [
+  `set -e`,
+  `rm -rf /tmp/canon-train && git init -q /tmp/canon-train && cd /tmp/canon-train`,
+  `git config user.name "Canon judge" && git config user.email "judge@canon.rodeo"`,
+  `git fetch -q "$NEW_URL" main && git checkout -q -B main FETCH_HEAD`,
+  `printf %s "$PARTS" | base64 -d > /tmp/canon-train-parts.json`,
+  `node -e 'for (const p of require("/tmp/canon-train-parts.json")) console.log([p.claim, p.url, p.base, p.head].join(" "))' > /tmp/canon-train-list`,
+  `included=""`,
+  `while read -r claim url base head; do`,
+  `  git fetch -q "$url" main`,
+  `  git diff --binary "$base" "$head" -- . ':(exclude)canon.json' > /tmp/canon-train.patch`,
+  `  if [ ! -s /tmp/canon-train.patch ]; then echo "CANON_TRAIN_DROPPED $claim (no change)"; continue; fi`,
+  `  if git apply --3way --index /tmp/canon-train.patch >/dev/null 2>&1; then`,
+  `    git commit -q -m "merge train: $claim" --trailer "Canon-Claim: $claim"; included="$included $claim"`,
+  `  else git reset -q --hard HEAD; echo "CANON_TRAIN_DROPPED $claim"; fi`,
+  `done < /tmp/canon-train-list`,
+  `if [ -z "$included" ]; then echo CANON_TRAIN_EMPTY; exit 0; fi`,
+  // canon.json: canon's own, with every included rider's fact moved from the backlog into the facts.
+  `printf %s "$CANON_BASE" | base64 -d > /tmp/canon-train-base.json && printf %s "$FACTS" | base64 -d > /tmp/canon-train-facts.json`,
+  `INCLUDED="$included" node -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync("/tmp/canon-train-base.json","utf8"));const f=JSON.parse(fs.readFileSync("/tmp/canon-train-facts.json","utf8"));for(const id of process.env.INCLUDED.trim().split(/ +/)){const d=f[id];if(!d)continue;if(Array.isArray(c.backlog))c.backlog=c.backlog.filter(b=>b.id!==d.id);if(!c.facts.some(x=>x.id===d.id))c.facts.push(d)}if(c.backlog&&!c.backlog.length)delete c.backlog;fs.writeFileSync("canon.json",JSON.stringify(c,null,2)+"\\n")'`,
+  `git add canon.json && git commit -q -m "canon: merge train of$included" --trailer "Canon-Train: yes"`,
+  `git push -q "$NEW_URL" HEAD:main`,
+  `echo "CANON_TRAIN_PUSHED$included"`,
+].join("\n");
+
 // Runs in the CI container. The URLs carry short-lived tokens: read for the old attempt, write for the new one.
 const REFRESH_SCRIPT = [
   `set -e`,
