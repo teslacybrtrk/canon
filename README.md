@@ -123,6 +123,12 @@ queue is taken out (13,876 s of wall time, 4,230 s of it queued): about 20 conta
 most $1.07 for the run (every busy second priced as a fully busy `standard-4` at list price), so about 13 cents per
 landed fact. Still one project and scripted agents: the next measurement is real agents, more of them.
 
+The same 30 attempts through a conventional merge queue (`node scripts/queue-under-load.mjs`: same changes, same
+order; an attempt lands only if it merges cleanly and the repo's CI and its author's own test pass on the merged
+tree): **5 of 8 features land**, 11 attempts bounce to a person on text conflicts (stall products, double booking and
+basket removal never land), and 14 merges are redundant copies of a feature already in, because a queue doesn't know
+two attempts are building the same thing. Canon on that workload: 8 of 8, nobody involved, duplicates superseded.
+
 One thing the load did break: under it, a correct change missed the 400 ms page-speed fact (p95 1.7 s) and was
 rejected. Now a speed fact that fails also runs on canon's own preview at that moment; if canon is just as slow, the
 verdict is a platform error the judge retries, not a rejection. Not measured yet: hundreds of agents, or several busy
