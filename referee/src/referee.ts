@@ -45,7 +45,7 @@ type Row = Record<string, SqlStorageValue>;
 const LIVE_CHECK_TTL_MS = 30_000;
 // How long the first claim that may land waits for others to board the same merge train.
 const BOARDING_MS = 60_000;
-const SPECULATIVE_BOARDING_MS = 10_000; // boarding while a release runs: the riders leave as a speculative train
+const SPECULATIVE_BOARDING_MS = 3_000; // boarding while a release runs: the riders leave as a speculative train
 const PRODUCTION_CHECK_EVERY_MS = 60 * 60_000;
 // The forked-from files travel to CI inside the command line; past this size the novelty check is skipped.
 const NOVELTY_MAX_B64 = 48_000;
@@ -872,6 +872,8 @@ export class Referee extends DurableObject<Env> {
   async candidateCheck(seq: number): Promise<boolean> {
     const project = this.requireProject();
     const url = this.env.CANDIDATE_URL.replace("{project}", project);
+    // The candidate was deployed seconds ago: let its rollout settle (Durable Objects pick up new code eventually).
+    await new Promise((ok) => setTimeout(ok, 20_000));
     const broke = await this.factsOn(seq, url, {});
     if (!broke.length) return true;
     const what = `broke “${broke[0].fact.sentence}” on its release candidate (a full copy with production’s config): ${broke[0].detail}`;
@@ -902,8 +904,12 @@ export class Referee extends DurableObject<Env> {
         await new Promise((ok) => setTimeout(ok, 15_000));
         r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
       }
-      if (!r.held) {
-        await new Promise((ok) => setTimeout(ok, 3_000));
+      // A fact holds a release back only if it fails every time, over about 45 seconds: right after a deploy, a Durable
+      // Object can still be switching to the new code and drop a request (an intermittent 500). A real break (a
+      // missing migration, a wrong price) fails on every try.
+      for (const wait of [3_000, 15_000, 30_000]) {
+        if (r.held) break;
+        await new Promise((ok) => setTimeout(ok, wait));
         r = await runCheck(f.check as ProbeCheck, url, seedOf(f), extra);
       }
       if (!r.held) broke.push({ fact: f, detail: r.detail });

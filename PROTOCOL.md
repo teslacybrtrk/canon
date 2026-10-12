@@ -237,7 +237,7 @@ a train held back at release does too, so the gate finds the rider that breaks p
 a unit. Rule changes never ride a train.
 
 **Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release
-runs board for 10 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is
+runs board for 3 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is
 built and checked while that release goes out. A train checked before the release finishes waits (`waiting`), then
 lands the moment the release is out, without a second check, because it was checked on exactly what production now
 runs. If the release is held back, the train's base is gone: it fails, and its riders land one at a time.
