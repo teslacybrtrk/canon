@@ -1146,16 +1146,18 @@
     }).join("");
     // A merge train being built or checked (or just landed / failed): one banner above the arena.
     const t = (MOCK ? demo.train : (s.trains ?? [])[0]) ?? null;
-    const fresh = t && (["building", "judging"].includes(t.status) || Date.now() - (t.createdAt ?? 0) < 90_000);
+    const fresh = t && (["building", "judging", "waiting"].includes(t.status) || Date.now() - (t.createdAt ?? 0) < 90_000);
     const sentenceOfClaim = (c) => s.facts.find((f) => f.id === c.factId)?.sentence ?? c.factId;
     const trainHtml = fresh ? `<div class="train ${t.status}"><b>${{
-      building: `Merge train: ${t.claims.length} attempts leave together`,
-      judging: `Merge train: checking ${t.claims.length} changes as one candidate`,
+      building: `${t.speculative ? "Speculative merge train" : "Merge train"}: ${t.claims.length} attempts leave together`,
+      judging: `${t.speculative ? "Speculative merge train" : "Merge train"}: checking ${t.claims.length} changes as one candidate`,
+      waiting: `Merge train checked: it lands the moment canon #${t.baseSeq ?? ""} is released`,
       landed: `Merge train landed: ${t.claims.length} facts, one release`,
       failed: "Merge train didn’t hold: its riders land one at a time",
     }[t.status]}</b>${{
-      building: "They were waiting behind the last release. The judge applies each one’s own change onto canon, in order, as a single candidate.",
-      judging: "One live preview, every canon fact and every rider’s fact. If it all holds, they land together and the release gate runs once.",
+      building: t.speculative ? `They didn’t wait for canon #${t.baseSeq} to finish releasing: the judge builds them on it now, as a single candidate, betting the release goes out.` : "They were waiting behind the last release. The judge applies each one’s own change onto canon, in order, as a single candidate.",
+      judging: t.speculative ? `Checked while canon #${t.baseSeq} is still being released. If that release is held back, the train’s base is gone and its riders land one at a time.` : "One live preview, every canon fact and every rider’s fact. If it all holds, they land together and the release gate runs once.",
+      waiting: "Every canon fact and every rider’s fact held on the combined code. It was checked on exactly what production is about to run, so it won’t be checked again.",
       landed: "One candidate checked once, one release instead of one each.",
       failed: esc(t.detail ?? ""),
     }[t.status]}<div class="cars">${t.claims.map((c) => `<span>${esc(c.agent)} · ${esc(sentenceOfClaim(c))}</span>`).join("")}</div></div>` : "";
@@ -1633,12 +1635,12 @@
   // In the demo, the backlog fact that needs a schema change: its attempt adds a migration, which the charter routes to review.
   const DEMO_REVIEW = { "stall-products": ["migrations/0002_stall_products.sql"] };
   // The same rule as the judge's autopilot: may this Ready claim land with no click, or why does it wait?
-  function demoDecide(x) {
+  function demoDecide(x, ignoreQueue = false) {
     const mode = state.policy?.autoAccept ?? "off";
     const fact = state.facts.find((f) => f.id === x.factId);
     if (mode === "off" || x.status !== "ready" || fact?.status !== "proposed") return null;
-    if (demo.train && ["building", "judging"].includes(demo.train.status)) return { wait: demo.train.claims.some((c) => c.claimId === x.id) ? "it's riding merge train: checked together with the others, released once" : "the merge train is being checked first" };
-    if (demo.deploying) return { wait: `canon #${state.canon.seq} is being released first (one release at a time)` };
+    if (!ignoreQueue && demo.train && ["building", "judging", "waiting"].includes(demo.train.status)) return { wait: demo.train.claims.some((c) => c.claimId === x.id) ? "it's riding merge train: checked together with the others, released once" : "the merge train is being checked first" };
+    if (!ignoreQueue && demo.deploying) return { wait: `canon #${state.canon.seq} is being released first (one release at a time)` };
     if (fact.origin !== "backlog" && mode !== "charter") return { wait: "an agent proposed this fact, and Backlog autopilot only lands facts people wrote" };
     if (fact.replaces && CHARTER.locked.includes(fact.replaces)) return { wait: `it changes “${sentenceOf(fact.replaces)}”, which the charter locks` };
     const touched = x.verdict?.review ?? (mode === "charter" ? DEMO_REVIEW[fact.id] : null) ?? [];
@@ -1752,6 +1754,11 @@
   function autoLand(x) {
     const d = demoDecide(x);
     if (!d) return;
+    // Waiting only on the release (or a train): it boards anyway, and may leave in a speculative train.
+    if (d.wait && demoDecide(x, true)?.how) {
+      if (!demo.boardingTimer) demo.boardingTimer = setTimeout(() => { demo.boardingTimer = null; departQueue(); }, demo.deploying ? 2500 : 4200);
+      return;
+    }
     if (d.wait) {
       // Full autopilot: another agent goes to confirm a fact an agent proposed.
       if (d.wait === "confirm" && !demo.confirming.has(x.factId)) {
@@ -1782,32 +1789,53 @@
   // When a release finishes, what queued behind it leaves: two or more as one merge train, one on its own.
   function departQueue() {
     if (!["backlog", "charter"].includes(state.policy?.autoAccept)) return;
+    if (demo.train && ["building", "judging", "waiting"].includes(demo.train.status)) return;
+    // While a release runs, two or more riders leave anyway: a speculative train, built on the canon being released.
+    const speculative = !!demo.deploying;
     const seen = new Set();
     const riders = state.claims.filter((x) => {
       const f = state.facts.find((g) => g.id === x.factId);
       if (x.status !== "ready" || f?.replaces || seen.has(x.factId) || demo.trainFailed.has(x.id)) return false;
-      const d = demoDecide(x);
+      const d = demoDecide(x, speculative);
       if (!d?.how) return false;
       seen.add(x.factId);
       return true;
     });
+    if (speculative && riders.length < 2) return;
     if (riders.length === 1) { demo.landed++; return demoAccept(riders[0].id, true, demoDecide(riders[0]).how); }
     if (!riders.length) return;
-    const hows = Object.fromEntries(riders.map((r) => [r.id, demoDecide(r).how]));
-    demo.train = { status: "building", createdAt: Date.now(), claims: riders.map((r) => ({ claimId: r.id, agent: r.agent, factId: r.factId })) };
-    say(["train", "Merge train", `${riders.length} attempts were waiting on the last release. The judge applies each one’s own change onto canon as one candidate.`]);
+    const hows = Object.fromEntries(riders.map((r) => [r.id, demoDecide(r, true).how]));
+    const baseSeq = state.canon.seq;
+    demo.train = { status: "building", createdAt: Date.now(), speculative, baseSeq, claims: riders.map((r) => ({ claimId: r.id, agent: r.agent, factId: r.factId })) };
+    demo.trainRiders = riders;
+    demo.trainHows = hows;
+    say(speculative
+      ? ["train", "Speculative merge train", `${riders.length} attempts don’t wait for canon #${baseSeq} to finish releasing: the judge builds them on it now, as one candidate.`]
+      : ["train", "Merge train", `${riders.length} attempts were waiting on the last release. The judge applies each one’s own change onto canon as one candidate.`]);
     render();
     soon(2600, () => {
       demo.train.status = "judging";
-      say(["check", "Checking the train", "One live preview of the combined code: every canon fact, and every rider’s fact."]);
+      say(["check", "Checking the train", speculative ? `One live preview of the combined code, while canon #${baseSeq} is still going out.` : "One live preview of the combined code: every canon fact, and every rider’s fact."]);
       render();
       soon(3200, () => {
-        const still = riders.filter((r) => r.status === "ready" && state.facts.find((f) => f.id === r.factId)?.status === "proposed");
-        demo.train.status = "landed";
-        demo.landed += still.length;
-        if (still.length) demoAccept(still[0].id, true, hows[still[0].id], still.slice(1).map((r) => [r.id, hows[r.id]]));
+        // Checked on a canon still being released: wait for it, then land without checking again.
+        if (demo.deploying) {
+          demo.train.status = "waiting";
+          say(["check", "Train checked", `It held on the combined code. It lands the moment canon #${baseSeq} is released, without being checked again.`]);
+          return render();
+        }
+        landTrain();
       });
     });
+  }
+  // A checked train lands: one canon, one release.
+  function landTrain() {
+    const riders = demo.trainRiders ?? [];
+    const still = riders.filter((r) => r.status === "ready" && state.facts.find((f) => f.id === r.factId)?.status === "proposed");
+    demo.train.status = "landed";
+    demo.landed += still.length;
+    if (still.length) demoAccept(still[0].id, true, demo.trainHows[still[0].id], still.slice(1).map((r) => [r.id, demo.trainHows[r.id]]));
+    else render();
   }
 
   function demoAccept(id, auto = false, how = "the owner", ride = []) {
@@ -1873,11 +1901,21 @@
     // one that passes its fresh preview and breaks on a copy with real data (as it did in the real run), once.
     const prevCanon = { ...s.canon, seq: seq - 1 };
     s.deploys = [{ seq, facts: [...landedIds], factId: cl.factId, deployed: "pending", health: null, detail: null }, ...(s.deploys ?? [])].slice(0, 10);
-    soon(5200, () => {
+    // A release (candidate, every fact, then production) is the slowest step; what queues meanwhile may leave speculatively.
+    soon(auto ? 8500 : 5200, () => {
       demo.deploying = false;
-      if (landedIds.has("stall-hours") && !demo.heldOnce) return holdBack(seq, prevCanon, [cl, ...riders]);
+      if (landedIds.has("stall-hours") && !demo.heldOnce) {
+        // A speculative train built on this canon loses its base: its riders land one at a time.
+        if (demo.train && demo.train.baseSeq === seq && ["building", "judging", "waiting"].includes(demo.train.status)) {
+          demo.train.status = "failed";
+          demo.train.detail = `It was checked on canon #${seq}, which was held back at release, so its riders land one at a time.`;
+          for (const r of demo.trainRiders ?? []) demo.trainFailed.add(r.id);
+        }
+        return holdBack(seq, prevCanon, [cl, ...riders]);
+      }
       s.deploys[0] = { ...s.deploys[0], deployed: "deployed", health: "healthy" };
-      soon(400, departQueue);
+      if (demo.train?.status === "waiting" && demo.train.baseSeq === seq) soon(400, landTrain);
+      else soon(400, departQueue);
       if (!auto) say(["deploy", "In production", `Canon #${seq} is live, and every canon fact holds there.`]);
       s.production = { at: Date.now(), url: s.production?.url ?? "https://farmstand.canon.rodeo", results: {} };
       render();

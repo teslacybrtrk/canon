@@ -21,6 +21,8 @@ export const UPGRADES = [
   `ALTER TABLE canon ADD COLUMN health_detail TEXT`,
   `ALTER TABLE canon ADD COLUMN reverts INTEGER`,
   `ALTER TABLE canon ADD COLUMN facts_json TEXT`,
+  `ALTER TABLE trains ADD COLUMN base_seq INTEGER`,
+  `ALTER TABLE trains ADD COLUMN speculative INTEGER NOT NULL DEFAULT 0`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];
@@ -95,7 +97,7 @@ CREATE TABLE IF NOT EXISTS trains (
   id         TEXT PRIMARY KEY,         -- the train's attempt id
   claims     TEXT NOT NULL,            -- JSON: claim ids riding it (after the build: the ones that applied)
   hows       TEXT NOT NULL,            -- JSON: claim id -> why the policy lets it land
-  status     TEXT NOT NULL,            -- building | judging | landed | failed
+  status     TEXT NOT NULL,            -- building | judging | waiting (checked, its base canon still releasing) | landed | failed
   detail     TEXT,
   created_at INTEGER NOT NULL
 );

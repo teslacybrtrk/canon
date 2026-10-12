@@ -28,6 +28,7 @@ import {
   type Mutant,
   type Mutation,
 } from "./protocol";
+import { platformFailure } from "./platform";
 import { SCHEMA, UPGRADES } from "./schema";
 import { ground, parseAnswer, REVIEW_SCHEMA, reviewPrompt, type Review, type ReviewFile } from "./review";
 
@@ -44,6 +45,7 @@ type Row = Record<string, SqlStorageValue>;
 const LIVE_CHECK_TTL_MS = 30_000;
 // How long the first claim that may land waits for others to board the same merge train.
 const BOARDING_MS = 60_000;
+const SPECULATIVE_BOARDING_MS = 10_000; // boarding while a release runs: the riders leave as a speculative train
 const PRODUCTION_CHECK_EVERY_MS = 60 * 60_000;
 // The forked-from files travel to CI inside the command line; past this size the novelty check is skipped.
 const NOVELTY_MAX_B64 = 48_000;
@@ -119,8 +121,10 @@ export class Referee extends DurableObject<Env> {
       production: JSON.parse(this.meta("production") ?? "null"),
       trains: this.rows(`SELECT * FROM trains ORDER BY created_at DESC LIMIT 5`).map((t) => ({
         id: t.id as string,
-        status: t.status as "building" | "judging" | "landed" | "failed",
+        status: t.status as "building" | "judging" | "waiting" | "landed" | "failed",
         detail: (t.detail as string | null) ?? null,
+        baseSeq: (t.base_seq as number | null) ?? null,
+        speculative: t.speculative === 1,
         createdAt: t.created_at as number,
         claims: (JSON.parse(t.claims as string) as string[]).flatMap((id) => {
           const c = this.claim(id);
@@ -348,6 +352,9 @@ export class Referee extends DurableObject<Env> {
   async buildFailed(repo: string, sha: string, detail: string): Promise<void> {
     const train = this.rows(`SELECT * FROM trains WHERE id = ? AND status IN ('building', 'judging')`, repo)[0];
     if (train) return this.trainFailed(train, `the combined candidate didn't build: ${detail.slice(0, 160)}`);
+    // The platform failed (the API answered with an error page, the network dropped): not the code's fault. It is
+    // an error the judge retries itself, never a rejection.
+    if (platformFailure(detail)) return this.couldNotJudge(repo, sha, `the build failed on the platform: ${detail.replace(/<[^>]*>/g, " ").slice(0, 160)}`);
     const attempt = this.attempt(repo);
     if (!attempt || (attempt.headSha && attempt.headSha !== sha)) return;
     await this.evaluate(attempt, sha, "", { held: false, detail: `build failed: ${detail.slice(0, 300)}`, ms: 0 });
@@ -588,6 +595,12 @@ export class Referee extends DurableObject<Env> {
     // decides whether this deploy is healthy (see checkCanonOnProduction).
     if (ok) this.setMeta("verifyDeploy", String(seq));
     await this.scheduleProductionCheck(20_000);
+    // A speculative train checked on this canon: it lands now if the release went out, and fails if it was held back.
+    for (const t of this.rows(`SELECT * FROM trains WHERE status = 'waiting' AND base_seq = ?`, seq)) {
+      const v = this.latestVerdict(t.id as string);
+      if (ok && v) await this.trainJudged(t, v).catch(() => {});
+      else await this.trainFailed(t, `it was checked on canon #${seq}, which ${ok ? "had no verdict" : "was held back at release"}, so its riders land one at a time`).catch(() => {});
+    }
     this.broadcast();
   }
 
@@ -611,7 +624,7 @@ export class Referee extends DurableObject<Env> {
       await this.keepCanonReleased().catch(() => {});
       await this.depart().catch(() => {});
       await this.retryPlatformErrors().catch(() => {});
-      for (const t of this.rows(`SELECT * FROM trains WHERE status IN ('building', 'judging') AND created_at < ?`, Date.now() - 20 * 60_000)) {
+      for (const t of this.rows(`SELECT * FROM trains WHERE status IN ('building', 'judging', 'waiting') AND created_at < ?`, Date.now() - 20 * 60_000)) {
         await this.trainFailed(t, "it was still being checked after 20 minutes").catch(() => {});
       }
       for (const c of this.rows(`SELECT * FROM claims WHERE status = 'ready' ORDER BY created_at LIMIT 20`).map(toClaim)) {
@@ -1326,14 +1339,19 @@ export class Referee extends DurableObject<Env> {
     const claim = this.claim(claimId);
     if (!claim || claim.status !== "ready") return;
     const decision = this.autoDecision(claim);
+    const batch = this.meta("batch") === "1";
+    // Held only by the queue (a release or a train out): with batching it boards anyway, so a speculative train can
+    // take it while the release runs instead of after.
+    const queued = batch && !!decision && "wait" in decision && ((d) => !!d && !("wait" in d))(this.autoDecision(claim, true));
     this.sql.exec(`UPDATE claims SET auto_wait = ? WHERE id = ?`, decision && "wait" in decision ? decision.wait : null, claim.id);
-    if (!decision || "wait" in decision) return this.broadcast();
-    if (this.meta("batch") === "1") {
+    if (!decision || ("wait" in decision && !queued)) return this.broadcast();
+    if (batch) {
       // Boarding: the first claim that may land opens a short window, so others that become Ready meanwhile leave with
       // it as one merge train (one candidate, one check, one release). The alarm departs it when the window closes.
+      // During a release the window is short: the train is built and checked while the release runs.
       const until = Number(this.meta("boardingUntil") ?? 0);
       if (!until) {
-        const at = Date.now() + BOARDING_MS;
+        const at = Date.now() + (this.releasing() ? SPECULATIVE_BOARDING_MS : BOARDING_MS);
         this.setMeta("boardingUntil", String(at));
         const current = await this.ctx.storage.getAlarm();
         if (current === null || current > at) await this.ctx.storage.setAlarm(at);
@@ -1341,6 +1359,7 @@ export class Referee extends DurableObject<Env> {
       this.sql.exec(`UPDATE claims SET auto_wait = ? WHERE id = ?`, "it's boarding the next merge train, which leaves in under a minute", claim.id);
       return this.broadcast();
     }
+    if ("wait" in decision) return this.broadcast();
     try {
       await this.accept(claim.id, decision.how);
     } catch {
@@ -1516,8 +1535,21 @@ export class Referee extends DurableObject<Env> {
   private async depart() {
     const until = Number(this.meta("boardingUntil") ?? 0);
     if (!until || Date.now() < until) return;
-    // Still busy (a release or a train is out): look again in a few seconds; promoted() also brings it forward.
-    if (this.activeTrain() || this.releasing()) return void this.setMeta("boardingUntil", String(Date.now() + 15_000));
+    // A train is out: look again in a few seconds; promoted() also brings it forward.
+    if (this.activeTrain()) return void this.setMeta("boardingUntil", String(Date.now() + 15_000));
+    // A release is out: two or more riders leave now anyway, as a speculative train built on the canon being released.
+    // It is checked while that release runs; it lands the moment the release goes out, or fails if it's held back.
+    const releasing = this.releasing();
+    if (releasing) {
+      const riders = this.trainRiders(false, true);
+      if (riders.length < 2) return void this.setMeta("boardingUntil", String(Date.now() + 15_000));
+      this.setMeta("boardingUntil", "0");
+      try {
+        return await this.startTrain(riders);
+      } catch {
+        return void this.setMeta("boardingUntil", String(Date.now() + 15_000));
+      }
+    }
     this.setMeta("boardingUntil", "0");
     const riders = this.trainRiders();
     if (riders.length >= 2) {
@@ -1538,19 +1570,19 @@ export class Referee extends DurableObject<Env> {
 
   /** A train still being built or checked (a stuck one stops blocking after 20 minutes). */
   private activeTrain(): Row | null {
-    const t = this.rows(`SELECT * FROM trains WHERE status IN ('building', 'judging') ORDER BY created_at DESC LIMIT 1`)[0];
+    const t = this.rows(`SELECT * FROM trains WHERE status IN ('building', 'judging', 'waiting') ORDER BY created_at DESC LIMIT 1`)[0];
     return t && Date.now() - Number(t.created_at) < 20 * 60_000 ? t : null;
   }
 
   /** Ready claims the policy would land right now, one per fact, never a rule change, never one a failed train carried. */
-  private trainRiders(singles = false): Array<{ claim: Claim; how: string }> {
+  private trainRiders(singles = false, speculative = false): Array<{ claim: Claim; how: string }> {
     const failed = new Set(singles ? [] : (JSON.parse(this.meta("trainFailed") ?? "[]") as string[]));
     const seen = new Set<string>();
     const out: Array<{ claim: Claim; how: string }> = [];
     for (const c of this.rows(`SELECT * FROM claims WHERE status = 'ready' ORDER BY created_at`).map(toClaim)) {
       const fact = this.fact(c.factId);
       if (!fact || (fact.replaces && !singles) || seen.has(c.factId) || failed.has(c.id) || this.attempt(c.attemptId)?.frozen) continue;
-      const d = this.autoDecision(c);
+      const d = this.autoDecision(c, speculative);
       if (!d || "wait" in d) continue;
       seen.add(c.factId);
       out.push({ claim: c, how: d.how });
@@ -1562,16 +1594,21 @@ export class Referee extends DurableObject<Env> {
   /** Forks a train attempt from canon and asks CI to apply every rider's own change to it, in order. */
   private async startTrain(riders: Array<{ claim: Claim; how: string }>) {
     const canon = this.currentCanon();
-    if (!canon || this.activeTrain() || this.releasing()) return;
+    const releasing = this.releasing();
+    // While a release runs, only a train built on the very canon being released (speculation on its success).
+    if (!canon || this.activeTrain() || (releasing !== null && releasing !== canon.seq)) return;
     const id = `${this.requireProject()}-${shortId()}`;
     const now = Date.now();
     const { remote } = await this.forkAttempt(canon.attempt_id as string, id, `merge train: ${riders.map((r) => r.claim.factId).join(", ")}`);
     this.sql.exec(`INSERT INTO attempts (id, claim_id, remote, base_attempt, base_sha, created_at) VALUES (?, NULL, ?, ?, ?, ?)`, id, remote, canon.attempt_id, canon.sha, now);
     this.sql.exec(
-      `INSERT INTO trains (id, claims, hows, status, created_at) VALUES (?, ?, ?, 'building', ?)`,
-      id, JSON.stringify(riders.map((r) => r.claim.id)), JSON.stringify(Object.fromEntries(riders.map((r) => [r.claim.id, r.how]))), now,
+      `INSERT INTO trains (id, claims, hows, status, created_at, base_seq, speculative) VALUES (?, ?, ?, 'building', ?, ?, ?)`,
+      id, JSON.stringify(riders.map((r) => r.claim.id)), JSON.stringify(Object.fromEntries(riders.map((r) => [r.claim.id, r.how]))), now, canon.seq, releasing ? 1 : 0,
     );
-    for (const r of riders) this.sql.exec(`UPDATE claims SET auto_wait = ? WHERE id = ?`, `it's riding merge train ${id}: checked together with the others, released once`, r.claim.id);
+    const ride = releasing
+      ? `it's riding merge train ${id}, checked now on canon #${canon.seq} while that release runs: it lands the moment the release goes out`
+      : `it's riding merge train ${id}: checked together with the others, released once`;
+    for (const r of riders) this.sql.exec(`UPDATE claims SET auto_wait = ? WHERE id = ?`, ride, r.claim.id);
     this.broadcast();
     try {
       await this.env.TRAIN_WORKFLOW.create({ id: `train-${id}`, params: this.ciParams(id, canon.sha as string) });
@@ -1633,6 +1670,14 @@ export class Referee extends DurableObject<Env> {
         : missing ? `“${this.fact(missing.factId)?.sentence ?? missing.factId}” doesn't hold on the combined code` : stale ? "canon or a rider changed while it was checked" : `its verdict was ${verdict.outcome}`;
       return this.trainFailed(train, why);
     }
+    // Checked on a canon that is still being released: it waits for that release, then lands without being checked
+    // again (its base is exactly what production will run). If the release is held back, its base is gone.
+    if (this.releasing() === canon.seq) {
+      this.sql.exec(`UPDATE trains SET status = 'waiting' WHERE id = ?`, train.id);
+      for (const c of claims) this.sql.exec(`UPDATE claims SET auto_wait = ? WHERE id = ?`, `checked with merge train ${train.id} on canon #${canon.seq}: it lands the moment that release goes out`, c.id);
+      this.broadcast();
+      return;
+    }
     const hows = JSON.parse(train.hows as string) as Record<string, string>;
     const now = Date.now();
     const trainId = train.id as string;
@@ -1676,14 +1721,14 @@ export class Referee extends DurableObject<Env> {
     }
   }
 
-  private autoDecision(claim: Claim): { how: string } | { wait: string } | null {
+  private autoDecision(claim: Claim, ignoreQueue = false): { how: string } | { wait: string } | null {
     const policy = this.autoAccept();
     const fact = this.fact(claim.factId);
     if (policy === "off" || fact?.status !== "proposed") return null;
     const charter = this.charter() ?? {};
-    const releasing = this.releasing();
+    const releasing = ignoreQueue ? null : this.releasing();
     if (releasing) return { wait: `canon #${releasing} is being released first (one release at a time)` };
-    const train = this.activeTrain();
+    const train = ignoreQueue ? null : this.activeTrain();
     if (train) {
       const riding = (JSON.parse(train.claims as string) as string[]).includes(claim.id);
       return { wait: riding ? `it's riding merge train ${train.id}: checked together with the others, released once` : `merge train ${train.id} is being checked first` };

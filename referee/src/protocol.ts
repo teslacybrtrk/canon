@@ -206,7 +206,7 @@ export interface CanonState {
   // Accepted, deployed and healthy are three different things. Each accepted canon is uploaded as a Worker version,
   // staged at 0% and smoke-tested on the production URL before any visitor gets it: a version that breaks a fact is
   // held back (production never served it). The first check after the release is a second net: broken, it rolls back.
-  trains: Array<{ id: string; status: "building" | "judging" | "landed" | "failed"; detail: string | null; createdAt: number; claims: Array<{ claimId: string; agent: string; factId: string }> }>;
+  trains: Array<{ id: string; status: "building" | "judging" | "waiting" | "landed" | "failed"; detail: string | null; createdAt: number; baseSeq?: number | null; speculative?: boolean; claims: Array<{ claimId: string; agent: string; factId: string }> }>;
   deploys: Array<{ seq: number; reverts?: number | null; facts?: string[]; factId: string | null; deployed: "pending" | "deployed" | "failed"; versionId: string | null; health: "healthy" | "held" | "broken" | "rolled-back" | null; detail: string | null }>;
 }
 
