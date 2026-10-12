@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts five real coding agents in parallel, each speaking the Canon protocol.
+# Starts real coding agents in parallel (one per agents/prompts/*.md, twelve), each speaking the Canon protocol.
 #   ./agents/run.sh   (CANON_URL defaults to your referee, see scripts/env.sh)
 # Uses Claude Code headless (`claude -p`). GROK_AGENTS="agent-5" runs those agents on Grok Build (`grok -p`) instead,
 # with the same allow-list, to show any coding agent can play. For opencode, use `opencode run "$PROMPT"`.
@@ -16,7 +16,7 @@ ROOT="$PWD"
 # Cheap by default. The two reservation racers get different models so their attempts differ.
 model_for() {
   case "$1" in
-    agent-1-* | agent-2-*) echo sonnet ;; # agent-1 also writes a revision, the trickiest move
+    agent-1-* | agent-2-* | agent-7-*) echo sonnet ;; # agent-1 also writes a revision; 2 and 7 race their rivals on another model
     *) echo haiku ;;
   esac
 }
@@ -24,9 +24,9 @@ model_for() {
 # Agents may run only the protocol, Git, the app's toolchain and read-only shell commands.
 TOOLS=(Read Edit Write Glob Grep "Bash(canon:*)" "Bash(git:*)" "Bash(npm:*)" "Bash(npx:*)" "Bash(node:*)" "Bash(cd:*)" "Bash(ls:*)" "Bash(cat:*)" "Bash(pwd)" "Bash(sleep:*)")
 
-for prompt in agents/prompts/*.md; do
+for prompt in $(ls agents/prompts/*.md | sort -V); do # agent-2 before agent-10
   name="$(basename "$prompt" .md)"           # agent-1-discount
-  [ -n "${ONLY:-}" ] && [[ "$name" != "$ONLY"* ]] && continue   # ONLY=agent-4 runs one agent
+  [ -n "${ONLY:-}" ] && [[ " $ONLY " != *" $(echo "$name" | cut -d- -f1-2) "* ]] && continue   # ONLY="agent-4 agent-9" runs those
   agent="$(echo "$name" | cut -d- -f1-2)"     # agent-1
   dir="runs/$name"
   [ -d "$dir" ] && chmod -R u+w "$dir" # the claims copy is read-only

@@ -1,0 +1,7 @@
+{
+  "id": "stall-products",
+  "sentence": "Each stall lists its own products",
+  "check": { "kind": "probe", "steps": [
+    { "path": "/api/stalls/2/products", "expect": { "status": 200, "json": { "length": 2, "0.stallId": 2 } } }
+  ] }
+}

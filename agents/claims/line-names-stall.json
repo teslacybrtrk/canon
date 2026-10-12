@@ -1,0 +1,9 @@
+{
+  "id": "line-names-stall",
+  "sentence": "Every basket line says which stall it comes from",
+  "check": { "kind": "probe", "steps": [
+    { "method": "POST", "path": "/api/cart", "body": { "productId": "comb", "qty": 1 }, "expect": { "status": 200 } },
+    { "method": "POST", "path": "/api/cart", "body": { "productId": "kale", "qty": 2 }, "expect": { "status": 200 } },
+    { "path": "/api/cart", "expect": { "status": 200, "json": { "items.0.stallId": 2, "items.1.stallId": 3 } } }
+  ] }
+}

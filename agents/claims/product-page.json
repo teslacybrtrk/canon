@@ -1,0 +1,8 @@
+{
+  "id": "product-page",
+  "sentence": "Each product has its own API page with its price",
+  "check": { "kind": "probe", "steps": [
+    { "path": "/api/products/honey", "expect": { "status": 200, "json": { "id": "honey", "priceCents": 1200 } } },
+    { "path": "/api/products/turnip", "expect": { "status": 404 } }
+  ] }
+}

@@ -1,0 +1,9 @@
+{
+  "id": "remove-from-basket",
+  "sentence": "Shoppers can remove an item from the basket",
+  "check": { "kind": "probe", "steps": [
+    { "method": "POST", "path": "/api/cart", "body": { "productId": "eggs", "qty": 2 }, "expect": { "status": 200 } },
+    { "method": "DELETE", "path": "/api/cart/eggs", "expect": { "status": 200 } },
+    { "path": "/api/cart", "expect": { "json": { "items.length": 0, "totalCents": 0 } } }
+  ] }
+}

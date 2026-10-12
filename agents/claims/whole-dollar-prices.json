@@ -1,0 +1,8 @@
+{
+  "id": "whole-dollar-prices",
+  "sentence": "The basket rounds every price down to the whole dollar",
+  "check": { "kind": "probe", "steps": [
+    { "method": "POST", "path": "/api/cart", "body": { "productId": "duck-eggs", "qty": 2 }, "expect": { "status": 200 } },
+    { "path": "/api/cart", "expect": { "status": 200, "json": { "items.0.unitCents": 600, "totalCents": 1200 } } }
+  ] }
+}
