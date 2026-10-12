@@ -939,6 +939,7 @@
           const d = MOCK ? demoDecide(cl) : cl.autoWait ? { wait: cl.autoWait } : null;
           if (d?.wait === "confirm" || /second agent/.test(d?.wait ?? "")) return them("another agent", "The charter lands it once a second agent makes it true independently.");
           if (/locks/.test(d?.wait ?? "")) return `<p class="next you"><b>Next: the owner</b> (you, or an owner agent). It changes a rule the charter locks, and only the owner can change a locked rule. Accept it, or decline.</p>`;
+          if (/boarding the next merge train/.test(d?.wait ?? "")) return them("the judge", "It’s boarding the next merge train: claims that may land around now leave together, checked once and released once.");
           if (/riding merge train/.test(d?.wait ?? "")) return them("the judge", "It rides a merge train: the judge checks it together with the others as one candidate, then releases them once.");
           if (/merge train .* is being checked first|being released first/.test(d?.wait ?? "")) return them("the judge", `${esc(d.wait.replace(/^./, (c) => c.toUpperCase()))}. It lands after that, maybe in the next train.`);
           if (/routes to review/.test(d?.wait ?? "")) return `<p class="next you"><b>Next: a reviewer</b> (you, or an owner agent). Its verdict is clean, but ${esc(d.wait.replace(/, which.*$/, "").replace(/^it /, "it "))}: the charter wants eyes on those files before it lands. Open the code, then accept or decline.</p>`;
