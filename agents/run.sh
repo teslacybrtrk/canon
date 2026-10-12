@@ -44,8 +44,10 @@ for prompt in $(ls agents/prompts/*.md | sort -V); do # agent-2 before agent-10
         --output-format streaming-messages-json \
         > agent.log 2>&1 && echo "$agent done (grok)" || echo "$agent exited non-zero (see $dir/agent.log)"
     else
-      CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" CANON_CLAIMS="$PWD/claims" claude -p "$PROMPT" \
+      # The overlap hook (agents/hooks): after each edit, other agents changing the same files show up in the session.
+      CANON_ROOT="$ROOT" CANON_KEY="$CANON_AGENT_KEY" CANON_AGENT="$agent" CANON_CLAIMS="$PWD/claims" claude -p "$PROMPT" \
         --model "$(model_for "$name")" \
+        --settings "$ROOT/agents/hooks/settings.json" \
         --allowedTools "${TOOLS[@]}" \
         --strict-mcp-config --disable-slash-commands \
         --output-format stream-json --verbose \

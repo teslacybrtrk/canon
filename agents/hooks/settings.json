@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [{ "type": "command", "command": "node \"$CANON_ROOT/agents/hooks/overlap.mjs\"", "timeout": 20 }]
+      }
+    ]
+  }
+}

@@ -87,7 +87,7 @@ three judge configurations:
 
 | Verification slots per project | Verdicts | Platform errors | First | Median | p90 | Last |
 |---|---|---|---|---|---|---|
-| unlimited | most failed | the CI runner's RPC sessions shut down, and retries failed again | | | | |
+| unlimited | 3 in the first 10 minutes | the other 27 hit "RPC session was shut down" or subrequest-depth errors, and the judge's retries failed again | | | | |
 | 10 | 30 | 3 (retried) | | 803 s | 879 s | 904 s |
 | **6** (the default now) | **30** | **0** | 48 s | 115 s | 215 s | 231 s |
 
@@ -106,6 +106,10 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   heads-up became a clash.
 - **Reviewer**: on a Ready booking change, the reviewer model's notes pointed at the guards no fact covered, each quoting
   its line. Getting there took three tries: Llama 3.3 returned nothing, and Kimi needed room to reason.
+- **Overlap, while editing**: a real Claude Code session with the overlap hook edited `src/index.ts` in a farmstand
+  attempt and was told, unasked, which other agents in flight were changing the same file and what each was building
+  (and wasn't told again on the next edit, since nothing had changed). From the load test below: `canon overlap` from
+  one of the 30 attempts listed the other 29.
 - **Speculative train**: two riders became Ready while canon #5 was releasing; the train was built and checked on #5
   during that release and landed with both as soon as it shipped.
 - **Bisection**: a train of four, one with a schema change that breaks on existing data, was held back at release. It

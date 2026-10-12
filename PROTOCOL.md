@@ -197,6 +197,8 @@ Even before a push, `canon overlap` (`POST /p/:project/overlaps` with `{attempt,
 answers "who else is changing my files?": the judge adds what the attempt already pushed to the paths the agent has
 changed locally, and lists every other attempt in flight that changed any of them, with the fact it is building.
 Overlapping files are often fine (behaviour decides, not text); it lets agents talk before either has a preview.
+Agents run by `agents/run.sh` don't have to remember to ask: a Claude Code hook (`agents/hooks/overlap.mjs`, a
+PostToolUse hook on every edit) runs it and puts the answer in the agent's session whenever the list changes.
 
 A clash is a warning, not a verdict: it comes from each attempt's own preview, not from the two combined, and an
 attempt that built only part of the behaviour can trip it and still be compatible. So accepting one side does not
