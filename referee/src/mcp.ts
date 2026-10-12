@@ -301,18 +301,22 @@ function fail(message: string): never {
   throw new Error(message);
 }
 
-type Overlaps = { paths: string[]; overlaps: Array<{ agent: string; factId: string; sentence: string; status: string; files: string[]; symbols: string[] }>; headsUp: unknown[]; clashes: unknown[] };
+type Overlaps = { paths: string[]; overlaps: Array<{ agent: string; factId: string; sentence: string; status: string; files: string[]; symbols: string[]; youCall?: string[]; theyCall?: string[] }>; headsUp: unknown[]; clashes: unknown[] };
 
 /** Who else is changing the same files, in the words an agent acts on. */
 function overlapText(o: Overlaps): string {
   if (!o.paths.length) return "You haven't changed any files yet.";
   if (!o.overlaps.length) return `No other attempt in flight changes ${o.paths.slice(0, 6).join(", ")}${o.paths.length > 6 ? " and the rest" : ""}.`;
-  const close = o.overlaps.filter((x) => x.symbols.length);
-  const near = o.overlaps.filter((x) => !x.symbols.length);
+  const touches = (x: Overlaps["overlaps"][number]) => x.symbols.length + (x.youCall?.length ?? 0) + (x.theyCall?.length ?? 0);
+  const close = o.overlaps.filter((x) => touches(x));
+  const near = o.overlaps.filter((x) => !touches(x));
   const lines: string[] = [];
   if (close.length) {
     lines.push("Others changing the same code:");
-    for (const x of close.slice(0, 8)) lines.push(`  ${x.agent} (${x.status}) is changing ${x.symbols.slice(0, 3).join(", ")}, to make "${x.sentence}" true`);
+    for (const x of close.slice(0, 8)) {
+      const what = [x.symbols.length ? `is changing ${x.symbols.slice(0, 3).join(", ")}` : "", x.youCall?.length ? `is changing ${x.youCall.slice(0, 3).join(", ")}, which your change calls` : "", x.theyCall?.length ? `calls ${x.theyCall.slice(0, 3).join(", ")}, which you are changing` : ""].filter(Boolean).join("; and ");
+      lines.push(`  ${x.agent} (${x.status}) ${what}, to make "${x.sentence}" true`);
+    }
     if (close.length > 8) lines.push(`  …and ${close.length - 8} more`);
   }
   if (near.length) lines.push(`${close.length ? "Also in the same files, but other functions" : "Others change the same files, but other functions"}: ${near.slice(0, 5).map((x) => x.agent).join(", ")}${near.length > 5 ? ` and ${near.length - 5} more` : ""}.`);

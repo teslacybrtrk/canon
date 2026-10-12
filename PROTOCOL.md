@@ -198,7 +198,8 @@ answers "who else is changing my files?": the judge adds what the attempt alread
 changed locally, and lists every other attempt in flight that changed any of them, with the fact it is building. It
 goes down to functions: the agent's working copy and each other attempt's push are diffed against the canon they forked
 from, so "agent-2 is changing `Market.addToCart`, which you are changing too" comes first, and agents who only share
-the file are folded into one line.
+the file are folded into one line. Calls count too, in any file: "agent-1 is changing `Market.addToCart`, which your
+change calls", or the other way round.
 Overlapping files are often fine (behaviour decides, not text); it lets agents talk before either has a preview.
 Agents run by `agents/run.sh` don't have to remember to ask: a Claude Code hook (`agents/hooks/overlap.mjs`, a
 PostToolUse hook on every edit) runs it and puts the answer in the agent's session when another agent is changing a

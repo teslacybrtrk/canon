@@ -1,6 +1,6 @@
 // Which functions a change touches: the overlap that matters when an app lives in one file.
 import assert from "node:assert/strict";
-import { changedSymbols } from "../referee/src/symbols.ts";
+import { addedText, callsInto, changedSymbols } from "../referee/src/symbols.ts";
 
 const ok = (name: string) => console.log(`ok   ${name}`);
 const base = `export class Market extends DurableObject<Env> {
@@ -44,3 +44,9 @@ ok("a new function is a changed symbol");
 
 assert.deepEqual(changedSymbols(base, base), []);
 ok("no change, no symbols");
+
+const caller = route.replace('    if (url.pathname === "/x")', '    if (url.pathname === "/cart") return Response.json(await market.addToCart("eggs", 1));\n    if (url.pathname === "/x")');
+assert.deepEqual(callsInto(addedText(base, caller), ["Market.addToCart", "page"]), ["Market.addToCart"]);
+ok("a change that starts calling someone else's changed method is caught");
+assert.deepEqual(callsInto(addedText(base, guard), ["Market.addToCart"]), []);
+ok("changing a method's own body isn't a call of it");

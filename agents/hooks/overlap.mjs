@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // A Claude Code PostToolUse hook: after an agent edits a file inside a Canon attempt, ask the judge who else in flight
-// is changing the same files (`canon overlap`) and put the answer in front of the agent, so it hears about overlapping
-// work while it is still editing, without having to remember to ask. It speaks only when the list changes.
+// is changing the same functions, or functions this change calls, or calls the ones it changes (`canon overlap`), and
+// put the answer in front of the agent, so it hears about it while still editing, without having to ask. It speaks
+// only when that list changes.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

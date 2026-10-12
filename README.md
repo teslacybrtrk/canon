@@ -125,6 +125,9 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   the two changing `fetch` were folded into one line. A real Claude Code session with the current hook, editing
   `addToCart` there, was told unasked that agent-2 was changing `Market.addToCart` to enforce the 99-unit limit, and
   judged its own edit wouldn't conflict.
+- **Calls**: one agent capping a basket line at 99 (changing `Market.addToCart`) and another moving the add-to-basket
+  route into a helper that calls `market.addToCart(...)`: each was told about the other, from its own side ("calls
+  Market.addToCart, which you are changing" / "is changing Market.addToCart, which your change calls").
 - **Queue**: with one slot busy, an attempt pushed twice: the first push waited, then dropped itself as stale once the
   second arrived; the second waited its turn and ran.
 - **Speculative train**: two riders became Ready while canon #5 was releasing; the train was built and checked on #5

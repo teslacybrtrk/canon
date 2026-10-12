@@ -65,3 +65,25 @@ export function changedSymbols(base: string, head: string): string[] {
   for (const i of d.removed) if (a[i].trim() && ownA[i]) out.add(ownA[i]!);
   return [...out].sort();
 }
+
+/** The lines a change adds (by the same diff), for spotting calls: did this change start calling something? */
+export function addedText(base: string, head: string): string[] {
+  const b = head.split("\n");
+  const d = diffLines(base.split("\n"), b);
+  return d ? d.added.map((i) => b[i]).filter((l) => l.trim()) : [];
+}
+
+/**
+ * Which of `changed` (symbols someone else is changing, e.g. "Market.addToCart") these added lines call. Matched by
+ * the last name segment followed by "(", so `market.addToCart(...)` counts as a call of Market.addToCart.
+ */
+export function callsInto(added: string[], changed: string[]): string[] {
+  const out = new Set<string>();
+  for (const sym of changed) {
+    const name = sym.split(".").pop()!;
+    if (name.length < 3 || name === "constructor") continue;
+    const call = new RegExp(`(?<![\\w$])${name.replace(/[$]/g, "\\$")}\\s*\\(`);
+    if (added.some((l) => call.test(l) && !new RegExp(`^\\s*(?:async\\s+)?(?:function\\s+)?${name}\\s*\\(`).test(l))) out.add(sym);
+  }
+  return [...out].sort();
+}

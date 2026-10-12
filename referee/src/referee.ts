@@ -29,7 +29,7 @@ import {
   type Mutation,
 } from "./protocol";
 import { edgeFailure, platformFailure } from "./platform";
-import { changedSymbols } from "./symbols";
+import { addedText, callsInto, changedSymbols } from "./symbols";
 import { SCHEMA, UPGRADES } from "./schema";
 import { ground, parseAnswer, REVIEW_SCHEMA, reviewPrompt, type Review, type ReviewFile } from "./review";
 
@@ -1265,24 +1265,40 @@ export class Referee extends DurableObject<Env> {
     // Which functions I'm changing: my working copy (or my last push) against the canon my attempt forked from.
     const code = /\.(ts|tsx|js|jsx|mjs)$/;
     const mineSyms = new Map<string, Set<string>>();
+    const myAdded: string[] = [];
     for (const path of [...paths].filter((p) => code.test(p)).slice(0, 20)) {
       const head = typeof localFiles[path] === "string" ? localFiles[path].slice(0, 400_000) : mine.headSha ? await this.fileAt(mine.id, mine.headSha, path) : null;
       const base = mine.baseSha ? await this.fileAt(mine.id, mine.baseSha, path) : null;
-      if (head !== null) mineSyms.set(path, new Set(changedSymbols(base ?? "", head)));
+      if (head === null) continue;
+      mineSyms.set(path, new Set(changedSymbols(base ?? "", head)));
+      myAdded.push(...addedText(base ?? "", head));
     }
-    const out: Array<{ claimId: string; agent: string; factId: string; sentence: string; status: ClaimStatus; attemptId: string; files: string[]; symbols: string[] }> = [];
+    const mySymsAll = [...new Set([...mineSyms.values()].flatMap((s) => [...s]))];
+    const out: Array<{ claimId: string; agent: string; factId: string; sentence: string; status: ClaimStatus; attemptId: string; files: string[]; symbols: string[]; youCall: string[]; theyCall: string[] }> = [];
     for (const c of this.rows(`SELECT * FROM claims WHERE status IN ('open', 'checking', 'unproven', 'ready', 'behind') AND attempt_id != ?`, attemptId).map(toClaim)) {
       const a = this.attempt(c.attemptId);
       if (!a?.headSha) continue;
-      const files = ((await this.changedPaths(a, a.headSha)) ?? []).filter((p) => paths.has(p));
-      if (!files.length) continue;
+      const theirPaths = (await this.changedPaths(a, a.headSha)) ?? [];
+      const files = theirPaths.filter((p) => paths.has(p));
       const symbols: string[] = [];
       for (const path of files.filter((p) => mineSyms.has(p))) {
         for (const s of await this.symbolsOf(a, path)) if (mineSyms.get(path)!.has(s)) symbols.push(`${s} in ${path}`);
       }
-      out.push({ claimId: c.id, agent: c.agent, factId: c.factId, sentence: this.fact(c.factId)?.sentence ?? c.factId, status: c.status, attemptId: c.attemptId, files, symbols });
+      // Calls across the two changes, in any file: you start calling what they change, or they call what you change.
+      const theirCode = theirPaths.filter((p) => code.test(p)).slice(0, 20);
+      const theirSyms: string[] = [];
+      const theirAdded: string[] = [];
+      for (const path of theirCode) {
+        theirSyms.push(...(await this.symbolsOf(a, path)));
+        theirAdded.push(...(await this.addedOf(a, path)));
+      }
+      const youCall = callsInto(myAdded, theirSyms).filter((s) => !mySymsAll.includes(s));
+      const theyCall = callsInto(theirAdded, mySymsAll).filter((s) => !theirSyms.includes(s));
+      if (!files.length && !youCall.length && !theyCall.length) continue;
+      out.push({ claimId: c.id, agent: c.agent, factId: c.factId, sentence: this.fact(c.factId)?.sentence ?? c.factId, status: c.status, attemptId: c.attemptId, files, symbols, youCall, theyCall });
     }
-    out.sort((x, y) => y.symbols.length - x.symbols.length);
+    const weight = (x: { symbols: string[]; youCall: string[]; theyCall: string[] }) => x.symbols.length + x.youCall.length + x.theyCall.length;
+    out.sort((x, y) => weight(y) - weight(x));
     return { paths: [...paths], overlaps: out, headsUp: this.headsUpFor(mine.claimId), clashes: this.clashesFor(mine.claimId) };
   }
 
@@ -1295,6 +1311,17 @@ export class Referee extends DurableObject<Env> {
     } catch {
       return null;
     }
+  }
+
+  /** The lines an attempt's pushed commit adds to a file (cached per commit). */
+  private async addedOf(a: Attempt, path: string): Promise<string[]> {
+    const key = `add:${a.id}:${a.headSha}:${path}`;
+    if (this.changedCache.has(key)) return this.changedCache.get(key) ?? [];
+    const head = a.headSha ? await this.fileAt(a.id, a.headSha, path) : null;
+    const base = a.baseSha ? await this.fileAt(a.id, a.baseSha, path) : null;
+    const lines = head === null ? [] : addedText(base ?? "", head);
+    this.changedCache.set(key, lines);
+    return lines;
   }
 
   /** The functions an attempt's pushed commit changes in a file, against the canon it forked from (cached per commit). */

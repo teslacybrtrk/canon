@@ -269,11 +269,15 @@ async function overlap() {
   const o = await api("POST", "/overlaps", { attempt: ctx.attemptId, paths: local, files });
   if (!o.paths.length) return console.log("You haven't changed any files yet.");
   if (!o.overlaps.length) return console.log(`No other attempt in flight changes ${o.paths.slice(0, 6).join(", ")}${o.paths.length > 6 ? " and the rest" : ""}.`);
-  const close = o.overlaps.filter((x) => x.symbols?.length);
-  const near = o.overlaps.filter((x) => !x.symbols?.length);
+  const touches = (x) => (x.symbols?.length ?? 0) + (x.youCall?.length ?? 0) + (x.theyCall?.length ?? 0);
+  const close = o.overlaps.filter((x) => touches(x));
+  const near = o.overlaps.filter((x) => !touches(x));
   if (close.length) {
     console.log("Others changing the same code:");
-    for (const x of close.slice(0, 8)) console.log(`  ${x.agent} (${x.status}) is changing ${x.symbols.slice(0, 3).join(", ")}, to make "${x.sentence}" true`);
+    for (const x of close.slice(0, 8)) {
+      const what = [x.symbols?.length ? `is changing ${x.symbols.slice(0, 3).join(", ")}` : "", x.youCall?.length ? `is changing ${x.youCall.slice(0, 3).join(", ")}, which your change calls` : "", x.theyCall?.length ? `calls ${x.theyCall.slice(0, 3).join(", ")}, which you are changing` : ""].filter(Boolean).join("; and ");
+      console.log(`  ${x.agent} (${x.status}) ${what}, to make "${x.sentence}" true`);
+    }
     if (close.length > 8) console.log(`  …and ${close.length - 8} more`);
   }
   if (near.length) console.log(`${close.length ? "Also in the same files, but other functions" : "Others change the same files, but other functions"}: ${near.slice(0, 5).map((x) => x.agent).join(", ")}${near.length > 5 ? ` and ${near.length - 5} more` : ""}.`);
