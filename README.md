@@ -134,7 +134,8 @@ GitHub hosts a mirror as the archive.
 
 ## License
 
-MIT
+MIT, for the code. The Canon Stampede song, "Keep It Canon" (`referee/public/keep-it-canon.m4a`), was made
+with Suno and is not covered by the MIT license.
 
 ## Contact
 
