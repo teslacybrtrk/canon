@@ -214,8 +214,10 @@ the board. Accepted, deployed and healthy are three states, and a broken version
    (twice in a row: **broken**), the judge rolls production back to the last healthy version through the Workers
    deployments API (**rolled-back**). Later hourly checks only report.
 
-A Durable Object class change can't be uploaded as a version (Cloudflare applies it atomically), so that one release
-skips step 2: the release candidate has run its code, and step 4 is the net.
+Step 2 needs a Worker without Durable Objects. An object runs one version at a time, so at 0% the staged Worker talks
+to the old objects and its answers mean nothing (in practice they fail even when the new code is right). For a Worker
+with Durable Objects, step 1 is the gate: a full copy with production's config and its own persistent data, which is
+also what catches a schema change that only breaks on existing data. Step 4 stays the last net.
 
 **Merge trains** (`"policy": { "batch": true }`, with autopilot). The first Ready claim that may land opens a short
 boarding window; claims that may land meanwhile (typically the queue behind a release) board too. When it closes, two or
@@ -233,8 +235,7 @@ fact notices is code no check covers; the claim shows `mutation` (`caught` of `t
 through). With `charter.mutation` (say `0.8`), autopilot only lands a claim whose facts catch that share.
 
 In the release gate, a fact that fails at 0% counts against the new version only if the old version answers
-differently (both run with the same inputs). Code inside a Durable Object runs on the version its object was assigned,
-so at 0% it still gives the old answer; the release candidate has already run the new code there in full.
+differently (both run with the same inputs).
 
 **Canon always equals what production runs.** A canon that isn't released (held back in step 1 or 2, rolled back in
 step 4, or a deploy that failed) is reverted: a new canon entry (`reverts` in `deploys`) points back at the last

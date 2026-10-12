@@ -113,9 +113,13 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       const candidateOk = await step.do("check release candidate", { timeout: "10 minutes" }, async () => await referee.candidateCheck(seq));
       if (!candidateOk) throw new Error("held back: the release candidate broke a fact");
       // Step two: upload the exact commit as a new Worker version that serves nobody yet; the judge's gate stages it at
-      // 0%, smoke-tests every fact on the production URL against it, and only then releases it.
-      let atomic = false;
-      const run = await deps.runner({ name: "upload version", command: `npx wrangler versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
+      // 0%, smoke-tests every fact on the production URL against it, and only then releases it. Not for a Worker with
+      // Durable Objects: an object runs one version at a time, so at 0% the staged Worker talks to the old objects and
+      // the answer means nothing. There the release candidate (a full copy, its own persistent data) is the gate.
+      const objects = await deps.runner({ name: "durable objects?", command: `grep -qs '"durable_objects"' wrangler.jsonc wrangler.json && echo CANON_HAS_DO || true` });
+      const hasObjects = typeof objects.logs.stdout === "string" && objects.logs.stdout.includes("CANON_HAS_DO");
+      let atomic = hasObjects;
+      const run = hasObjects ? null : await deps.runner({ name: "upload version", command: `npx wrangler versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
         // Only a Durable Object class change may skip the gate: Cloudflare can't upload it as a version (it's atomic).
         // Any other upload failure stops the release.
         const why = isCiRunnerFailure(err) ? err.message : String(err);

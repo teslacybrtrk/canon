@@ -838,7 +838,7 @@
     const rolled = dep?.health === "rolled-back" || dep?.health === "broken";
     const held = dep?.health === "held";
     $("prodline").className = `prod ${rolled ? "bad" : held ? "warn" : prod ? (failing ? "bad" : "good") : ""}`;
-    $("prodtext").textContent = demo.deploying || dep?.deployed === "pending" ? `Deploying canon #${c.seq} to production…`
+    $("prodtext").textContent = demo.deploying || (dep?.deployed === "pending" && dep.factId) ? `Deploying canon #${c.seq} to production…`
       : rolled ? `Canon #${dep.seq} ${(dep.detail ?? "broke a fact in production").split(": ")[0]}${dep.revertedBy ? `; canon went back (#${dep.revertedBy})` : ""}. ${/rolled back to ([^.]+)/.exec(dep.detail ?? "") ? `Production rolled back to ${/rolled back to ([^.]+)/.exec(dep.detail)[1]}.` : dep.health === "rolled-back" ? "Production rolled back." : ""}`
       : dep?.health === "held" ? `Canon #${dep.seq} held back before release: it ${(dep.detail ?? "broke a fact").split(": ")[0]}. No visitor ever got it${dep.revertedBy ? `, and canon went back (#${dep.revertedBy})` : ""}.`
       : dep?.deployed === "failed" ? `Canon #${dep.seq} couldn’t deploy; production stays on the last good version`

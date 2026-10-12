@@ -328,7 +328,7 @@ export class Referee extends DurableObject<Env> {
     }
     // Genesis becomes the first canon only if it declares facts and satisfies all of them.
     if (isGenesis && verdict.outcome === "ready" && verdict.kept.length > 0) {
-      this.sql.exec(`INSERT INTO canon (attempt_id, sha, at) VALUES (?, ?, ?)`, repo, sha, Date.now());
+      this.sql.exec(`INSERT INTO canon (attempt_id, sha, at, deployed, health) VALUES (?, ?, ?, 1, 'healthy')`, repo, sha, Date.now());
       this.sql.exec(`UPDATE attempts SET frozen = 1 WHERE id = ?`, repo);
       await this.revokeWriteTokens(repo);
       await this.scheduleProductionCheck(20_000);
@@ -576,6 +576,11 @@ export class Referee extends DurableObject<Env> {
       }
       await this.keepCanonReleased().catch(() => {});
       await this.depart().catch(() => {});
+      await this.retryPlatformErrors().catch(() => {});
+      for (const c of this.rows(`SELECT * FROM claims WHERE status = 'ready' ORDER BY created_at LIMIT 20`).map(toClaim)) {
+        const v = this.latestVerdict(c.attemptId);
+        if (v) await this.startMutation(c.id, v).catch(() => {});
+      }
       // An alarm set before the production check existed was a re-judge.
       if (this.meta("rejudge") === "1" || this.meta("prodCheckAt") === null) {
         this.setMeta("rejudge", "0");
@@ -750,6 +755,25 @@ export class Referee extends DurableObject<Env> {
     const before = this.currentCanon()?.seq;
     await this.keepCanonReleased();
     return { canonSeq: this.currentCanon()?.seq, reverted: this.currentCanon()?.seq !== before };
+  }
+
+  /**
+   * A verdict of "error" is the platform's fault (a container dropped, CI ran out of retries), never the code's. An agent
+   * would push again; the judge does that itself, re-running verification on the same commit, three times at most,
+   * two minutes apart, so attempts the judge made (re-applies) don't wait for an agent that has gone home.
+   */
+  private async retryPlatformErrors() {
+    const tries = JSON.parse(this.meta("errorRetries") ?? "{}") as Record<string, { n: number; at: number }>;
+    for (const c of this.rows(`SELECT * FROM claims WHERE status = 'error'`).map(toClaim)) {
+      const a = this.attempt(c.attemptId);
+      if (!a?.headSha || a.frozen) continue;
+      const t = tries[`${a.id}:${a.headSha}`] ?? { n: 0, at: 0 };
+      if (t.n >= 3 || Date.now() - t.at < 120_000) continue;
+      tries[`${a.id}:${a.headSha}`] = { n: t.n + 1, at: Date.now() };
+      this.setClaimStatus(c.id, "checking");
+      await this.env.CI_WORKFLOW.create({ id: `retry-${a.id}-${a.headSha.slice(0, 12)}-${t.n + 1}`, params: this.ciParams(a.id, a.headSha) }).catch(() => {});
+    }
+    this.setMeta("errorRetries", JSON.stringify(Object.fromEntries(Object.entries(tries).slice(-300))));
   }
 
   /** The invariant, checked on every alarm: the current canon was released. If not (held back, rolled back, or the deploy failed), revert. */
@@ -1264,6 +1288,9 @@ export class Referee extends DurableObject<Env> {
     const attempt = claim ? this.attempt(claim.attemptId) : null;
     if (!claim || !attempt?.baseSha || this.fact(claim.factId)?.check.kind !== "probe") return;
     if (this.rows(`SELECT 1 FROM mutations WHERE attempt_id = ? AND sha = ?`, attempt.id, verdict.sha).length) return;
+    // At most two at a time (each builds several previews); the alarm starts the next ones.
+    const busy = this.rows(`SELECT json, at FROM mutations`).filter((r) => (JSON.parse(r.json as string) as Mutation).status === "running" && Date.now() - Number(r.at) < 20 * 60_000).length;
+    if (busy >= 2) return;
     const running: Mutation = { status: "running", total: 0, caught: 0, mutants: [], at: Date.now() };
     this.sql.exec(`INSERT INTO mutations (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, attempt.id, verdict.sha, JSON.stringify(running), Date.now());
     try {
@@ -1321,7 +1348,7 @@ export class Referee extends DurableObject<Env> {
       let by: string | undefined;
       for (const f of facts) {
         const r = await runCheck(f.check as ProbeCheck, url);
-        if (!r.held && !/failed:|returned 5\d\d/.test(r.detail)) { by = f.id; break; }
+        if (!r.held && !/ failed: /.test(r.detail)) { by = f.id; break; }
       }
       mutants.push({ file: m.file, line: m.line, op: m.op, before: m.before, after: m.after, caught: !!by, ...(by ? { by } : {}) });
     }
