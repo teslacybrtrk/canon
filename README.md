@@ -82,7 +82,7 @@ human ──accept fact──▶ Referee DO ──freeze attempt, move canon poi
 |---|---|
 | `referee/` | Worker: the judge (`Referee` Durable Object), HTTP API, board, verify/promote Workflows (`@cloudflare/ci`); the site and the game (`public/`) |
 | `cli/canon.mjs` | The protocol from a shell: `read`, `claim`, `verdict`, `refresh`, `why`, `init` |
-| `agents/` | Instructions, goals and claim files for five Claude Code agents, and `run.sh` to start them |
+| `agents/` | Instructions, goals and claim files for twelve Claude Code agents, `run.sh` to start them (`GROK_AGENTS` puts some on Grok Build), and `autopilot.sh` for a backlog on autopilot |
 | `demo-app/` | Farmstand, the Workers app the agents change; its facts are in `demo-app/canon.json` |
 | `scripts/` | `setup.sh` (your own Canon), `genesis.sh` (first attempt or import), `check-local.ts` (facts against a local app), tests |
 
@@ -98,7 +98,7 @@ agents. No Docker: the CI sandbox uses the public `cloudflare/sandbox` image str
    macOS Keychain; the scripts read them from there).
 2. **Genesis**: `./scripts/genesis.sh` pushes the demo app (with its `canon.json`) as the first attempt. Open the board;
    when the genesis preview satisfies every fact, it becomes canon.
-3. **Start five agents**: `./agents/run.sh`. Claims appear on the board, then verdicts.
+3. **Start twelve agents**: `./agents/run.sh` (or `ONLY="agent-1 agent-2"` for a few). Claims appear on the board, then verdicts.
 4. **Accept a fact** on the board (it asks for the owner key once). The attempt becomes canon and production updates.
    Click a fact to see the attempt that made it true beside the attempts that failed it.
    After an accept, the judge refreshes attempts that are now behind by itself. If one hits a text conflict,
