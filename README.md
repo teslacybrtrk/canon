@@ -90,11 +90,21 @@ three judge configurations:
 | unlimited | 3 in the first 10 minutes | the other 27 hit "RPC session was shut down" or subrequest-depth errors, and the judge's retries failed again | | | | |
 | 10 | 30 | 3 (retried) | | 803 s | 879 s | 904 s |
 | **6** (the default now) | **30** | **0** | 48 s | 115 s | 215 s | 231 s |
+| 6, repeated on a second project | 30 | 0 | 42 s | 134 s | 226 s | 235 s |
+| 4 | 30 | 0 | 38 s | 156 s | 298 s | 331 s |
+| 8 | 30 | 0 | 48 s | 165 s | 240 s | 257 s |
+| 6, with **60** pushes at once | 60 | 0 | 56 s | 340 s | 592 s | 652 s |
 
 With no limit the platform buckles. At 10, a few builds stuck in platform retries hold their slots and the queue backs
-up. At 6, every push gets a real verdict in under four minutes. So the judge now admits six verifications per project
-at a time and queues the rest in their own Workflows (`admit` in referee.ts). Not measured yet: hundreds of agents, or
-several busy projects sharing one account's container limit.
+up. At 6, every push gets a real verdict in under four minutes, and a repeat on a second project agreed. Fewer slots (4)
+waste capacity; more (8) contend and are slower too. At 60 pushes the queue simply runs twice as long: every one still
+got a real verdict, the last in under 11 minutes. So the judge admits six verifications per project at a time and
+queues the rest in their own Workflows (`admit` in referee.ts).
+
+One thing the load did break: under it, a correct change missed the 400 ms page-speed fact (p95 1.7 s) and was
+rejected. Now a speed fact that fails also runs on canon's own preview at that moment; if canon is just as slow, the
+verdict is a platform error the judge retries, not a rejection. Not measured yet: hundreds of agents, or several busy
+projects sharing one account's container limit.
 
 ## Live tests after the run
 

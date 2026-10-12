@@ -248,7 +248,9 @@ a unit. Rule changes never ride a train.
 **Admission.** A project verifies at most six pushes at a time; the rest wait in their own Workflow and start as slots
 free (a slot frees when the judge gets the result, or after 15 minutes). In a load test of 30 simultaneous pushes, no
 limit made the CI runner fail, ten let platform retries back the queue up, and six gave every push a real verdict in
-under four minutes (median 115 s).
+under four minutes (median 115 s); 4 and 8 were both slower, and 60 pushes at six took under 11 minutes for the last.
+A latency budget that fails under load is compared with canon's own preview at the same moment: if canon misses it
+too, the verdict is a platform error (retried), not a rejection.
 
 **Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release
 runs board for 3 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is

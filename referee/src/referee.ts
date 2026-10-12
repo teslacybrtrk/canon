@@ -1992,6 +1992,24 @@ export class Referee extends DurableObject<Env> {
       }),
     );
 
+    // A latency budget measures the platform as much as the code: under load (thirty builds at once) a correct change
+    // missed a 400 ms budget at 1.7 s. So a budget that fails runs on canon's own preview at the same moment; if canon
+    // is just as slow, the environment was, and when that's the only failure this is a platform error, retried later.
+    if (!forced) {
+      const canonPreview = (() => { const c = this.currentCanon(); return c ? (this.attempt(c.attempt_id as string)?.previewUrl ?? null) : null; })();
+      const budgetMiss = (r: CheckResult | undefined) => !!r && !r.held && /p95 is \d+ ms, budget \d+ ms/.test(r.detail);
+      const misses = facts.filter((f) => f.status === "canon" && f.check.kind === "probe" && budgetMiss(results.get(f.id)));
+      if (misses.length && canonPreview && canonPreview !== previewUrl) {
+        const slow = (await Promise.all(misses.map(async (f) => (budgetMiss(await runCheck(f.check as ProbeCheck, canonPreview)) ? f.id : null)))).filter(Boolean);
+        const otherFailures = facts.some((f) => f.status === "canon" && !slow.includes(f.id) && results.get(f.id)?.held === false);
+        if (slow.length && !otherFailures) {
+          await this.couldNotJudge(attempt.id, sha, `the platform was slow: ${results.get(slow[0] as string)!.detail}, and canon's own preview missed the same budget just now`);
+          const v = this.latestVerdict(attempt.id);
+          if (v) return v;
+        }
+      }
+    }
+
     const now = Date.now();
     for (const [factId, r] of results) {
       this.sql.exec(
