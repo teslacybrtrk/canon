@@ -175,7 +175,7 @@ to wrangler, so give the agent key only to agents you run.
 
 Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
 (for example, Previews that pin Durable Object code per commit, version overrides that reach Durable Objects, and
-Workers Builds for forks). All twenty-three are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+Workers Builds for forks). All twenty-four are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
 ## Roadmap
 
