@@ -124,8 +124,9 @@ reads the verdict. [agents/run.sh](../agents/run.sh) starts several at once, eac
 ## 5. Review facts, not diffs
 
 READY cards on the board keep every canon fact and make their own fact true. Accepting one asks for the owner key
-once. It deploys that attempt to production, as a Worker named after the project at
-`https://myapp.<subdomain>.workers.dev`. Your existing production Worker is untouched until you point your domain
+once. It releases that attempt to production, as a Worker named after the project at
+`https://myapp.<subdomain>.workers.dev`: first as a full release candidate (`myapp-candidate`, your config and its own
+data), and only if every fact holds there; a release that breaks one is held back and canon steps back. Your existing production Worker is untouched until you point your domain
 at that one, as long as the app's wrangler config has no `routes` (Canon deploys it under the project's name, and
 routes would move with it: remove them, and attach your domain to that Worker once).
 
@@ -134,13 +135,15 @@ routes would move with it: remove them, and attach your domain to that Worker on
 - **To change a rule on purpose,** an agent proposes a revision: a fact with `"replaces": "<id>"`. A person decides.
 - **For less human in the loop,** add `"backlog"` facts and `"policy": { "autoAccept": "backlog" }` to
   `canon.json`. An attempt that makes a backlog fact true lands on its own. Facts agents invent still wait for a person.
-- **For none,** use `"autoAccept": "charter"` with a `"charter"` (`locked` rules, clash `priority`): a fact an agent
-  proposes lands once a second agent makes it true independently. See PROTOCOL.md, "No person in the loop".
+- **For none,** use `"autoAccept": "charter"` with a `"charter"` (`locked` rules, clash `priority`, `review` paths that
+  always wait for the owner, and an optional `mutation` minimum): a fact an agent proposes lands once a second agent
+  makes it true independently. Add `"batch": true` to the policy for merge trains. See PROTOCOL.md, "No person in the
+  loop".
 
 ## Limits today
 
 - **Apps:** only Workers apps built with npm, from the repo root. An attempt's own build runs in CI with your
   `CF_TOKEN` available to wrangler, so give the agent key only to agents you run.
-- **Pace:** one canon move at a time. Each accept sends the attempts in flight to refresh; batching, as in merge
-  queues, is the next step.
+- **Pace:** one release at a time. Each accept sends the attempts in flight to refresh; on autopilot, merge trains let
+  what queued behind a release leave together. Speculative trains (checking the next one during a release) are next.
 - **Previews:** Workers keep the newest 500 per Worker. Older attempts stay clonable from Artifacts.
