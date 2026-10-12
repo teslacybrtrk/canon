@@ -362,6 +362,11 @@ export class Referee extends DurableObject<Env> {
     this.sql.exec(`INSERT OR REPLACE INTO verdicts (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, repo, sha, JSON.stringify(verdict), verdict.judgedAt);
     if (attempt.claimId) this.setClaimStatus(attempt.claimId, "error");
     this.broadcast();
+    // The judge retries platform errors itself (see retryPlatformErrors): wake up for it in a couple of minutes.
+    void this.ctx.storage.getAlarm().then((current) => {
+      const at = Date.now() + 125_000;
+      if (current === null || current > at) return this.ctx.storage.setAlarm(at);
+    });
   }
 
   /** Names of every Preview this project's verdicts used, so a reset can delete them. */
@@ -754,6 +759,7 @@ export class Referee extends DurableObject<Env> {
     }
     const before = this.currentCanon()?.seq;
     await this.keepCanonReleased();
+    await this.ctx.storage.setAlarm(Date.now() + 1_000); // and run the rest of the alarm's work (retries, mutation runs) now
     return { canonSeq: this.currentCanon()?.seq, reverted: this.currentCanon()?.seq !== before };
   }
 
