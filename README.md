@@ -146,6 +146,12 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   the two changing `fetch` were folded into one line. A real Claude Code session with the current hook, editing
   `addToCart` there, was told unasked that agent-2 was changing `Market.addToCart` to enforce the 99-unit limit, and
   judged its own edit wouldn't conflict.
+- **An agent acting on it**: with agent-1's 99-unit line limit pushed, a real Claude Code session (Sonnet, the hook on)
+  was asked only to add a route that puts 150 dozen eggs in the basket via `market.addToCart`. The hook told it
+  agent-1 was changing `Market.addToCart` for "a single basket line can't exceed 99 units"; before any push, it worked
+  out that the two features are mutually exclusive for one product (one basket line can't hold 150 once the cap lands)
+  and said so, instead of quietly splitting the call. That's a semantic conflict raised by the agents themselves,
+  before either had a verdict.
 - **Calls**: one agent capping a basket line at 99 (changing `Market.addToCart`) and another moving the add-to-basket
   route into a helper that calls `market.addToCart(...)`: each was told about the other, from its own side ("calls
   Market.addToCart, which you are changing" / "is changing Market.addToCart, which your change calls").
