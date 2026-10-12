@@ -63,6 +63,15 @@ const TOOLS = [
     },
   },
   {
+    name: "canon_overlap",
+    description: "Before you push: who else is changing the files you are changing? Pass your attempt and the paths you changed (git status). Lists every other attempt in flight that touches them, with the fact it is building, so you can avoid building the same behaviour opposite ways.",
+    inputSchema: {
+      type: "object",
+      required: ["attempt"],
+      properties: { attempt: { type: "string" }, paths: { type: "array", items: { type: "string" }, description: "Files you changed and haven't pushed yet" } },
+    },
+  },
+  {
     name: "canon_why",
     description: "Why a fact is true: the attempt and reason that made it true, and every attempt that failed it, with the exact reason.",
     inputSchema: { type: "object", required: ["fact"], properties: { fact: { type: "string", description: "A fact id" } } },
@@ -115,6 +124,10 @@ async function call(name: string, args: Args, referee: Referee, project: string)
   const need = (key: string) => str(key) ?? fail(`"${key}" is required`);
   if (name === "canon_read") return read((await referee.read()) as CanonState, str("path"));
   if (name === "canon_why") return why((await referee.why(need("fact"))) as unknown as FactChain);
+  if (name === "canon_overlap") {
+    const paths = Array.isArray(args.paths) ? (args.paths as unknown[]).filter((p): p is string => typeof p === "string") : [];
+    return overlapText(await referee.overlaps(need("attempt"), paths));
+  }
   if (name === "canon_verdict") return verdict(referee, need("attempt"), str("sha"), args.wait === true);
   if (name === "canon_claim") {
     const req = { agent: need("agent"), why: need("why") } as DeclareRequest;
@@ -286,4 +299,15 @@ function rpcError(id: Rpc["id"], code: number, message: string) {
 
 function fail(message: string): never {
   throw new Error(message);
+}
+
+type Overlaps = { paths: string[]; overlaps: Array<{ agent: string; factId: string; sentence: string; status: string; files: string[] }>; headsUp: unknown[]; clashes: unknown[] };
+
+/** Who else is changing the same files, in the words an agent acts on. */
+function overlapText(o: Overlaps): string {
+  if (!o.paths.length) return "You haven't changed any files yet.";
+  if (!o.overlaps.length) return `No other attempt in flight changes ${o.paths.slice(0, 6).join(", ")}${o.paths.length > 6 ? " and the rest" : ""}.`;
+  const lines = o.overlaps.map((x) => `  ${x.agent} (${x.status}) is making "${x.sentence}" true and changes ${x.files.join(", ")}`);
+  const warn = o.headsUp.length + o.clashes.length ? `\n${o.headsUp.length + o.clashes.length} of these already conflict in behaviour: see HEADS-UP / CLASH in canon_verdict.` : "";
+  return `Others changing the same files:\n${lines.join("\n")}\nOverlapping files are fine when the behaviours agree. If yours could break one of theirs, change course now, or say why in your claim.${warn}`;
 }

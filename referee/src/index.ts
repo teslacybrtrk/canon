@@ -27,6 +27,7 @@ export { VerifyAttempt, PromoteAttempt, RefreshAttempt, TrainAttempt, MutateAtte
 //   POST /p/:project/republish                redeploy canon and rewrite its Git notes                owner key
 //   POST /p/:project/reconcile                canon = production now: revert a canon that wasn't released   owner key
 //   POST /p/:project/attempts/:id/review      run the advisory reviewer again on the attempt's latest commit  owner key
+//   POST /p/:project/overlaps                  {attempt, paths}: other attempts in flight changing the same files   agent key
 //   POST /p/:project/mcp                      the moves as MCP tools, for any MCP agent        agent or owner key
 //   git clone https://canon.rodeo/canon.git   Canon's own source, read-only (also /a/<attempt>.git, /src)
 //   POST /p/:project/genesis                  one-time setup (empty repo, or {"importUrl": "<git url>"})   owner key
@@ -46,7 +47,7 @@ export default {
 
     // Every POST is a write and needs a key, except checking a fact against production.
     if (request.method === "POST" && !/^POST \/facts\/[\w-]+\/check$/.test(route)) {
-      const denied = await deny(request, env, route === "POST /claims" || route === "POST /mcp" ? "agent" : "owner");
+      const denied = await deny(request, env, route === "POST /claims" || route === "POST /mcp" || route === "POST /overlaps" ? "agent" : "owner");
       if (denied) return denied;
     }
 
@@ -64,6 +65,10 @@ export default {
         return json(await referee.genesis(project, body.importUrl), 201);
       }
       if (route === "POST /claims") return json(await referee.declare(await request.json<DeclareRequest>()), 201);
+      if (route === "POST /overlaps") {
+        const body = await request.json<{ attempt?: string; paths?: string[] }>().catch(() => ({}) as { attempt?: string; paths?: string[] });
+        return json(await referee.overlaps(String(body.attempt ?? ""), Array.isArray(body.paths) ? body.paths : []));
+      }
       if ((match = route.match(/^GET \/attempts\/([\w-]+)\/verdict$/))) {
         const verdict = await referee.verdict(match[1]);
         return verdict ? json(verdict) : json({ outcome: "pending" }, 202);

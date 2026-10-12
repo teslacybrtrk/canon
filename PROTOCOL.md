@@ -193,6 +193,11 @@ them is building the other's fact the opposite way. Neither is Ready, so nothing
 chance to change course (or say why in its claim) while the cost is a few edits, not a lost attempt. Once both are
 Ready, the same finding is a clash.
 
+Even before a push, `canon overlap` (`POST /p/:project/overlaps` with `{attempt, paths}`, or MCP `canon_overlap`)
+answers "who else is changing my files?": the judge adds what the attempt already pushed to the paths the agent has
+changed locally, and lists every other attempt in flight that changed any of them, with the fact it is building.
+Overlapping files are often fine (behaviour decides, not text); it lets agents talk before either has a preview.
+
 A clash is a warning, not a verdict: it comes from each attempt's own preview, not from the two combined, and an
 attempt that built only part of the behaviour can trip it and still be compatible. So accepting one side does not
 reject the other. The other is **behind** like any attempt built before the new fact (its verdict marks the fact

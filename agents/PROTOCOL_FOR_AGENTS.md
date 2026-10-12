@@ -15,6 +15,8 @@ Use the `canon` command for the protocol and plain `git` for code.
    Work only inside that directory. Never edit canon.json: the judge rejects an attempt that changes it.
 3. Make the change. Before committing, run the command facts locally (`canon read` shows them as "runs: …",
    for example `npx tsc --noEmit -p tsconfig.json` and `npx biome lint src` in your attempt, after `npm ci` once) and fix what they report.
+   Before pushing, `canon overlap` (MCP: canon_overlap) lists other agents in flight changing the same files, with the
+   fact each is building: if yours could break theirs, change course now, or say why in your claim.
    Commit. `git push origin main`. Use `git -C <attempt-dir> ...` rather than `cd <attempt-dir> && git ...`.
    `canon verdict` and `canon refresh` work from anywhere: outside an attempt they use your latest one.
 4. `canon verdict --wait`. It runs every canon fact and your fact against a live preview

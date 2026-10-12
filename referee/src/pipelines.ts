@@ -14,6 +14,11 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const referee = refereeForRepo(this.env, repo);
     const attemptId = await step.do("register push", () => referee.pushed(repo, sha));
     if (!attemptId) return;
+    // Admission: at most a few verifications per project build at once; this one waits its turn (up to ~30 minutes).
+    for (let turn = 0; turn < 120; turn++) {
+      if (await step.do(`slot ${turn}`, () => referee.admit(repo, sha))) break;
+      await step.sleep(`queued ${turn}`, "15 seconds");
+    }
 
     // One Preview per pushed commit. Within a single Preview, Durable Objects always run the
     // latest push, so only a Preview of its own keeps a judged attempt exactly as it was.

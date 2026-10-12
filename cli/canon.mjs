@@ -4,6 +4,7 @@
 //   canon read [--for <path>]                   1. read canon, the backlog and claims in flight (--for: facts governing a file)
 //   canon claim --fact <file.json> --why "..."  2. declare a new fact (or a revision: "replaces" a canon fact)
 //   canon claim --join <fact-id>   --why "..."     ...or race for a fact someone already proposed
+//   canon overlap                               before pushing: other attempts in flight changing the same files
 //   git push                                    3. push the attempt (plain Git, from inside the attempt)
 //   canon verdict [--wait]                      4. which facts held, which broke, accepted or not
 //   canon refresh                               a BEHIND attempt the judge couldn't re-apply: new attempt from current canon + your changes
@@ -31,7 +32,7 @@ const [cmd, ...rest] = process.argv.slice(2);
 const args = parseArgs(rest);
 
 try {
-  if (!["read", "claim", "verdict", "refresh", "why", "init"].includes(cmd)) usage();
+  if (!["read", "claim", "verdict", "refresh", "why", "overlap", "init"].includes(cmd)) usage();
   if (cmd === "init") init();
   else if (!URL_BASE) fail("set CANON_URL to where Canon runs, e.g. https://canon.rodeo");
   else if (cmd === "read") await read();
@@ -39,6 +40,7 @@ try {
   else if (cmd === "verdict") await verdict();
   else if (cmd === "refresh") await refresh();
   else if (cmd === "why") await why(args._[0]);
+  else if (cmd === "overlap") await overlap();
   else usage();
 } catch (err) {
   fail(err.message);
@@ -252,6 +254,20 @@ async function verdict() {
   }
   if (followed && ["unproven", "contradicts"].includes(v.outcome)) console.log(`To change the code, run canon refresh in your attempt: it gives you your own copy of ${v.attemptId}.`);
   process.exit(v.outcome === "ready" ? 0 : 2);
+}
+
+// Before a push: who else is changing the files this attempt changes (pushed or not)?
+async function overlap() {
+  const ctx = attemptContext();
+  const run = (argv) => { try { return execFileSync("git", argv, { cwd: ctx.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch { return ""; } };
+  const local = new Set([...run(["diff", "--name-only", "HEAD"]).split("\n"), ...run(["diff", "--name-only", "origin/main", "HEAD"]).split("\n"), ...run(["ls-files", "--others", "--exclude-standard"]).split("\n")].filter(Boolean));
+  const o = await api("POST", "/overlaps", { attempt: ctx.attemptId, paths: [...local] });
+  if (!o.paths.length) return console.log("You haven't changed any files yet.");
+  if (!o.overlaps.length) return console.log(`No other attempt in flight changes ${o.paths.slice(0, 6).join(", ")}${o.paths.length > 6 ? " and the rest" : ""}.`);
+  console.log("Others changing the same files:");
+  for (const x of o.overlaps) console.log(`  ${x.agent} (${x.status}) is making "${x.sentence}" true and changes ${x.files.join(", ")}`);
+  console.log("Overlapping files are fine when the behaviours agree. If yours could break one of theirs, change course now, or say why in your claim.");
+  if (o.headsUp.length + o.clashes.length) console.log(`${o.headsUp.length + o.clashes.length} of these already conflict in behaviour: see HEADS-UP / CLASH in canon verdict.`);
 }
 
 async function why(factId) {

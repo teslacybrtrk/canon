@@ -45,6 +45,7 @@ type Row = Record<string, SqlStorageValue>;
 const LIVE_CHECK_TTL_MS = 30_000;
 // How long the first claim that may land waits for others to board the same merge train.
 const BOARDING_MS = 60_000;
+const VERIFY_SLOTS = 10; // commits a project verifies at once; the rest queue (see admit)
 const SPECULATIVE_BOARDING_MS = 3_000; // boarding while a release runs: the riders leave as a speculative train
 const PRODUCTION_CHECK_EVERY_MS = 60 * 60_000;
 // The forked-from files travel to CI inside the command line; past this size the novelty check is skipped.
@@ -224,6 +225,35 @@ export class Referee extends DurableObject<Env> {
   }
 
   /**
+   * Admission control. Every verification builds in containers, and thirty starting at once overwhelmed the CI runner
+   * (RPC sessions shut down, subrequest depth exceeded). So a project verifies at most VERIFY_SLOTS commits at a time;
+   * the rest wait in the Workflow and come in as slots free. A slot is freed when the judge gets the result (or the
+   * platform error), and expires after 15 minutes if its Workflow died.
+   */
+  admit(repo: string, sha: string): boolean {
+    const slots = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, number>;
+    for (const [k, at] of Object.entries(slots)) if (Date.now() - at > 15 * 60_000) delete slots[k];
+    const key = `${repo}:${sha}`;
+    if (!slots[key]) {
+      if (Object.keys(slots).length >= VERIFY_SLOTS) {
+        this.setMeta("verifying", JSON.stringify(slots));
+        return false;
+      }
+      slots[key] = Date.now();
+    }
+    this.setMeta("verifying", JSON.stringify(slots));
+    return true;
+  }
+
+  private releaseSlot(repo: string, sha: string) {
+    const slots = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, number>;
+    if (slots[`${repo}:${sha}`]) {
+      delete slots[`${repo}:${sha}`];
+      this.setMeta("verifying", JSON.stringify(slots));
+    }
+  }
+
+  /**
    * A proposed command fact must fail on the commit its attempt forked from, or it is not a new fact. CI rebuilds
    * that commit from the attempt's checkout with these files: each one the attempt changed, as it was at the fork.
    */
@@ -294,6 +324,7 @@ export class Referee extends DurableObject<Env> {
    * the CI pipeline ran. Throws while the preview is not serving yet (the Workflow step retries).
    */
   async judge(repo: string, sha: string, previewUrl: string, commands: Record<string, CheckResult> = {}, notNew?: string): Promise<Verdict | null> {
+    this.releaseSlot(repo, sha); // the containers are done with it
     const attempt = this.attempt(repo);
     if (!attempt) return null;
     // A claimed command fact that already passed on the commit its attempt forked from cannot fail: it is not new.
@@ -351,6 +382,7 @@ export class Referee extends DurableObject<Env> {
 
   /** An attempt that does not build breaks every fact. */
   async buildFailed(repo: string, sha: string, detail: string): Promise<void> {
+    this.releaseSlot(repo, sha);
     const train = this.rows(`SELECT * FROM trains WHERE id = ? AND status IN ('building', 'judging')`, repo)[0];
     if (train) return this.trainFailed(train, `the combined candidate didn't build: ${detail.slice(0, 160)}`);
     // The platform failed (the API answered with an error page, the network dropped): not the code's fault. It is
@@ -364,6 +396,7 @@ export class Referee extends DurableObject<Env> {
 
   /** The platform failed (container capacity, RPC, Workflows), not the code: say so, and let the agent push again. */
   async couldNotJudge(repo: string, sha: string, detail: string): Promise<void> {
+    this.releaseSlot(repo, sha);
     const train = this.rows(`SELECT * FROM trains WHERE id = ? AND status IN ('building', 'judging')`, repo)[0];
     if (train) return this.trainFailed(train, `the combined candidate couldn't be judged (platform): ${detail.slice(0, 160)}`);
     const attempt = this.attempt(repo);
@@ -1200,6 +1233,27 @@ export class Referee extends DurableObject<Env> {
       if (other?.status !== "ready") return [];
       return [{ with: { claimId: other.id, agent: other.agent, attemptId: other.attemptId, factId: other.factId }, factId: r.fact_id as string, breaks: mine ? "mine" : "theirs", detail: r.detail as string } satisfies Clash];
     });
+  }
+
+  /**
+   * Before a push: who else is changing the files I'm changing? The judge adds what this attempt already pushed (from
+   * the two Git trees in Artifacts) to the paths the agent has changed locally, and lists every other attempt in
+   * flight that changed any of them, with the fact it is building. Overlapping files are often fine (behaviour decides,
+   * not text); this is so agents can talk before either finds out from a verdict.
+   */
+  async overlaps(attemptId: string, localPaths: string[]) {
+    const mine = this.attempt(attemptId);
+    if (!mine?.claimId) throw new ProtocolError(404, `no attempt ${attemptId}`);
+    const pushed = mine.headSha ? ((await this.changedPaths(mine, mine.headSha)) ?? []) : [];
+    const paths = new Set([...pushed, ...localPaths.slice(0, 500)].filter((p) => typeof p === "string" && p && p !== "canon.json"));
+    const out: Array<{ claimId: string; agent: string; factId: string; sentence: string; status: ClaimStatus; attemptId: string; files: string[] }> = [];
+    for (const c of this.rows(`SELECT * FROM claims WHERE status IN ('open', 'checking', 'unproven', 'ready', 'behind') AND attempt_id != ?`, attemptId).map(toClaim)) {
+      const a = this.attempt(c.attemptId);
+      if (!a?.headSha) continue;
+      const files = ((await this.changedPaths(a, a.headSha)) ?? []).filter((p) => paths.has(p));
+      if (files.length) out.push({ claimId: c.id, agent: c.agent, factId: c.factId, sentence: this.fact(c.factId)?.sentence ?? c.factId, status: c.status, attemptId: c.attemptId, files });
+    }
+    return { paths: [...paths], overlaps: out, headsUp: this.headsUpFor(mine.claimId), clashes: this.clashesFor(mine.claimId) };
   }
 
   /** The same findings while either side is still being written: a heads-up to both agents, not a clash yet. */

@@ -13,7 +13,8 @@
 
 After an accept, a release runs every fact on a full release candidate first; a version that breaks one is held back
 and canon steps back with it (your verdict says HELD BACK and why). On autopilot with batching on, claims queued behind a release leave
-together as one merge train, checked while that release is still going out. The judge also breaks each Ready change on purpose to show which breaks no fact catches. If your verdict shows HEADS-UP, another agent's work in progress builds one behaviour the
+together as one merge train, checked while that release is still going out. The judge also breaks each Ready change on purpose to show which breaks no fact catches. Before pushing, canon_overlap (CLI: canon overlap) lists other agents changing the same files and the fact each is
+building. If your verdict shows HEADS-UP, another agent's work in progress builds one behaviour the
 opposite way from yours: change course now if you can, or say why in your claim. A Ready verdict may carry REVIEWER notes: advice from a model
 that didn't write your change, each quoting a line. Fix what's right; they never decide anything.
 
