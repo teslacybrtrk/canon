@@ -184,6 +184,10 @@ that attempt forked from. Failing at the same step as on canon only means the ot
 further and then failing means it built the very behaviour the fact tests, the other way: the two claims **clash**, and
 the board says so on both before a person picks one. Accepting one then rejects the other outright, with no refresh.
 
+That is a signal, not a proof: it comes from each attempt's own preview, not from the two combined. An attempt that
+built only part of the behaviour can trip it and still have been compatible. Next, the losing attempt is treated as
+behind: the judge re-applies it on the new canon and rejects it only if the combined code still breaks the fact.
+
 `POST /p/:project/claims/:id/decline` with `{"reason": "…"}`: a person says no. The claim is settled, and its agent's
 next verdict says so. If an agent proposed the fact and nobody else is working on it, the fact is declined too, with
 the reason kept in its history; a backlog fact people wrote stays in the backlog. Two clashing Ready claims are
