@@ -16,11 +16,16 @@ previews="$(curl -sf "$CANON_URL/p/$PROJECT/previews" | node -e 'let s="";proces
 # Deletions run 8 at a time: each one is a separate wrangler call that takes a few seconds.
 printf '%s\n' $previews | xargs -P 8 -I{} sh -c 'cd demo-app && npx wrangler preview delete --name "$1" >/dev/null 2>&1 && echo "deleted preview $1" || true' _ {}
 
-repos="$(cd referee && npx wrangler artifacts repos list --namespace "$NAMESPACE" --json 2>/dev/null \
-  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s.slice(s.indexOf("[")));for(const x of j)if(x.name.startsWith(process.argv[1]+"-"))console.log(x.name)})' "$PROJECT")"
-printf '%s\n' $repos | xargs -P 8 -I{} sh -c '
-  (cd referee && npx wrangler artifacts repos delete "$1" --namespace "$2" --force >/dev/null 2>&1) && echo "deleted repo $1"
-  (cd demo-app && npx wrangler preview delete --name "$1" >/dev/null 2>&1) && echo "deleted preview $1" || true' _ {} "$NAMESPACE"
+# The listing returns a page at a time (and sometimes nothing): list and delete until none are left.
+for round in 1 2 3 4 5 6 7 8; do
+  repos="$(cd referee && npx wrangler artifacts repos list --namespace "$NAMESPACE" --json 2>/dev/null \
+    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s.slice(s.indexOf("[")));for(const x of j)if(x.name.startsWith(process.argv[1]+"-"))console.log(x.name)}catch{console.log("?")}})' "$PROJECT")"
+  [ "$repos" = "?" ] && { sleep 5; continue; }
+  [ -z "$repos" ] && break
+  printf '%s\n' $repos | xargs -P 8 -I{} sh -c '
+    (cd referee && npx wrangler artifacts repos delete "$1" --namespace "$2" --force >/dev/null 2>&1) && echo "deleted repo $1"
+    (cd demo-app && npx wrangler preview delete --name "$1" >/dev/null 2>&1) && echo "deleted preview $1" || true' _ {} "$NAMESPACE"
+done
 
 done
 
