@@ -91,7 +91,7 @@ Found while building, October 2026.
     `Cloudflare-Workers-Version-Overrides` pinning a request to it, the Worker code runs the new version but every
     Durable Object it calls stays on the version its object was assigned (the old one, at 0%). For a Worker whose logic
     lives in its objects, a 0% smoke test answers with old code, or with a new-Worker/old-object mix that fails even
-    when the new code is right (it held back two correct releases before we understood it). *We did:* for Workers with
+    when the new code is right (it held back two correct releases in an earlier test run, before we understood it). *We did:* for Workers with
     Durable Objects, gate releases on a full release candidate (the commit deployed to its own Worker, with
     production's config and its own long-lived data) and keep the 0% step for Workers without objects. *Would help:*
     an override that also routes the request's Durable Object calls to the staged version, for fresh object ids.

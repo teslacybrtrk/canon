@@ -8,9 +8,10 @@ push becomes main.
 Canon is a small protocol on top of [Cloudflare Artifacts](https://developers.cloudflare.com/artifacts/)
 for many coding agents sharing one codebase. Agents don't merge branches or open pull requests. Each agent
 declares the fact it is trying to make true, works in its own fork (an *attempt*), and pushes with plain Git. A
-judge checks every canon fact against a live Workers Preview of that attempt. A person (or a charter written once)
-accepts a change in the facts, and the accepted attempt becomes canon, then production, only if it keeps every fact
-there too.
+judge checks every fact (a plain sentence with an automated check) against a live Workers Preview of that attempt. A
+person (or a charter written once) accepts a change in the facts, and the accepted attempt becomes *canon*: the facts
+plus the commit that keeps them, in the role of main. It reaches production only if every fact also holds on a release
+candidate; if not, canon steps back.
 
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
 - **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the judge replays an
@@ -22,7 +23,7 @@ there too.
 - **Release**: accepted is not released. Every release runs all facts on a full release candidate (production's
   config, its own long-lived data) first, a version that breaks one is held back, and canon always equals what
   production runs: a held-back release reverts it.
-- **Throughput**: claims that queue behind a release leave together as one merge train: one candidate, checked once,
+- **Throughput**: on autopilot with `"batch": true`, claims that queue behind a release leave together as one merge train: one candidate, checked once,
   released once. A train that doesn't hold lands its riders one by one, so the gate finds the culprit.
 - **Why**: the fact chain. Every fact links to the attempt that made it true and to the attempts that failed it.
   Failed attempts stay clonable, so they remain the project's memory. The chain is in Git too, as notes on the canon
@@ -47,7 +48,8 @@ change yourself, then 40 the Canon way.
 On Oct 12, 2026, twelve Claude Code agents worked on the farmstand demo at once on canon.rodeo, with a person deciding,
 while six more ran a second project (rodeo) on autopilot. On farmstand the judge ran 465 fact checks, rejected 2
 attempts without anyone reading the diff, caught 1 clash before anyone accepted either side, and re-applied 8 attempts
-on the new canon by itself; the median push-to-verdict was 48 s (p90 77 s). A person clicked once, to choose a side.
+on the new canon by itself; the median push-to-verdict was 48 s (p90 77 s). A person clicked once: they accepted one fact, settling the clash, and the judge re-applied the other Ready attempts on
+the new canon.
 On rodeo, nobody clicked: queued claims left in 2 merge trains (5 facts), and the release gate held back 2 releases. A
 schema change passed its fresh preview but broke the market page on a release candidate with real data; when its train
 was held back, its riders landed one by one, and the gate found it.
@@ -62,11 +64,11 @@ other 7 stopped at text conflicts for a person to resolve. Reproduce it with `no
 | | Merge queue | AI review of the diff | Held-out tests | Canon |
 |---|---|---|---|---|
 | What decides | the branch's own tests pass on the merged tree | a model reads the diff | tests the author never sees | facts about the running app, checked on a live preview of each commit |
-| Can the author change the judge? | yes: the tests ship in the branch | it can argue with it | no | no: canon owns the facts; changing one is a revision someone accepts |
+| Can the author change the judge? | often: the tests usually ship in the branch | it can argue with it | no | no: canon owns the facts; changing one is a revision someone accepts |
 | What a person reviews | code | the model's summary | a pass or fail | changes to the facts, in plain sentences |
 | Conflicts | text | text, plus an opinion | none | behaviour: clashes flagged before an accept, settled on the combined code |
-| Memory | PR threads | none | none | the fact chain, in Git notes; every failed attempt stays clonable |
-| Release | whatever merged | whatever merged | whatever passed | every fact on a full release candidate, then on the production URL at 0% traffic; a version that breaks one never serves anyone |
+| Memory | PR threads | not part of the method | not part of the method | the fact chain, in Git notes; every failed attempt stays clonable |
+| Release | whatever merged | whatever merged | whatever passed | every fact on a full release candidate, then (for Workers without Durable Objects) on the production URL at 0% traffic; a version that breaks a fact there never serves anyone, and one that breaks in production anyway is rolled back |
 
 ## How it works
 
@@ -176,8 +178,8 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
 - **Speculative trains**: today queued claims leave as one merge train and a failed train lands them one by one.
   Next, check the next train while this one releases, and split a failed train in halves to find the culprit.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
-- **Canary traffic**: today a new canon runs every fact on a full release candidate, then on the production URL at 0%
-  traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,
+- **Canary traffic**: today a new canon runs every fact on a full release candidate, then (for Workers without Durable
+  Objects) on the production URL at 0% traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,
   with error rates as facts.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
 

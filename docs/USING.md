@@ -51,8 +51,9 @@ claims.
 ```
 
 Each check is one of two kinds:
-- **Probe:** HTTP requests against a live preview of each commit. `vars` draws random inputs from the commit's
-  own hash, so an agent can't hard-code the answers, and the same commit always gets the same inputs.
+- **Probe:** HTTP requests against a live preview of each commit. `vars` draws random inputs from a seed the
+  judge picks after each push, so an agent can't hard-code the answers; the verdict records the seed, so a run can be
+  replayed.
 - **Command:** a shell command run on each commit's checkout in CI, such as a linter, a type-check or a test
   suite. Call tools directly, not package scripts, so an attempt can't redefine what judges it.
 

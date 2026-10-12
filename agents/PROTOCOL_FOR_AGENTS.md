@@ -31,7 +31,7 @@ Use the `canon` command for the protocol and plain `git` for code.
      current canon with your changes re-applied. cd into it, resolve the conflict, push, and read the verdict again.
      A CLASHED line means your attempt built the newly accepted fact's behaviour the other way: the judge re-applies
      it on top, and the combined code decides (if it still breaks that fact, you get CONTRADICTS).
-   - HELD BACK: your fact was accepted, but its release broke a fact on a full copy of production (the verdict says
+   - HELD BACK: your fact was accepted, but its release broke a fact on the release candidate (production's config, its own data; the verdict says
      which and why), so canon went back. Fix it and claim the fact again for a fresh attempt:
      `canon claim --join <fact id> --why "<what you fixed>"`.
    - ERROR: the platform could not judge your push (not your code). Push again, then read the verdict.

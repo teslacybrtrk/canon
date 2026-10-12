@@ -70,7 +70,7 @@ const broken = canonResults.filter((x) => !x.r.held);
 const out = [
   `# Baseline: the same run through plain Git`,
   ``,
-  `Every agent's first attempt from the ${project} run, merged with \`git merge\` in the order they were claimed, as a`,
+  `The first attempt of each claim in the ${project} run, merged with \`git merge\` in the order they were claimed, as a`,
   `queue whose only gate is "it merges" would. Then canon's ${seedCanon.facts.length} facts and the agents' claimed facts were run against the merged app.`,
   ``,
   `**${merged.length} of ${merges.length} attempts merged cleanly. The merged app breaks ${broken.length} of canon's ${seedCanon.facts.length} facts.**`,

@@ -316,7 +316,7 @@
   <div class="hero-body wrap reveal">
     <p class="kicker">Git for teams of AI coding agents</p>
     <h1>Main is not a branch.<br><em>It’s what must stay true.</em></h1>
-    <p class="lede">Agents push with plain Git. Canon checks each commit, on its own live preview, against the facts your app must keep, so a change that breaks one is rejected without anyone reading the diff.</p>
+    <p class="lede">Agents push with plain Git. Canon checks each commit, on its own live preview, against the facts your app must keep (plain sentences, each with an automated check), so a change that breaks one is rejected without anyone reading the diff.</p>
     <div class="cta">
       <a class="btn primary" href="/demo">Test drive the next Git platform →</a>
       <a class="btn ghost" href="#problem">Learn more about Canon ↓</a>
@@ -380,7 +380,7 @@
         <li class="ok"><b>6 of 13 merged cleanly.</b> No conflict, nothing for anyone to look at.</li>
         <li><b>The merged app charges the wrong price.</b> A bulk discount nobody approved merged cleanly and broke “The basket charges the listed price”: 3 kale and 13 duck eggs came to $85.05, not the listed $93.50.</li>
         <li><b>The other 7 stopped at text conflicts</b> in <code>src/index.ts</code>, each for a person to resolve by reading the code.</li>
-        <li><b>On autopilot, a schema change</b> passed its fresh preview but broke the market page on a copy with real data. Canon held it back twice and found it; a gate that only tests fresh copies would have shipped it.</li>
+        <li><b>On autopilot, a schema change</b> passed its fresh preview but broke the market page on a copy with real data. Canon held back the train, then the change on its own, and named it as the cause; a gate that only tests fresh copies would have shipped it.</li>
       </ul>
     </div>
   </div>
@@ -399,14 +399,14 @@
     <li class="move reveal" style="animation-delay:.19s"><h3>Push an attempt</h3><p>Plain <code>git push</code>. Every commit becomes its own live preview on Cloudflare.</p>
       <div class="example"><span class="dim">$</span> git push origin main<br><span class="dim">→ preview built in ~40 s</span></div></li>
     <li class="move reveal" style="animation-delay:.26s"><h3>Get a verdict</h3><p>Canon runs every fact on the preview. Keep them all and make yours true, and a person can accept it into production.</p>
-      <div class="example"><span class="ok">READY</span> · 6 kept · +1 new<br><span class="bad">REJECTED</span> · ✗ listed price</div></li>
+      <div class="example"><span class="ok">READY</span> · 9 kept · +1 new<br><span class="bad">REJECTED</span> · ✗ listed price</div></li>
   </ol>
   <h3 class="next-title">Then the judge keeps going</h3>
   <ol class="moves after">
     <li class="move reveal" style="animation-delay:.05s"><h3>Settle clashes</h3><p>Two Ready attempts that built one behaviour opposite ways are flagged before anyone accepts. Accept one; the other is re-applied on top, and the combined code decides.</p></li>
     <li class="move reveal" style="animation-delay:.12s"><h3>Test the tests</h3><p>Each Ready change is broken on purpose (a guard removed, a comparison flipped) and built again. The card names every break no fact noticed.</p></li>
-    <li class="move reveal" style="animation-delay:.19s"><h3>Ride together</h3><p>Claims queued behind a release leave as one merge train: one candidate, checked once, released once. A train that fails goes one by one.</p></li>
-    <li class="move reveal" style="animation-delay:.26s"><h3>Release, or hold back</h3><p>Every fact runs on a full release candidate with production’s data first. A version that breaks one never ships, and canon steps back with it.</p></li>
+    <li class="move reveal" style="animation-delay:.19s"><h3>Ride together</h3><p>On autopilot with batching on, claims queued behind a release leave as one merge train: one candidate, checked once, released once. A train that fails goes one by one.</p></li>
+    <li class="move reveal" style="animation-delay:.26s"><h3>Release, or hold back</h3><p>Every fact runs on a full release candidate (production’s config, its own long-lived data) first. A version that breaks one there never ships, and canon steps back with it.</p></li>
   </ol>
   <div class="join reveal">
     <div><h3>Bring your own agent</h3>
@@ -450,7 +450,7 @@
     <li><b>A reviewer agent.</b> Today the charter routes risky files to the owner. Next, a reviewer from a different model writes findings grounded in the exact candidate.</li>
     <li><b>Speculative trains.</b> Today queued claims leave together as one merge train. Next, check the next train while this one releases, and split a failed one in halves.</li>
     <li><b>Any stack.</b> Facts about apps beyond Workers, built and previewed in Containers.</li>
-    <li><b>Canary traffic.</b> Today a new canon passes every fact on a full release candidate and on the production URL at 0% traffic before anyone gets it. Next, real traffic in steps, 1% then 10%, with error rates as facts.</li>
+    <li><b>Canary traffic.</b> Today a new canon passes every fact on a full release candidate and (for Workers without Durable Objects) on the production URL at 0% traffic before anyone gets it. Next, real traffic in steps, 1% then 10%, with error rates as facts.</li>
     <li><b>Facts from production.</b> An error in production becomes a proposed fact, so once it’s fixed it stays fixed.</li>
   </ul>
 </section>
@@ -483,15 +483,15 @@
         <p>Think of it as SWE-bench’s grading rule turned into a merge policy: a claim must go from failing to passing, canon must keep passing, and the judge owns both.</p></div></details>
       <details><summary>How is this different from AI code review, or hidden tests?</summary><div class="a">
         <p>AI review has a model read the diff and give an opinion; Canon never asks a model whether code is right. It runs facts against the app the commit actually builds, so the answer comes from behaviour, and agents can’t argue with it. Hidden tests stop an agent from editing the grader; Canon does that too (canon owns the facts), but keeps them in the open, as plain sentences people review and change on purpose.</p>
-        <p>Canon also keeps what the others drop: why each rule exists (the fact chain, in Git notes), which changes can’t coexist (clashes, settled on the combined code), and whether a new version keeps every fact before anyone gets it (a full release candidate with production’s config and data, and for Workers without Durable Objects the production URL at 0% traffic too; one that breaks a fact is held back).</p></div></details>
+        <p>Canon adds three things: why each rule exists (the fact chain, in Git notes), which changes can’t coexist (clashes, settled on the combined code), and whether a new version keeps every fact before anyone gets it (a full release candidate with production’s config and its own long-lived data, and for Workers without Durable Objects the production URL at 0% traffic too; one that breaks a fact is held back).</p></div></details>
       <details><summary>Can’t an agent just weaken a check to pass?</summary><div class="a">
         <p>No. The judge checks every attempt against canon’s copy of the facts, never the attempt’s own. An attempt whose <code>canon.json</code> changes, drops or invents a fact is rejected as tampered. Command facts call tools directly, and a fact pins the toolchain, its settings and the deploy config, so an attempt can’t swap the linter. Suppression comments are ruled out by facts too.</p>
         <p><b>Gaming</b> a check is the harder problem, as with any test. Probes draw random inputs from a seed the judge picks after the push, so no agent can know them in advance and hard-coded answers fail; the verdict records the seed, so the run can be replayed. Facts that only read are sent exactly as a visitor’s requests, and canon’s facts are re-checked on production every hour.</p></div></details>
       <details><summary>Is a passing fact proof the code is correct?</summary><div class="a">
         <p>No. A fact is exactly as strong as its check. “A stall cannot be double-booked” checked with two requests in a row says nothing about two requests at the same instant, or a retry after a lost response. Canon makes the evidence visible: every fact shows its check, and every verdict shows what was tried.</p>
-        <p>Stronger evidence is next: the judge will break the implementation on purpose (remove the guard, skip the transaction) to confirm a check notices, and risky areas such as auth and schema changes can require a person’s review on top of the facts.</p></div></details>
+        <p>So the judge also breaks each Ready change on purpose (removes a guard, flips a comparison) and shows which breaks no fact noticed, and a charter can send risky paths such as auth and migrations to a person whatever the verdict.</p></div></details>
       <details><summary>What happens when two agents edit the same file?</summary><div class="a">
-        <p>Each works on its own fork, so nothing happens until one lands. Then the other is <b>behind</b>, and the judge replays its changes on the new canon itself, like a rebase in CI; only a real text conflict goes back to its agent. A person only hears about contradictions: attempts whose facts can’t both hold. Those are flagged while both are still ready (each fact is run on the other’s preview), and once one lands, the other is rejected without anyone reading it.</p>
+        <p>Each works on its own fork, so nothing happens until one lands. Then the other is <b>behind</b>, and the judge replays its changes on the new canon itself, like a rebase in CI; only a real text conflict goes back to its agent. A person only hears about contradictions: attempts whose facts can’t both hold. Those are flagged while both are still ready (each fact is run on the other’s preview), and once one lands, the other is re-applied on top of it, and the combined code decides.</p>
         <p>That flag is a warning, not a verdict: it comes from each attempt’s own preview. So the losing side isn’t rejected on the warning. The judge re-applies it on the new canon, and the combined code decides: it’s rejected only if it still breaks the rule.</p></div></details>
       <details><summary>What about lint, types, performance and database changes?</summary><div class="a">
         <p>They’re facts too. This demo’s canon includes “the code passes the linter, with no rules silenced”, “the code type-checks”, “the toolchain, its settings and the deploy config only change by revision” and “the market page answers in under 400 ms at p95”. Database rules fit the same way: “migrations only add, never drop”, “every migration applies cleanly to a copy of the data”.</p>

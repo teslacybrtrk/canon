@@ -200,7 +200,8 @@ settled by accepting one (the other is re-applied on it, and rejected if the com
 declining both.
 
 After each deploy, and every hour, the judge runs canon's probe facts against production and shows the result on
-the board. Accepted, deployed and healthy are three states, and a broken version never reaches visitors:
+the board. Accepted, deployed and healthy are three states. A version that breaks a fact on the release candidate never reaches visitors, and one that breaks in
+production anyway is rolled back:
 
 1. **Release candidate.** The accepted commit is deployed in full to its own Worker (`<project>-candidate`) with
    production's config, and every canon fact runs on it: all of its code, Durable Objects included.

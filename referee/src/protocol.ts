@@ -96,7 +96,7 @@ export interface ProbeCheck {
   steps: ProbeStep[];
   // Random inputs, drawn again for every sample: {"qty": {"int": [1, 20]}, "item": {"oneOf": [...]}}.
   // Steps use them as {{qty}} or {{item.id}}, and expectations can add and multiply: "{{qty * item.cents}}".
-  // The draws are seeded by the commit and the fact: unknown before the push, the same every time it is judged.
+  // The draws are seeded by the commit, the fact and a seed the judge picks after the push (recorded in the verdict).
   vars?: Record<string, VarSpec>;
   samples?: number; // run the steps this many times (1-10), each with fresh inputs and a fresh run
   // false: send the requests exactly as a visitor would, without the x-canon-run header, so the app
