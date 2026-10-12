@@ -19,6 +19,7 @@ export const UPGRADES = [
   `ALTER TABLE canon ADD COLUMN version_id TEXT`,
   `ALTER TABLE canon ADD COLUMN health TEXT`,
   `ALTER TABLE canon ADD COLUMN health_detail TEXT`,
+  `ALTER TABLE canon ADD COLUMN reverts INTEGER`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];

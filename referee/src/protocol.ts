@@ -180,7 +180,7 @@ export interface CanonState {
   // Accepted, deployed and healthy are three different things. Each accepted canon is uploaded as a Worker version,
   // staged at 0% and smoke-tested on the production URL before any visitor gets it: a version that breaks a fact is
   // held back (production never served it). The first check after the release is a second net: broken, it rolls back.
-  deploys: Array<{ seq: number; factId: string | null; deployed: "pending" | "deployed" | "failed"; versionId: string | null; health: "healthy" | "held" | "broken" | "rolled-back" | null; detail: string | null }>;
+  deploys: Array<{ seq: number; reverts?: number | null; factId: string | null; deployed: "pending" | "deployed" | "failed"; versionId: string | null; health: "healthy" | "held" | "broken" | "rolled-back" | null; detail: string | null }>;
 }
 
 // ---- Move 2: declare --------------------------------------------------------------
@@ -239,6 +239,8 @@ export interface Verdict {
   seed?: string;
   // Files this attempt changed that the charter routes to review (see Charter.review).
   review?: string[];
+  // Accepted, then held back at release (or rolled back): the canon reverted, and this says what broke where.
+  heldBack?: string;
   // Added when the verdict is read (GET /attempts/:id/verdict), not stored with it:
   refreshedAs?: string; // canon moved, and the judge re-applied this attempt on the current canon as this attempt
   declined?: string; // a person declined this claim, for this reason

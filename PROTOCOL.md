@@ -217,6 +217,15 @@ the board. Accepted, deployed and healthy are three states, and a broken version
 A Durable Object class change can't be uploaded as a version (Cloudflare applies it atomically), so that one release
 skips step 2: the release candidate has run its code, and step 4 is the net.
 
+**Canon always equals what production runs.** A canon that isn't released (held back in step 1 or 2, rolled back in
+step 4, or a deploy that failed) is reverted: a new canon entry (`reverts` in `deploys`) points back at the last
+released canon. Every fact accepted since then is proposed again (a rule a revision retired comes back), and the
+accepted claim's verdict says what broke where (`heldBack`); its agent claims the fact again with a fix, because an
+attempt held back at release never lands as it is. Claims that forked from the reverted canon carry code production
+never ran, so they are behind: the judge re-applies their own change on the restored canon. While a release is in
+progress, accepts wait (one release at a time), and a fact held back twice doesn't land automatically again: the owner
+decides. The judge checks this invariant on every alarm; `POST /p/:project/reconcile` (owner key) applies it now.
+
 ## MCP
 
 `POST /p/:project/mcp` serves the moves as MCP tools (Streamable HTTP, JSON responses) with the agent key:

@@ -109,6 +109,7 @@ export class Referee extends DurableObject<Env> {
       production: JSON.parse(this.meta("production") ?? "null"),
       deploys: this.rows(`SELECT * FROM canon ORDER BY seq DESC LIMIT 10`).map((r) => ({
         seq: r.seq as number,
+        reverts: (r.reverts as number | null) ?? null,
         factId: (r.accepted_fact as string | null) ?? null,
         deployed: r.deployed === 1 ? "deployed" : r.deployed === -1 ? "failed" : "pending",
         versionId: (r.version_id as string | null) ?? null,
@@ -393,7 +394,12 @@ export class Referee extends DurableObject<Env> {
     const attempt = this.attempt(claim.attemptId)!;
     const verdict = this.latestVerdict(attempt.id);
     const canon = this.currentCanon()!;
+    // One release at a time: until the last accept is released (or held back and reverted), canon may still move back.
+    const releasing = this.releasing();
+    if (releasing) throw new ProtocolError(409, `canon #${releasing} is being released; accept again once it's out (or held back)`);
     if (!verdict || verdict.sha !== attempt.headSha) throw new ProtocolError(409, "the attempt moved since its verdict; wait for the new one");
+    // An attempt accepted once and then held back at release never lands as it is: its agent claims the fact again.
+    if (attempt.frozen) throw new ProtocolError(409, "this attempt was held back at release; its agent claims the fact again with a fix");
     if (verdict.canonSeq !== canon.seq) {
       await this.evaluate(attempt, verdict.sha, verdict.previewUrl);
       this.broadcast();
@@ -496,8 +502,21 @@ export class Referee extends DurableObject<Env> {
     return (this.currentCanon()?.seq as number | undefined) ?? 0;
   }
 
+  /** The canon still waiting for its release, if any (a stuck one stops blocking after 20 minutes). */
+  private releasing(): number | null {
+    const row = this.rows(`SELECT seq, at FROM canon WHERE accepted_fact IS NOT NULL AND deployed = 0 AND reverts IS NULL ORDER BY seq DESC LIMIT 1`)[0];
+    return row && Date.now() - Number(row.at) < 20 * 60_000 ? (row.seq as number) : null;
+  }
+
   async promoted(seq: number, ok: boolean, versionId: string | null = null) {
     this.sql.exec(`UPDATE canon SET deployed = ?, version_id = COALESCE(?, version_id) WHERE seq = ?`, ok ? 1 : -1, versionId, seq);
+    // Canon is what production runs. A canon that wasn't released goes back to the last one that was.
+    if (!ok) {
+      const row = this.rows(`SELECT health_detail, health FROM canon WHERE seq = ?`, seq)[0];
+      await this.revertCanon(seq, row?.health === "held" ? (row.health_detail as string) : null);
+    }
+    // The queue moves: Ready claims waiting on the release are judged (and autopiloted) against the canon now live.
+    this.setMeta("rejudge", "1");
     // Production just changed: check canon's facts on it shortly, once the new version is serving. That first check
     // decides whether this deploy is healthy (see checkCanonOnProduction).
     if (ok) this.setMeta("verifyDeploy", String(seq));
@@ -508,6 +527,7 @@ export class Referee extends DurableObject<Env> {
   // One alarm, two jobs: re-judging live attempts after canon moves, and checking canon's facts on production hourly.
   async alarm() {
     try {
+      await this.keepCanonReleased().catch(() => {});
       // An alarm set before the production check existed was a re-judge.
       if (this.meta("rejudge") === "1" || this.meta("prodCheckAt") === null) {
         this.setMeta("rejudge", "0");
@@ -516,8 +536,9 @@ export class Referee extends DurableObject<Env> {
         for (const claim of live) {
           const attempt = this.attempt(claim.attemptId);
           const judgedOn = attempt ? this.judgedPreview(attempt) : null;
-          // A newer push that is still building gets its own verdict against the new canon.
-          if (!attempt || !judgedOn) continue;
+          // A newer push that is still building gets its own verdict against the new canon. A frozen attempt was
+          // accepted: if it's live again, it was held back at release, and its verdict stays (the agent claims anew).
+          if (!attempt || !judgedOn || attempt.frozen) continue;
           try {
             judged.push([claim.id, await this.evaluate(attempt, judgedOn.sha, judgedOn.previewUrl)]);
           } catch {
@@ -585,6 +606,85 @@ export class Referee extends DurableObject<Env> {
       this.sql.exec(`UPDATE canon SET health = 'healthy' WHERE seq = ?`, live.seq);
     }
     this.setMeta("production", JSON.stringify({ at: Date.now(), url, results }));
+  }
+
+  /**
+   * Canon always equals what production runs. When canon #seq is not released (held back by the release candidate or
+   * the 0% gate, or rolled back afterwards), the canon pointer goes back to the last released canon as a new canon
+   * entry that says it reverts #seq. The accepted fact is proposed again (a rule it retired comes back), the claim gets
+   * a verdict that says what broke where (or, if only the platform failed, it is Ready again), claims superseded by the
+   * accept are live again, and every attempt that forked from the reverted canon is re-applied on the restored one, so
+   * nothing keeps the code that never shipped.
+   */
+  private async revertCanon(seq: number, brokeAt: string | null) {
+    const current = this.currentCanon();
+    if (!current || current.seq !== seq || current.reverts) return;
+    const back = this.rows(
+      `SELECT * FROM canon WHERE seq < ? AND reverts IS NULL AND (accepted_fact IS NULL OR deployed = 1)
+         AND COALESCE(health, '') NOT IN ('held', 'broken', 'rolled-back') ORDER BY seq DESC LIMIT 1`,
+      seq,
+    )[0];
+    if (!back) return;
+    // Every canon above the last released one never shipped: undo them all (normally just this one).
+    const undone = this.rows(`SELECT * FROM canon WHERE seq > ? AND seq <= ? AND accepted_fact IS NOT NULL AND reverts IS NULL ORDER BY seq DESC`, back.seq, seq);
+    this.sql.exec(
+      `INSERT INTO canon (attempt_id, sha, accepted_fact, deployed, at, version_id, health, reverts) VALUES (?, ?, NULL, 1, ?, ?, 'healthy', ?)`,
+      back.attempt_id, back.sha, Date.now(), back.version_id ?? null, seq,
+    );
+    const facts = this.rows(`SELECT id, sentence FROM facts`);
+    // The undone accepts' own claims go back to their agents; only bystanders that forked from them are re-applied.
+    const undoneAttempts = undone.map((r) => r.attempt_id as string);
+    for (const row of undone) {
+      const why = row.seq === seq ? brokeAt : ((row.health_detail as string | null) ?? null);
+      const factId = row.accepted_fact as string;
+      const fact = this.fact(factId);
+      this.sql.exec(`UPDATE facts SET status = 'proposed', accepted_at = NULL, made_true_by = NULL, accepted_how = NULL WHERE id = ?`, factId);
+      if (fact?.replaces) this.sql.exec(`UPDATE facts SET status = 'canon', retired_by = NULL, retired_at = NULL WHERE id = ? AND retired_by = ?`, fact.replaces, row.attempt_id);
+      // The claim that was accepted: back to its agent with what broke, or Ready again if only the platform failed.
+      const claim = this.rows(`SELECT * FROM claims WHERE attempt_id = ?`, row.attempt_id).map(toClaim)[0];
+      const verdict = claim ? this.latestVerdict(claim.attemptId) : null;
+      if (claim && verdict) {
+        const brokeFact = why ? ((facts.find((f) => why.includes(`“${f.sentence}”`))?.id as string | undefined) ?? "release") : "";
+        const v: Verdict = why
+          ? { ...verdict, outcome: "contradicts", heldBack: why, lost: [...verdict.lost.filter((l) => !l.detail.startsWith("at release")), { factId: brokeFact, detail: `at release, ${why}` }] }
+          : { ...verdict, heldBack: undefined };
+        this.sql.exec(`UPDATE verdicts SET json = ? WHERE attempt_id = ? AND sha = ?`, JSON.stringify(v), verdict.attemptId, verdict.sha);
+        this.setClaimStatus(claim.id, why ? "contradicts" : "ready");
+      }
+      // Claims the accept superseded race for the fact again.
+      for (const c of this.rows(`SELECT * FROM claims WHERE fact_id = ? AND status = 'superseded' AND id != ?`, factId, claim?.id ?? "").map(toClaim)) {
+        this.setClaimStatus(c.id, (this.latestVerdict(c.attemptId)?.outcome as ClaimStatus | undefined) ?? "open");
+      }
+      // Attempts built on a reverted canon carry its code: re-apply their own change on the restored canon.
+      const onReverted = this.rows(
+        `SELECT c.id FROM claims c JOIN attempts a ON a.id = c.attempt_id WHERE a.base_attempt = ? AND c.status IN (${LIVE.map(() => "?").join(",")})
+           AND a.id NOT IN (${undoneAttempts.map(() => "?").join(",")})`,
+        row.attempt_id, ...LIVE, ...undoneAttempts,
+      );
+      for (const r of onReverted) {
+        this.sql.exec(`UPDATE claims SET status = 'behind', refresh = NULL WHERE id = ?`, r.id);
+        await this.autoRefresh(r.id as string).catch(() => {});
+      }
+    }
+    this.setMeta("rejudge", "1");
+    await this.ctx.storage.setAlarm(Date.now() + 1_000);
+    this.broadcast();
+  }
+
+  /** Owner: apply the invariant now instead of at the next alarm. */
+  async reconcile() {
+    const before = this.currentCanon()?.seq;
+    await this.keepCanonReleased();
+    return { canonSeq: this.currentCanon()?.seq, reverted: this.currentCanon()?.seq !== before };
+  }
+
+  /** The invariant, checked on every alarm: the current canon was released. If not (held back, rolled back, or the deploy failed), revert. */
+  private async keepCanonReleased() {
+    const cur = this.currentCanon();
+    if (!cur?.accepted_fact || cur.reverts) return;
+    if (cur.deployed === -1 || cur.health === "held" || cur.health === "rolled-back") {
+      await this.revertCanon(cur.seq as number, cur.health === "held" || cur.health === "rolled-back" ? (cur.health_detail as string) : null);
+    }
   }
 
   /**
@@ -696,6 +796,8 @@ export class Referee extends DurableObject<Env> {
       if (!res.ok) throw new Error(`deployments API returned ${res.status}`);
       const to = healthy ? `canon #${healthy.seq}` : "the version before it";
       this.sql.exec(`UPDATE canon SET health = 'rolled-back', health_detail = ? WHERE seq = ?`, `${what}. Production rolled back to ${to}.`, live.seq);
+      // Production went back, so canon goes back with it.
+      await this.revertCanon(live.seq as number, `${what}. Production rolled back to ${to}.`);
       // Check the restored version shortly.
       await this.scheduleProductionCheck(20_000);
     } catch (err) {
@@ -910,7 +1012,12 @@ export class Referee extends DurableObject<Env> {
     const notes: Array<{ sha: string; text: string }> = [];
     for (const c of this.rows(`SELECT * FROM canon WHERE seq <= ? ORDER BY seq`, seq)) {
       const lines: string[] = [];
-      if (!c.accepted_fact) {
+      if (c.reverts) {
+        const was = this.rows(`SELECT * FROM canon WHERE seq = ?`, c.reverts)[0];
+        lines.push(`Canon #${c.seq}: back to the code of canon #${this.rows(`SELECT seq FROM canon WHERE attempt_id = ? AND reverts IS NULL ORDER BY seq LIMIT 1`, c.attempt_id)[0]?.seq ?? "?"}, reverting canon #${c.reverts}`, "");
+        lines.push(`why: canon #${c.reverts} ("${this.fact(String(was?.accepted_fact ?? ""))?.sentence ?? was?.accepted_fact}") was not released: ${was?.health_detail ?? "it couldn't deploy"}`);
+        lines.push("Canon is what production runs, so the fact is proposed again.");
+      } else if (!c.accepted_fact) {
         const seeds = this.rows(`SELECT * FROM facts WHERE origin = 'seed'`).map(toFact);
         lines.push(`Canon #${c.seq}: genesis, the seed facts from canon.json`, "");
         for (const f of seeds) lines.push(`- ${f.sentence} (${f.id})`);
@@ -1044,6 +1151,11 @@ export class Referee extends DurableObject<Env> {
     const fact = this.fact(claim.factId);
     if (policy === "off" || fact?.status !== "proposed") return null;
     const charter = this.charter() ?? {};
+    const releasing = this.releasing();
+    if (releasing) return { wait: `canon #${releasing} is being released first (one release at a time)` };
+    // A safety valve: a fact held back at release twice doesn't land automatically again; the owner decides.
+    const heldTimes = Number(this.rows(`SELECT COUNT(*) AS n FROM canon WHERE accepted_fact = ? AND (deployed = -1 OR health IN ('held', 'rolled-back'))`, fact.id)[0]?.n ?? 0);
+    if (heldTimes >= 2) return { wait: `it was held back at release ${heldTimes} times, so autopilot leaves it to the owner` };
     if (fact.origin !== "backlog" && policy !== "charter") return { wait: "an agent proposed this fact, and autopilot only lands facts people wrote" };
     if (fact.replaces && charter.locked?.includes(fact.replaces)) return { wait: `it changes “${this.fact(fact.replaces)?.sentence ?? fact.replaces}”, which the charter locks` };
     const touched = this.latestVerdict(claim.attemptId)?.review ?? [];
@@ -1133,13 +1245,19 @@ export class Referee extends DurableObject<Env> {
     const reviewed = reviewGlobs.length && changed ? changed.filter((p) => inScope(reviewGlobs, [p])) : [];
     if (ledger.status === "tampered") lost.push({ factId: "canon.json", detail: ledger.detail });
     const claimed = claim ? results.get(claim.factId) : undefined;
+    // Built on a canon that was never released (held back, rolled back): it carries code production never ran, so it
+    // is behind whatever its preview says, and the judge re-applies its own change on the current canon.
+    const unreleasedBase = attempt.baseAttempt
+      ? this.rows(`SELECT seq FROM canon WHERE attempt_id = ? AND reverts IS NULL AND accepted_fact IS NOT NULL AND (deployed = -1 OR health IN ('held', 'rolled-back'))`, attempt.baseAttempt)[0]
+      : null;
+    if (unreleasedBase) stale.push({ factId: "canon", detail: `built on canon #${unreleasedBase.seq}, which was never released` });
     const behind = stale.length > 0 || ledger.status === "behind";
     const verdict: Verdict = {
       attemptId: attempt.id,
       sha,
       previewUrl,
       canonSeq,
-      outcome: lost.length ? "contradicts" : behind ? "behind" : claim && !claimed?.held ? "unproven" : "ready",
+      outcome: unreleasedBase ? "behind" : lost.length ? "contradicts" : behind ? "behind" : claim && !claimed?.held ? "unproven" : "ready",
       stale,
       kept: judged.filter((f) => results.get(f.id)!.held).map((f) => f.id),
       lost,
@@ -1163,7 +1281,7 @@ export class Referee extends DurableObject<Env> {
     // Re-read the claim: the checks above awaited the network, and meanwhile another attempt may have been
     // accepted (superseding this claim). Never resurrect a settled claim with a stale status.
     const current = claim ? this.claim(claim.id) : null;
-    if (current && LIVE.includes(current.status)) this.setClaimStatus(current.id, verdict.outcome as ClaimStatus);
+    if (current && LIVE.includes(current.status) && !attempt.frozen) this.setClaimStatus(current.id, verdict.outcome as ClaimStatus);
     return verdict;
   }
 

@@ -223,7 +223,8 @@ async function verdict() {
       : `  CLASH    your attempt breaks ${c.with.agent}'s fact ${c.factId}: ${c.detail}`);
   }
   if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.${v.clashes?.length ? " Your attempt and the one it clashes with likely can't both land: once one is accepted, the other is re-applied on top of it and rejected if the combined code still breaks the accepted fact." : ""}`);
-  if (v.outcome === "contradicts") {
+  if (v.heldBack) console.log(`\nHELD BACK at release: it ${v.heldBack.replace(/^broke/, "broke")}\nProduction never ran it, so canon went back to the last released canon and your fact is proposed again.\nFix it and claim the fact again for a fresh attempt: canon claim --join ${v.claimed.factId} --why "<what you fixed>"`);
+  if (v.outcome === "contradicts" && !v.heldBack) {
     const lostIds = v.lost.map((l) => l.factId).filter((id) => id !== "canon.json");
     console.log(`\nThis attempt contradicts canon. Make the lost facts hold again and push.`);
     if (lostIds.length) console.log(`If your goal is to change ${lostIds.join(", ")} on purpose, this attempt cannot land. Propose a revision instead:\n  canon claim --fact <revision.json> --why "<why the rule changes>"\n(a fact file with "replaces": "${lostIds[0]}"). That gives you a new attempt; implement the change there.`);

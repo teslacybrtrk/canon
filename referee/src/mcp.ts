@@ -241,7 +241,8 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
       ? "Canon moved after this attempt forked, and the judge couldn't re-apply your change (usually a conflict with the new canon's code). Call canon_refresh, then resolve any conflict."
       : "Canon moved after this attempt forked. The judge re-applies your change on the current canon by itself; call canon_verdict again in a minute.",
   }[v.outcome as string];
-  if (next) out.push("", next);
+  if (v.heldBack) out.push("", `HELD BACK at release: it ${v.heldBack}. Production never ran it, so canon went back to the last released canon and your fact is proposed again. Fix it and call canon_claim with join "${v.claimed.factId}" for a fresh attempt.`);
+  else if (next) out.push("", next);
   if (moved.length && ["unproven", "contradicts"].includes(v.outcome)) out.push(`To change the code, call canon_refresh with your old attempt "${attempt}": it gives you your own copy of ${v.attemptId}.`);
   return out.join("\n");
 }

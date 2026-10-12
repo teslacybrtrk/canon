@@ -814,13 +814,15 @@
     const offProd = (f) => f.status === "canon" && prod?.results?.[f.id] && !prod.results[f.id].held;
     const failing = canonFacts.filter(offProd).length;
     // Accepted, deployed, healthy: the newest deploy's state, then the latest production check.
-    const dep = (s.deploys ?? [])[0];
+    const dep0 = (s.deploys ?? [])[0];
+    // A revert entry: show the release it reverted (what broke, and that production never served it).
+    const dep = dep0?.reverts ? { ...((s.deploys ?? []).find((d) => d.seq === dep0.reverts) ?? dep0), revertedBy: dep0.seq } : dep0;
     const rolled = dep?.health === "rolled-back" || dep?.health === "broken";
     const held = dep?.health === "held";
     $("prodline").className = `prod ${rolled ? "bad" : held ? "warn" : prod ? (failing ? "bad" : "good") : ""}`;
     $("prodtext").textContent = demo.deploying || dep?.deployed === "pending" ? `Deploying canon #${c.seq} to production…`
-      : rolled ? `Canon #${dep.seq} ${(dep.detail ?? "broke a fact in production").split(": ")[0]}. ${/rolled back to ([^.]+)/.exec(dep.detail ?? "") ? `Production rolled back to ${/rolled back to ([^.]+)/.exec(dep.detail)[1]}.` : dep.health === "rolled-back" ? "Production rolled back." : ""}`
-      : dep?.health === "held" ? `Canon #${dep.seq} held back before release: it ${(dep.detail ?? "broke a fact").replace(/^broke/, "broke").split(": ")[0]}. No visitor ever got it.`
+      : rolled ? `Canon #${dep.seq} ${(dep.detail ?? "broke a fact in production").split(": ")[0]}${dep.revertedBy ? `; canon went back (#${dep.revertedBy})` : ""}. ${/rolled back to ([^.]+)/.exec(dep.detail ?? "") ? `Production rolled back to ${/rolled back to ([^.]+)/.exec(dep.detail)[1]}.` : dep.health === "rolled-back" ? "Production rolled back." : ""}`
+      : dep?.health === "held" ? `Canon #${dep.seq} held back before release: it ${(dep.detail ?? "broke a fact").split(": ")[0]}. No visitor ever got it${dep.revertedBy ? `, and canon went back (#${dep.revertedBy})` : ""}.`
       : dep?.deployed === "failed" ? `Canon #${dep.seq} couldn’t deploy; production stays on the last good version`
       : !prod ? "Production is checked every hour"
       : failing ? `${failing} fact${failing === 1 ? "" : "s"} failed on production ${ago(prod.at)}`
@@ -930,6 +932,7 @@
           : v?.stale?.some((l) => l.clash) ? them("the judge", `It clashed with “${esc(sentence(v.stale.find((l) => l.clash).factId))}”, now canon. It’s re-applying this on top of it; the combined code decides.`)
           : them("the judge", "It’s re-applying this on the new canon.");
         case "contradicts": {
+          if (v?.heldBack) return them("the agent", `Held back at release: it ${esc(v.heldBack.split(": ")[0])}. Production never ran it, so canon went back; the agent fixes it and claims the fact again.`);
           const broke = v?.lost?.[0];
           return them("the agent", `${broke ? `It broke “${esc(broke.factId === "canon.json" ? "canon.json" : sentence(broke.factId))}”. ` : ""}It fixes that, or gives up. Nothing for you.`);
         }

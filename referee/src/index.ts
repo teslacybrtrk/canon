@@ -25,6 +25,7 @@ export { VerifyAttempt, PromoteAttempt, RefreshAttempt } from "./pipelines";
 //   GET  /p/:project/previews                 Preview names used (for reset)
 //   GET  /p/:project/stats                    the run report: counts and push-to-verdict times
 //   POST /p/:project/republish                redeploy canon and rewrite its Git notes                owner key
+//   POST /p/:project/reconcile                canon = production now: revert a canon that wasn't released   owner key
 //   POST /p/:project/mcp                      the moves as MCP tools, for any MCP agent        agent or owner key
 //   git clone https://canon.rodeo/canon.git   Canon's own source, read-only (also /a/<attempt>.git, /src)
 //   POST /p/:project/genesis                  one-time setup (empty repo, or {"importUrl": "<git url>"})   owner key
@@ -56,6 +57,7 @@ export default {
       if (route === "GET /previews") return json(await referee.previews());
       if (route === "GET /stats") return json(await referee.stats());
       if (route === "POST /republish") return json(await referee.republish(), 202);
+      if (route === "POST /reconcile") return json(await referee.reconcile());
       if (route === "POST /genesis") {
         const body = await request.json<{ importUrl?: string }>().catch(() => ({}) as { importUrl?: string });
         return json(await referee.genesis(project, body.importUrl), 201);
