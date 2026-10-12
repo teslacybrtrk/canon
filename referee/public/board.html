@@ -817,13 +817,13 @@
     const rolled = dep?.health === "rolled-back" || dep?.health === "broken";
     $("prodline").className = `prod ${rolled ? "bad" : prod ? (failing ? "bad" : "good") : ""}`;
     $("prodtext").textContent = demo.deploying || dep?.deployed === "pending" ? `Deploying canon #${c.seq} to production…`
-      : rolled ? `Canon #${dep.seq} ${dep.detail ?? "broke a fact in production"}`
+      : rolled ? `Canon #${dep.seq} ${(dep.detail ?? "broke a fact in production").split(": ")[0]}. ${/rolled back to ([^.]+)/.exec(dep.detail ?? "") ? `Production rolled back to ${/rolled back to ([^.]+)/.exec(dep.detail)[1]}.` : dep.health === "rolled-back" ? "Production rolled back." : ""}`
       : dep?.deployed === "failed" ? `Canon #${dep.seq} couldn’t deploy; production stays on the last good version`
       : !prod ? "Production is checked every hour"
       : failing ? `${failing} fact${failing === 1 ? "" : "s"} failed on production ${ago(prod.at)}`
       : dep?.health === "healthy" && dep.factId ? `Canon #${dep.seq} is deployed and healthy: every fact held on production ${ago(prod.at)}`
       : `All facts held on production ${ago(prod.at)}`;
-    $("prodline").title = dep?.versionId ? `Worker version ${dep.versionId}` : "";
+    $("prodline").title = rolled && dep.detail ? dep.detail : dep?.versionId ? `Worker version ${dep.versionId}` : "";
     const prodUrl = prod?.url ?? c?.previewUrl;
     $("prodlinkrow").hidden = $("prodbtn").hidden = !prodUrl;
     if (prodUrl) { $("prodlink").href = $("prodbtn").href = prodUrl; $("prodlink").textContent = new URL(prodUrl).host; }
