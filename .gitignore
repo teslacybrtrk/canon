@@ -3,3 +3,5 @@ node_modules/
 worker-configuration.d.ts
 runs/
 attempts/
+# The root package.json only runs scripts and has no dependencies; npm still writes an empty lockfile here.
+/package-lock.json
