@@ -64,8 +64,13 @@ the repo's CI (type-check, lint) and the author's own test on the merged tree la
 the discount's own test passes, because the discount is what its author meant. Reproduce it with `node scripts/baseline.mjs`; the report is
 [docs/baseline.md](docs/baseline.md). Canon's own numbers come from the judge's records, live at [canon.rodeo/p/farmstand/stats](https://canon.rodeo/p/farmstand/stats) and [canon.rodeo/p/rodeo/stats](https://canon.rodeo/p/rodeo/stats).
 
-One run is evidence, not a benchmark. Not measured yet: compute cost per landed fact and scale beyond 18
-agents.
+What it cost: every verification, deliberate-break run, re-apply, merge train and release in the run took 84 minutes
+of Cloudflare Workflows time in all (64 verifications, 40 mutation runs, 27 re-applies, 2 trains, 4 releases, by the
+platform's own instance records). Counted as a fully busy `standard-4` container for every second at list price, that
+is about $0.56 for the whole run, under a cent per verification. The judge keeps a running upper bound in its stats
+(`computeUsdUpperBound`).
+
+One run is evidence, not a benchmark. Not measured yet: scale beyond 18 agents.
 
 ## How it compares
 

@@ -521,6 +521,13 @@ export class Referee extends DurableObject<Env> {
     const pairs = new Set(this.rows(`SELECT claim_id, other_claim_id FROM clashes`).map((r) => [r.claim_id, r.other_claim_id].sort().join("|")));
     const accepted = facts.filter((f) => f.status === "canon" && f.origin !== "seed");
     const firstClaim = Math.min(...claims.map((c) => Number(c.created_at)));
+    // Compute, as an upper bound: every second from push to verdict (or from a mutation run's start to its end) is
+    // counted as a busy standard-4 container (4 vCPU, 12 GiB, 20 GB) at Cloudflare's list price, ignoring the usage
+    // the Workers Paid plan includes. Part of that time is the judge's probes, when no container runs at all.
+    const runs = this.rows(`SELECT json FROM mutations`).map((r) => JSON.parse(r.json as string) as Mutation).filter((m) => m.status === "done");
+    const mutationSeconds = runs.reduce((n, m) => n + (m.startedAt ? (m.at - m.startedAt) / 1000 : 0), 0);
+    const verifySeconds = waits.reduce((n, ms) => n + ms / 1000, 0);
+    const PER_SECOND = 4 * 0.00002 + 12 * 0.0000025 + 20 * 0.00000007;
     const lastVerdict = one(`SELECT MAX(at) AS n FROM verdicts`);
     return {
       agents: new Set(claims.map((c) => c.agent)).size,
@@ -539,6 +546,11 @@ export class Referee extends DurableObject<Env> {
       acceptedByPerson: accepted.filter((f) => String(f.accepted_how ?? "the owner").startsWith("the owner")).length,
       acceptedByPolicy: accepted.filter((f) => !String(f.accepted_how ?? "the owner").startsWith("the owner")).length,
       canonFacts: facts.filter((f) => f.status === "canon").length,
+      verifyMinutes: Math.round(verifySeconds / 6) / 10,
+      mutationRuns: runs.length,
+      mutationMinutesMeasured: Math.round(mutationSeconds / 6) / 10,
+      computeUsdUpperBound: Math.round((verifySeconds + mutationSeconds) * PER_SECOND * 100) / 100,
+      computeBasis: "push-to-verdict and mutation-run seconds, each counted as a busy standard-4 container at list price (Workers Paid included usage ignored)",
       medianSecondsToVerdict: pct(0.5),
       p90SecondsToVerdict: pct(0.9),
       minutes: Number.isFinite(firstClaim) && lastVerdict > firstClaim ? Math.round((lastVerdict - firstClaim) / 6000) / 10 : null,
@@ -576,6 +588,13 @@ export class Referee extends DurableObject<Env> {
 
   // One alarm, two jobs: re-judging live attempts after canon moves, and checking canon's facts on production hourly.
   async alarm() {
+    // A board from an earlier epoch (before a reset) is no longer anyone's judge: it must not keep checking, or
+    // rolling back, the production it once watched. It stops its own alarm for good.
+    const project = this.meta("project");
+    if (project && !this.ctx.id.equals(this.env.REFEREE.idFromName(`${project}#${this.env.REFEREE_EPOCH}`))) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
     try {
       // No canon yet: re-judge genesis on its preview (judge() makes it canon once every fact holds).
       if (!this.currentCanon() && Number(this.meta("genesisRetries") ?? 0) > 0) {
@@ -1394,7 +1413,8 @@ export class Referee extends DurableObject<Env> {
       mutants.push({ file: m.file, line: m.line, op: m.op, before: m.before, after: m.after, caught: !!by, ...(by ? { by } : {}) });
     }
     const checked = mutants.filter((m) => m.caught !== null);
-    const result: Mutation = { status: checked.length || mutants.length ? "done" : "none", total: checked.length, caught: checked.filter((m) => m.caught).length, mutants, at: Date.now() };
+    const startedAt = (JSON.parse((this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, repo, sha)[0]?.json as string) ?? "{}") as Mutation).at;
+    const result: Mutation = { status: checked.length || mutants.length ? "done" : "none", total: checked.length, caught: checked.filter((m) => m.caught).length, mutants, at: Date.now(), ...(startedAt ? { startedAt } : {}) };
     this.sql.exec(`INSERT OR REPLACE INTO mutations (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, repo, sha, JSON.stringify(result), Date.now());
     this.broadcast();
     const pending = await this.ctx.storage.getAlarm();

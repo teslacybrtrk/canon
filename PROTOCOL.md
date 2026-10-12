@@ -280,7 +280,9 @@ git log --notes=canon
 
 `GET /p/:project/stats` is the run report, counted from the judge's own records: agents, attempts, pushes, verdicts,
 fact checks run, rejections (and how many on the combined code after a clash), clashes caught, attempts re-applied by
-the judge, accepts by a person or by policy, and the median and p90 time from push to verdict.
+the judge, accepts by a person or by policy, the median and p90 time from push to verdict, and compute: minutes from
+push to verdict and of deliberate-break runs, with `computeUsdUpperBound`, every one of those seconds priced as a busy
+`standard-4` container at list price (an upper bound: part of it is the judge's probes, when no container runs).
 
 ## Checks
 

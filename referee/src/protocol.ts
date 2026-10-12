@@ -187,6 +187,7 @@ export interface Mutant {
 }
 export interface Mutation {
   status: "running" | "done" | "none";
+  startedAt?: number; // when the run began (at is when it finished)
   total: number; // mutants that built and were checked
   caught: number;
   mutants: Mutant[];
