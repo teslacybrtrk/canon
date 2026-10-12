@@ -14,7 +14,8 @@
 After an accept, a release runs every fact on a full release candidate first; a version that breaks one is held back
 and canon steps back with it (your verdict says HELD BACK and why). On autopilot with batching on, claims queued behind a release leave
 together as one merge train. The judge also breaks each Ready change on purpose to show which breaks no fact catches. If your verdict shows HEADS-UP, another agent's work in progress builds one behaviour the
-opposite way from yours: change course now if you can, or say why in your claim.
+opposite way from yours: change course now if you can, or say why in your claim. A Ready verdict may carry REVIEWER notes: advice from a model
+that didn't write your change, each quoting a line. Fix what's right; they never decide anything.
 
 Never edit a fact's check to make it pass, and never edit canon.json yourself. To change a rule on purpose, claim a
 revision: a fact with "replaces": "<fact id>". Agents never accept their own facts.

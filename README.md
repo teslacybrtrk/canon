@@ -20,7 +20,9 @@ candidate; if not, canon steps back.
   are flagged as a clash once both are Ready (before anyone accepts either), and once one lands, the other is
   re-applied on top of it and the combined code decides.
 - **Review**: the fact diff. Facts kept, facts lost and facts proposed, each linked to a preview and a check. The
-  judge also tests the checks: it breaks each Ready change on purpose and shows which break no fact noticed.
+  judge also tests the checks: it breaks each Ready change on purpose and shows which break no fact noticed. Then a
+  reviewer model that didn't write the change adds up to three notes, each quoting the exact line it means (a note
+  that quotes nothing real is dropped): advice for whoever decides, never a verdict.
 - **Release**: accepted is not released. Every release runs all facts on a full release candidate (production's
   config, its own long-lived data) first, a version that breaks one is held back, and canon always equals what
   production runs: a held-back release reverts it.
@@ -172,7 +174,7 @@ to wrangler, so give the agent key only to agents you run.
 
 Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
 (for example, Previews that pin Durable Object code per commit, version overrides that reach Durable Objects, and
-Workers Builds for forks). All twenty are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+Workers Builds for forks). All twenty-three are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
 ## Roadmap
 
@@ -186,8 +188,8 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   what would change, why and the evidence, for a one-tap answer that is recorded like every other decision.
 - **Stronger breaks**: today the judge breaks each Ready change up to six ways (guards, statuses, comparisons) and
   shows which ones no fact noticed. Next, concurrency and retry breaks: two requests at once, a repeated request.
-- **A reviewer agent**: today the charter routes risky files to the owner. Next, a reviewer from a different model
-  writes findings grounded in the exact candidate, for the owner to accept or decline.
+- **Reviewer as a gate**: today a reviewer model writes advisory notes grounded in quoted lines. Next, let a charter
+  route a `risk` note to the owner the way `review` paths are, with the notes' track record on the board.
 - **Speculative trains**: today queued claims leave as one merge train and a failed train lands them one by one.
   Next, check the next train while this one releases, and split a failed train in halves to find the culprit.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.

@@ -69,7 +69,11 @@
         claim("c-9", "agent-1", "price-with-bulk-discount", "The basket charges the listed price, with 10% off any line of 10 or more", "ready", "The business is changing its pricing rule for wholesale buyers", "farmstand-r3v1s0",
           { ...verdict("farmstand-r3v1s0", DISCOUNT, "ready", { factId: "price-with-bulk-discount", held: true, detail: "ok" }), kept: KEPT.filter((k) => k !== "price-is-listed"), retires: ["price-is-listed"] }),
         { ...claim("c-2", "agent-2", "no-double-booking", "A stall cannot be double-booked", "ready", "Vendors keep fighting over stall 1", "farmstand-p2q8zz",
-          verdict("farmstand-p2q8zz", SOLD_OUT, "ready", { factId: "no-double-booking", held: true, detail: "ok" })), clashes: CLASH("c-2") },
+          verdict("farmstand-p2q8zz", SOLD_OUT, "ready", { factId: "no-double-booking", held: true, detail: "ok" })), clashes: CLASH("c-2"),
+          reviewer: { status: "done", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", dropped: 1, at: now, notes: [
+            { file: "src/index.ts", line: 86, kind: "untested", quote: "if (!date) return { ok: false, status: 400, error: \"date is required\" };", note: "No fact sends a booking without a date, so a change to this guard would go unnoticed." },
+            { file: "src/index.ts", line: 88, kind: "risk", quote: "const existing = this.sql.exec(`SELECT 1 FROM reservations WHERE stall_id = ? AND date = ?`, stallId, date).toArray();", note: "Check-then-insert: safe here only because one Durable Object serialises requests; the primary key on (stall_id, date) is what really prevents a double booking." },
+          ] } },
         { ...claim("c-10", "agent-3", "stalls-can-be-shared", "Two vendors can share a stall on the same market day", "ready", "Market manager wants co-op stalls where two small vendors share one stall", "farmstand-k8s2co",
           verdict("farmstand-k8s2co", SOLD_OUT, "ready", { factId: "stalls-can-be-shared", held: true, detail: "ok" })), clashes: CLASH("c-10"), headsUp: [EARLY] },
         { ...claim("c-3", "agent-8", "no-double-booking", "A stall cannot be double-booked", "unproven", "Joining the reservation race", "farmstand-m4n1aa",

@@ -30,6 +30,8 @@
     "Referee": { "type": "durable-object", "storage": "sqlite" },
     "CiSandbox": { "type": "durable-object", "storage": "sqlite" }
   },
+  // Workers AI: the advisory reviewer (a model that didn't write the change reads it after the checks pass).
+  "ai": { "binding": "AI" },
   "containers": [
     { "class_name": "CiSandbox", "image": "docker.io/cloudflare/sandbox:0.12.1", "max_instances": 40, "instance_type": "standard-4" }
   ],

@@ -106,6 +106,20 @@ Found while building, October 2026.
 20. **Version uploads can't carry Durable Object class changes** (they are applied atomically), so a release pipeline
     built on `wrangler versions upload` needs a second path with `wrangler deploy` for those commits. That's
     reasonable, but the upload error should name it plainly so a pipeline can branch on it.
+21. **A Durable Object can run the previous version for minutes after a 100% deploy.** After `wrangler deploy`
+    reported the new version (and `deployments list` showed it at 100%), a project's object kept answering with the
+    old code for about three minutes, including a "does not implement the method" error for an RPC method the new
+    version added. The docs do say "seconds to minutes". *We did:* keep RPC changes backward compatible and retry.
+    *Would help:* a way to see (or wait for) which version an object is on.
+22. **Boards from an old epoch keep their alarms.** We reset a board by changing the name its Durable Object is
+    looked up by; the old objects are unreachable by name but their alarms keep firing hourly forever (ours kept
+    starting work against repos already deleted). *We did:* on each alarm, an object checks it is still the current
+    one for its project and deletes its own alarm if not. *Would help:* listing or deleting a namespace's objects.
+23. **Reasoning models on Workers AI can spend the whole budget thinking.** `@cf/moonshotai/kimi-k2.7-code` with a
+    4,000-token budget returned an empty answer (`finish_reason: length`); with reasoning off the answers came back but
+    were less often right. A 24,000-token budget fixed it. Llama 3.3 70B in JSON mode returned an empty list for the
+    same prompt. Kimi also answered "3040: Capacity temporarily exceeded" once. *We did:* retry, then fall back to
+    Kimi K2.6.
 
 ## Things that worked especially well
 
@@ -119,5 +133,7 @@ Found while building, October 2026.
   across twelve agents at once).
 - The Workers deployments API (`POST /workers/scripts/:name/deployments`) made rolling production back to a named
   version, with an annotation saying why, one request from the judge.
+- Workers AI from a Durable Object: a frontier coding model reviewing each Ready change, with structured output, is
+  one binding and one call.
 - A Workers Preview per mutant: building six deliberately broken versions of a change, each live, in a couple of
   minutes, is what made "test the tests" practical.

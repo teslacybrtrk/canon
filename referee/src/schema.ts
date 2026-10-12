@@ -110,6 +110,15 @@ CREATE TABLE IF NOT EXISTS mutations (
   PRIMARY KEY (attempt_id, sha)
 );
 
+-- The advisory reviewer's notes on a Ready commit (see review.ts): grounded quotes, never a verdict.
+CREATE TABLE IF NOT EXISTS reviews (
+  attempt_id TEXT NOT NULL,
+  sha        TEXT NOT NULL,
+  json       TEXT NOT NULL,
+  at         INTEGER NOT NULL,
+  PRIMARY KEY (attempt_id, sha)
+);
+
 -- Every push the judge heard, for the run report's push-to-verdict times.
 CREATE TABLE IF NOT EXISTS pushes (
   attempt_id TEXT NOT NULL,

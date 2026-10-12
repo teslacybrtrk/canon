@@ -402,6 +402,8 @@
   .side h4 .ct { font-weight: 500; }
   .state.s-mut-ok { color: var(--held); background: var(--held-bg); border-color: rgb(63 185 80 / 0.4); }
   .state.s-mut-gap { color: var(--pending); background: var(--pending-bg, rgb(210 153 34 / 0.12)); border-color: rgb(210 153 34 / 0.45); }
+  .state.s-review { color: var(--ink-2); background: transparent; border-color: var(--line, rgb(127 127 127 / 0.35)); }
+  .mut .fine { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
   .mut { margin: 10px 0 0; font-size: 13px; color: var(--ink-2); }
   .mut ul { margin: 6px 0 0; padding-left: 18px; }
   .mut li { margin: 3px 0; }
@@ -998,6 +1000,21 @@
         The judge broke this change ${m.total} way${m.total === 1 ? "" : "s"} on purpose; the facts caught <b>${m.caught}</b>.${missed.length ? ` <span class="gap">Not caught:</span>` : " Every break was caught."}
         ${missed.length ? `<ul>${missed.map((x) => `<li>${esc(x.op)} in <code>${esc(x.file)}:${x.line}</code>: <code>${esc(x.before.slice(0, 90))}</code>${x.after ? ` → <code>${esc(x.after.slice(0, 90))}</code>` : ""}. No fact noticed.</li>`).join("")}</ul>` : ""}</div>`;
     };
+    // The advisory reviewer: a model that didn't write the change read it after the checks passed. Advice, not a verdict.
+    const KIND = { risk: "Risk", untested: "Untested", intent: "Beyond the fact" };
+    const revBadge = (cl) => {
+      const r = cl.reviewer;
+      if (!r || r.status !== "done" || !r.notes.length) return "";
+      return `<span class="state s-review" title="Advisory notes from a reviewer model that didn’t write this change">${icon("eye")}Reviewer ${r.notes.length}</span>`;
+    };
+    const revDetail = (cl) => {
+      const r = cl.reviewer;
+      if (!r || (r.status !== "done" && r.status !== "running")) return "";
+      if (r.status === "running") return `<p class="mut"><span class="k">Second pair of eyes</span> A reviewer model that didn’t write this change is reading it.</p>`;
+      const head = `<span class="k">Second pair of eyes ${tip("After the checks pass, a different model (" + r.model.split("/").pop() + ") reads the change for what they may miss. Each note must quote the exact line it is about; notes that quote nothing real are dropped. Advice for whoever decides, never a verdict.")}</span>`;
+      if (!r.notes.length) return `<div class="mut">${head} The reviewer found nothing that needs a person’s attention.</div>`;
+      return `<div class="mut">${head}<ul>${r.notes.map((n) => `<li><b>${KIND[n.kind] ?? esc(n.kind)}</b> at <code>${esc(n.file)}:${n.line}</code>: <code>${esc(n.quote.slice(0, 100))}</code> — ${esc(n.note)}</li>`).join("")}</ul>${r.dropped ? `<span class="fine">${r.dropped} note${r.dropped === 1 ? "" : "s"} dropped: ${r.dropped === 1 ? "it quoted" : "they quoted"} nothing in the code.</span>` : ""}</div>`;
+    };
     const autoWaitOf = (cl) => (MOCK ? (typeof demoDecide === "function" ? (demoDecide(cl)?.wait === "confirm" ? demoDecide(cl).text : demoDecide(cl)?.wait) : null) : cl.autoWait);
     const declineBtn = (cl) => SETTLED.includes(cl.status) ? "" : `<button class="decline" data-decline="${esc(cl.id)}">Decline</button>`;
 
@@ -1046,7 +1063,7 @@
           ${cl.status === "ready" && /routes to review/.test(autoWaitOf(cl) ?? "") ? `<span class="state s-locked" title="The charter routes changes to these files to a reviewer, however clean the verdict.">${icon("eye")}Review: ${esc((cl.verdict?.review ?? DEMO_REVIEW[cl.factId] ?? [""])[0].split("/").pop())}</span>` : ""}
           ${cl.status === "ready" && /locks/.test(autoWaitOf(cl) ?? "") ? `<span class="state s-locked" title="The charter locks the rule this changes. No agent, and no automatic decision, may change it: only the owner (you, or an owner agent).">${icon("key")}Locked: owner decides</span>` : ""}
           <span class="pr-agent">${avatar(cl.agent, 18)}${esc(cl.agent)}</span>
-          ${mutBadge(cl)}
+          ${mutBadge(cl)}${revBadge(cl)}
           <ol class="track" aria-label="Progress">${steps(cl)}</ol>
         </div>
         <div class="pr-goal">
@@ -1063,6 +1080,7 @@
           <span class="k">How the judge decided ${tip("Every step the judge took, in order. It builds the exact commit, runs each fact’s own check on it, and decides by a fixed rule. No person and no model reads the code.")}</span>
           ${trail(cl, v)}
           ${mutDetail(cl)}
+          ${revDetail(cl)}
           <p class="reason"><span class="k">Why ${tip("The agent’s own reason, written when it claimed the fact. It stays in the fact’s history.")}</span> <q>${esc(cl.why)}</q></p>
           <div class="pr-links">
             ${v?.previewUrl ? `<a href="${esc(v.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}
@@ -1085,7 +1103,7 @@
     const side = (x, other) => {
       const fails = (x.clashes ?? []).find((k) => k.with.claimId === other.id && k.breaks === "mine");
       return `<article class="pr duel-side s-${x.status}" id="claim-${esc(x.id)}">
-        <div class="pr-top"><span class="state s-ready">${icon("check")}Ready</span>${mutBadge(x)}<span class="pr-agent">${avatar(x.agent, 18)}${esc(x.agent)}</span></div>
+        <div class="pr-top"><span class="state s-ready">${icon("check")}Ready</span>${mutBadge(x)}${revBadge(x)}<span class="pr-agent">${avatar(x.agent, 18)}${esc(x.agent)}</span></div>
         <div class="pr-goal"><span class="k">Goal</span><button class="t" type="button" data-fact="${esc(x.factId)}" title="See the check and the fact’s history">${esc(x.sentence)}</button></div>
         ${headsUpNote(x)}
         <details class="more" data-card="${esc(x.id)}"${openCards.has(x.id) ? " open" : ""}>
@@ -1094,6 +1112,7 @@
           ${fails ? `<p class="fails">On ${esc(other.agent)}’s attempt, this fact fails:<code>${esc(fails.detail.replace(/ \(on the canon.*$/, ""))}</code></p>` : ""}
           ${trail(x, x.verdict)}
           ${mutDetail(x)}
+          ${revDetail(x)}
           <p class="reason"><span class="k">Why</span> <q>${esc(x.why)}</q></p>
           <div class="links">${x.verdict?.previewUrl ? `<a href="${esc(x.verdict.previewUrl)}" target="_blank" rel="noopener">Open preview ↗</a>` : ""}<button class="copy" data-copy="${esc(cloneCmd(x.attemptId))}">Clone attempt</button></div>
         </details>

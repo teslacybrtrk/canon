@@ -1,3 +1,4 @@
+import type { Review } from "./review";
 // The Canon protocol: four moves, one referee per project.
 //
 //   1. read     GET  /p/:project/canon               -> CanonState
@@ -198,7 +199,7 @@ export interface CanonState {
   project: string;
   canon: { attemptId: string; sha: string; seq: number; previewUrl: string | null } | null;
   facts: Fact[]; // canon + proposed
-  claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[]; headsUp?: Clash[]; mutation?: Mutation | null }>;
+  claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[]; headsUp?: Clash[]; mutation?: Mutation | null; reviewer?: Review | null }>;
   policy: { autoAccept: AutoAccept; charter: Charter | null };
   // The last time every canon probe fact ran against production (hourly, and after each deploy).
   production: { at: number; url: string; results: Record<string, { held: boolean; detail: string }> } | null;
@@ -274,6 +275,7 @@ export interface Verdict {
   // The same comparison while at least one side is still being written (unproven): a warning to both agents before
   // either is Ready, so they can talk it over (or one can change course) instead of finding out at accept time.
   headsUp?: Clash[];
+  reviewer?: Review | null; // the advisory reviewer's grounded notes (a model that didn't write the change), never a verdict
 }
 
 // Errors lose their class crossing the Durable Object RPC boundary, so the HTTP

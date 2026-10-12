@@ -242,6 +242,14 @@ builds each break as a preview of its own, and runs the attempt's fact and every
 fact notices is code no check covers; the claim shows `mutation` (`caught` of `total`, and each break that got
 through). With `charter.mutation` (say `0.8`), autopilot only lands a claim whose facts catch that share.
 
+**A second pair of eyes.** Once a Ready claim's checks are tested, a model that didn't write the change (Kimi K2.7 Code
+on Workers AI; the agents are Claude or Grok) reads it: the fact it claims, the facts it must keep, the breaks no fact
+caught, and the lines it added. It writes at most three notes (`risk`, `untested`, or `intent`: beyond what the fact
+asks), and each must quote the exact line it is about; a note whose quote isn't in the file is dropped and counted.
+The notes (`reviewer` on the claim and the verdict, `REVIEWER` in `canon verdict`) are advice for whoever decides,
+never a verdict: the facts decide, the reviewer only points. The owner can ask for a fresh review with
+`POST /p/:project/attempts/:id/review`.
+
 In the release gate, a fact that fails at 0% counts against the new version only if the old version answers
 differently (both run with the same inputs).
 

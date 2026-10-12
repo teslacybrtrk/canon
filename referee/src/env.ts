@@ -11,6 +11,7 @@ export type Env = CiBindings & {
   TRAIN_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   MUTATE_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   ASSETS: Fetcher;
+  AI?: Ai; // the advisory reviewer
   SOURCE: Artifacts; // namespace canon-src: Canon's own source
   SOURCE_PUBLIC: string; // "true" publishes canon.git and /src
   ARTIFACTS_NAMESPACE: string;

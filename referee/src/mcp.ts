@@ -235,6 +235,10 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
     out.push(c.breaks === "mine" ? `  HEADS-UP ${c.with.agent}'s attempt for "${c.with.factId}" breaks your fact (${why}).` : `  HEADS-UP your attempt breaks ${c.with.agent}'s fact "${c.factId}" (${why}).`);
   }
   if (v.headsUp?.length) out.push("  Not a clash yet: one side is still being written. If yours can make room for theirs, change course now; if not, say why in your claim (once both are Ready, a person picks one).");
+  if (v.reviewer?.status === "done" && v.reviewer.notes.length) {
+    out.push(`  REVIEWER advisory notes from ${v.reviewer.model.split("/").pop()}, a model that didn't write this (never a verdict):`);
+    for (const n of v.reviewer.notes) out.push(`    ${n.kind.toUpperCase()} ${n.file}:${n.line}  ${n.quote}  ${n.note}`);
+  }
 
   // The judge's refresh of a behind attempt: running, or (any other note) handed back to the agent.
   const refresh = v.outcome === "behind" ? ((await referee.read()) as CanonState).claims.find((c) => c.attemptId === v.attemptId)?.refresh : null;

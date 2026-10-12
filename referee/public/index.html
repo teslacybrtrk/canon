@@ -447,7 +447,7 @@
   <ul class="roadmap reveal">
     <li><b>Escalations.</b> When something touches a line only people may move, the owner agent sends it to you: what would change, why, and the evidence, approved or declined in one tap.</li>
     <li><b>Stronger breaks.</b> Today the judge breaks each Ready change on purpose (guards, statuses, comparisons) and shows what no fact noticed. Next: two requests at once, a repeated request.</li>
-    <li><b>A reviewer agent.</b> Today the charter routes risky files to the owner. Next, a reviewer from a different model writes findings grounded in the exact candidate.</li>
+    <li><b>Reviewer as a gate.</b> Today a reviewer model writes advisory notes, each quoting the line it means. Next, a charter can send a risk note to the owner, the way it sends risky paths.</li>
     <li><b>Speculative trains.</b> Today queued claims leave together as one merge train. Next, check the next train while this one releases, and split a failed one in halves.</li>
     <li><b>Any stack.</b> Facts about apps beyond Workers, built and previewed in Containers.</li>
     <li><b>Canary traffic.</b> Today a new canon passes every fact on a full release candidate and (for Workers without Durable Objects) on the production URL at 0% traffic before anyone gets it. Next, real traffic in steps, 1% then 10%, with error rates as facts.</li>
@@ -509,6 +509,7 @@
       <details class="more" id="qamore"><summary><span class="closed-l" id="qamorecount">Show more questions</span><span class="open-l">Show fewer</span></summary>
         <details><summary>Who reviews, and who verifies?</summary><div class="a">
           <p><b>Verifying is automatic.</b> On every push the judge builds a preview of that exact commit, runs every fact, checks the attempt’s <code>canon.json</code>, and confirms a proposed fact actually fails on canon. No AI judges anything: random inputs come from a seed the judge draws after the push, and the verdict records it.</p>
+          <p><b>Then a second pair of eyes.</b> After the checks pass and are themselves tested, a model that didn’t write the change (Kimi K2.7 Code on Workers AI) reads it and leaves at most three notes: a likely bug, code no fact checks, or something the fact didn’t ask for. Each note must quote the exact line it means, or it’s dropped. It advises whoever decides; it never decides.</p>
           <p><b>Reviewing is human, and it starts with rules, not diffs.</b> A person sees the new fact in plain words, its short check, the fact diff and a live preview. Reviewing a five-line check is far easier than a 500-line diff. Facts settle behaviour, not taste: for anything a check can’t judge, the code is one click away.</p></div></details>
         <details><summary>What if a check is flaky?</summary><div class="a">
         <p>A wrong answer is never retried. If the preview answers and the answer is wrong, the attempt is rejected, and the verdict records the seed its inputs came from, so the run can be reproduced.</p>

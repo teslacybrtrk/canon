@@ -29,6 +29,10 @@ import {
   type Mutation,
 } from "./protocol";
 import { SCHEMA, UPGRADES } from "./schema";
+import { ground, parseAnswer, REVIEW_SCHEMA, reviewPrompt, type Review, type ReviewFile } from "./review";
+
+// The advisory reviewer: a different model from the agents' (they are Claude or Grok), on Workers AI.
+const REVIEW_MODELS = ["@cf/moonshotai/kimi-k2.7-code", "@cf/moonshotai/kimi-k2.6"];
 import { diffTrees, inScope } from "./scope";
 
 const ATTEMPT_TOKEN_TTL_S = 4 * 60 * 60;
@@ -104,7 +108,7 @@ export class Referee extends DurableObject<Env> {
       const claim = toClaim(r);
       const verdict = this.latestVerdict(claim.attemptId);
       const m = verdict ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, verdict.sha)[0] : null;
-      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict, clashes: this.clashesFor(claim.id), headsUp: this.headsUpFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null };
+      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict, clashes: this.clashesFor(claim.id), headsUp: this.headsUpFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null, reviewer: verdict ? this.reviewOf(claim.attemptId, verdict.sha) : null };
     });
     return {
       project: this.meta("project") ?? "",
@@ -396,6 +400,7 @@ export class Referee extends DurableObject<Env> {
       ...verdict,
       clashes: this.clashesFor(claimId),
       headsUp: this.headsUpFor(claimId),
+      reviewer: this.reviewOf(attemptId, verdict.sha),
       ...(next ? { refreshedAs: next } : {}),
       ...(claim?.status === "declined" ? { declined: claim.declineReason || "no reason given" } : {}),
     };
@@ -1065,6 +1070,9 @@ export class Referee extends DurableObject<Env> {
     try {
       if (verdict.outcome === "ready" || verdict.outcome === "unproven") await this.findClashes(claimId);
       if (verdict.outcome === "ready") await this.startMutation(claimId, verdict);
+      // The reviewer reads the change after its checks are tested (it can point at code no fact covers); a change
+      // whose checks aren't tested gets reviewed now.
+      if (verdict.outcome === "ready" && !this.rows(`SELECT 1 FROM mutations WHERE attempt_id = ? AND sha = ?`, this.claim(claimId)?.attemptId ?? "", verdict.sha).length) this.ctx.waitUntil(this.startReview(claimId, verdict).catch(() => {}));
       if (verdict.outcome === "behind") await this.autoRefresh(claimId);
     } catch {
       // Best effort: the verdict stands either way.
@@ -1340,6 +1348,83 @@ export class Referee extends DurableObject<Env> {
     }
   }
 
+  // ---- A second pair of eyes: the advisory reviewer --------------------------------------------------------------
+
+  /** The owner asks for a fresh review of an attempt's latest commit (a new model, a changed prompt). */
+  async reReview(attemptId: string): Promise<Review | null> {
+    const attempt = this.attempt(attemptId);
+    const verdict = this.latestVerdict(attemptId);
+    if (!attempt?.claimId || !verdict) throw new ProtocolError(404, `no judged attempt ${attemptId}`);
+    this.sql.exec(`DELETE FROM reviews WHERE attempt_id = ? AND sha = ?`, attemptId, verdict.sha);
+    await this.startReview(attempt.claimId, verdict);
+    return this.reviewOf(attemptId, verdict.sha);
+  }
+
+  private reviewOf(attemptId: string, sha: string): Review | null {
+    const r = this.rows(`SELECT json FROM reviews WHERE attempt_id = ? AND sha = ?`, attemptId, sha)[0];
+    return r ? (JSON.parse(r.json as string) as Review) : null;
+  }
+
+  /**
+   * Once per Ready commit, a model that didn't write the change reads it: the fact it claims, the facts it must keep,
+   * the deliberate breaks no fact caught, and the lines it added. Its notes are advice for whoever decides, never a
+   * verdict, and each must quote the exact line it is about (see review.ts): a note quoting nothing real is dropped.
+   */
+  private async startReview(claimId: string, verdict: Verdict) {
+    const claim = this.claim(claimId);
+    const attempt = claim ? this.attempt(claim.attemptId) : null;
+    const own = claim ? this.fact(claim.factId) : null;
+    if (!claim || !own || !attempt?.baseSha || !this.env.AI) return;
+    if (this.reviewOf(attempt.id, verdict.sha)) return;
+    const put = (r: Review) => {
+      this.sql.exec(`INSERT OR REPLACE INTO reviews (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, attempt.id, verdict.sha, JSON.stringify(r), Date.now());
+      this.broadcast();
+    };
+    const base = { model: REVIEW_MODELS[0], notes: [], dropped: 0, at: Date.now() };
+    put({ status: "running", ...base });
+    try {
+      const paths = ((await this.changedPaths(attempt, verdict.sha)) ?? []).filter((p) => /\.(ts|tsx|js|jsx|mjs|sql)$/.test(p) && !/(^|\/)(node_modules|dist)\//.test(p)).slice(0, 4);
+      if (!paths.length) return put({ status: "none", ...base, detail: "no source files changed" });
+      using repo = await this.env.ARTIFACTS.get(attempt.id);
+      const text = async (ref: string, path: string) => (await (await repo.readFile({ ref, path }))?.text()) ?? "";
+      const files: ReviewFile[] = [];
+      for (const path of paths) files.push({ path, base: await text(attempt.baseSha, path), head: await text(verdict.sha, path) });
+      const m = this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, attempt.id, verdict.sha)[0];
+      const missed = m ? (JSON.parse(m.json as string) as Mutation).mutants.filter((x) => x.caught === false).map((x) => `${x.op} at ${x.file}:${x.line}: ${x.before.trim().slice(0, 100)}`) : [];
+      const canon = this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).map((f) => f.sentence);
+      type Answer = { response?: unknown; choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
+      const ask = (model: string) =>
+        this.env.AI!.run(model as Parameters<Ai["run"]>[0], {
+          messages: reviewPrompt(own.sentence, canon, missed, files),
+          response_format: { type: "json_schema", json_schema: { name: "review", schema: REVIEW_SCHEMA } },
+          // Reasoning makes the notes right far more often; it needs room, or the answer comes back empty (finish_reason: length).
+          max_completion_tokens: 24000,
+          temperature: 0.2,
+        } as never) as Promise<Answer>;
+      // Frontier models on Workers AI can be briefly out of capacity: try again, then the next model down.
+      let out: Answer | null = null;
+      let model = REVIEW_MODELS[0];
+      for (const m of [REVIEW_MODELS[0], REVIEW_MODELS[0], ...REVIEW_MODELS.slice(1)]) {
+        try {
+          out = await ask(m);
+          model = m;
+          break;
+        } catch (err) {
+          if (!/capacity|3040|overloaded|timeout/i.test(String(err))) throw err;
+          await new Promise((r) => setTimeout(r, 3_000));
+        }
+      }
+      if (!out) throw new Error("every reviewer model was out of capacity");
+      const answer = out.response ?? out.choices?.[0]?.message?.content;
+      const { notes, dropped } = ground(parseAnswer(answer), files);
+      // Nothing survived: keep what the model said (and why it stopped), so an empty review can be told from a failed one.
+      const said = notes.length ? {} : { detail: `${out.choices?.[0]?.finish_reason ?? "answer"}: ${(typeof answer === "string" ? answer : JSON.stringify(answer ?? null)).slice(0, 300)}` };
+      put({ status: "done", ...base, model, notes, dropped, at: Date.now(), ...said });
+    } catch (err) {
+      put({ status: "error", ...base, detail: String(err instanceof Error ? err.message : err).slice(0, 200), at: Date.now() });
+    }
+  }
+
   // ---- Checks that are checked: mutation testing ---------------------------------------------------------------
 
   /** A Ready claim with a probe fact gets its checks tested once per commit: CI builds deliberate breaks of its change. */
@@ -1421,6 +1506,7 @@ export class Referee extends DurableObject<Env> {
     if (pending === null || pending > Date.now() + 2_000) await this.ctx.storage.setAlarm(Date.now() + 1_000);
     // With a charter threshold, autopilot was waiting for this.
     const v = this.latestVerdict(repo);
+    if (claim && v && v.sha === sha && claim.status === "ready") this.ctx.waitUntil(this.startReview(claim.id, v).catch(() => {}));
     if (claim && v && v.sha === sha) await this.autopilot(claim.id, v);
   }
 
