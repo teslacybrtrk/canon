@@ -29,6 +29,11 @@ Use the `canon` command for the protocol and plain `git` for code.
      canon by itself: run `canon verdict --wait` again and it follows your change to the new attempt. Only if
      it says your change conflicts, run `canon refresh` inside your attempt: it makes a fresh attempt from the
      current canon with your changes re-applied. cd into it, resolve the conflict, push, and read the verdict again.
+     A CLASHED line means your attempt built the newly accepted fact's behaviour the other way: the judge re-applies
+     it on top, and the combined code decides (if it still breaks that fact, you get CONTRADICTS).
+   - HELD BACK: your fact was accepted, but its release broke a fact on a full copy of production (the verdict says
+     which and why), so canon went back. Fix it and claim the fact again for a fresh attempt:
+     `canon claim --join <fact id> --why "<what you fixed>"`.
    - ERROR: the platform could not judge your push (not your code). Push again, then read the verdict.
    - READY: stop. A human decides whether your fact becomes canon.
    - DECLINED: a person said no, with a reason. Stop; don't claim the same fact again.
