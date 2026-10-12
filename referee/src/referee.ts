@@ -236,7 +236,11 @@ export class Referee extends DurableObject<Env> {
     // A newer push of the same attempt makes this one pointless: its verdict would be replaced at once.
     const attempt = this.attempt(repo);
     if (attempt?.headSha && attempt.headSha !== sha && attempt.claimId) return "stale";
-    const agent = attempt?.claimId ? (this.claim(attempt.claimId)?.agent ?? repo) : "the judge";
+    const claimed = attempt?.claimId ? this.claim(attempt.claimId) : null;
+    const agent = claimed?.agent ?? (attempt?.claimId ? repo : "the judge");
+    // What it's worth: a fact the charter ranks first, then one people wrote (backlog), then the rest.
+    const fact = claimed ? this.fact(claimed.factId) : null;
+    const value = !fact ? 1 : this.charter()?.priority?.includes(fact.id) ? 3 : fact.origin === "backlog" ? 2 : 1;
     const now = Date.now();
     const slots = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, number | { at: number; agent: string }>;
     for (const [k, v] of Object.entries(slots)) if (now - (typeof v === "number" ? v : v.at) > 15 * 60_000) delete slots[k];
@@ -244,11 +248,12 @@ export class Referee extends DurableObject<Env> {
     if (slots[key]) return "go";
     // Fair turns: a free slot goes to the waiting agent with the fewest builds running, then the one waiting longest,
     // so one agent pushing a lot can't starve the others.
-    const waiting = JSON.parse(this.meta("waiting") ?? "{}") as Record<string, { agent: string; since: number; seen: number }>;
+    const waiting = JSON.parse(this.meta("waiting") ?? "{}") as Record<string, { agent: string; since: number; seen: number; value?: number }>;
     for (const [k, w] of Object.entries(waiting)) if (now - w.seen > 60_000) delete waiting[k];
-    waiting[key] = { agent, since: waiting[key]?.since ?? now, seen: now };
+    waiting[key] = { agent, since: waiting[key]?.since ?? now, seen: now, value };
     const running = (who: string) => Object.values(slots).filter((v) => typeof v !== "number" && v.agent === who).length;
-    const next = Object.entries(waiting).sort(([, x], [, y]) => running(x.agent) - running(y.agent) || x.since - y.since)[0]?.[0];
+    // Fewest builds running first (fairness), then the most valuable fact, then the longest wait.
+    const next = Object.entries(waiting).sort(([, x], [, y]) => running(x.agent) - running(y.agent) || (y.value ?? 1) - (x.value ?? 1) || x.since - y.since)[0]?.[0];
     if (Object.keys(slots).length >= VERIFY_SLOTS || next !== key) {
       this.setMeta("waiting", JSON.stringify(waiting));
       this.setMeta("verifying", JSON.stringify(slots));

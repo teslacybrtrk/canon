@@ -255,9 +255,10 @@ finds its culprit in about three checks instead of eight. A revert undoes a trai
 a unit. Rule changes never ride a train.
 
 **Admission.** A project verifies at most six pushes at a time; the rest wait in their own Workflow and start as slots
-free (a slot frees when the judge gets the result, or after 15 minutes). Turns are fair: a free slot goes to the waiting
-agent with the fewest builds already running, then the one waiting longest, so one agent pushing a lot can't starve the
-others. A queued push whose attempt has since pushed again is dropped: its verdict would be replaced at once. In a load test of 30 simultaneous pushes, no
+free (a slot frees when the judge gets the result, or after 15 minutes). Turns are fair and value-aware: a free slot goes to the
+waiting agent with the fewest builds already running, then to the most valuable fact (one the charter ranks in
+`priority`, then one people wrote in the backlog), then to the one waiting longest, so one agent pushing a lot can't
+starve the others and what people asked for comes first. A queued push whose attempt has since pushed again is dropped: its verdict would be replaced at once. In a load test of 30 simultaneous pushes, no
 limit made the CI runner fail, ten let platform retries back the queue up, and six gave every push a real verdict in
 under four minutes (median 115 s); 4 and 8 were both slower, and 60 pushes at six took under 11 minutes for the last.
 A latency budget that fails under load is compared with canon's own preview at the same moment: if canon misses it

@@ -293,9 +293,9 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   shows which ones no fact noticed. Next, concurrency and retry breaks: two requests at once, a repeated request.
 - **Reviewer track record**: a charter can already route the reviewer's `risk` notes to the owner (`reviewRisk`).
   Next, show how often its notes turned out right, so owners can tell when to trust it more.
-- **Value-aware scheduling**: today a project's six verification slots go to the agent with the fewest builds running,
-  and a queued push made obsolete by a newer one is dropped. Next, weigh claims by the value of the fact they serve,
-  and share capacity across projects on one account.
+- **Shared capacity**: today a project's six verification slots go to the agent with the fewest builds running, then to
+  charter-priority and backlog facts, and a queued push made obsolete by a newer one is dropped. Next, share one
+  account's container capacity across its projects.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Canary traffic**: today a new canon runs every fact on a full release candidate, then (for Workers without Durable
   Objects) on the production URL at 0% traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,
