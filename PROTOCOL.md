@@ -267,8 +267,9 @@ released canon. Every fact accepted since then is proposed again (a rule a revis
 accepted claim's verdict says what broke where (`heldBack`); its agent claims the fact again with a fix, because an
 attempt held back at release never lands as it is. Claims that forked from the reverted canon carry code production
 never ran, so they are behind: the judge re-applies their own change on the restored canon. While a release is in
-progress, accepts wait (one release at a time), and a fact held back twice doesn't land automatically again: the owner
-decides. The judge checks this invariant on every alarm; `POST /p/:project/reconcile` (owner key) applies it now.
+progress, accepts wait (one release at a time), and a fact held back twice when it went out alone doesn't land automatically
+again: the owner decides (a held-back train counts against none of its riders; it splits to find the culprit, and a
+release that failed without a fact breaking counts separately, four times before the owner decides). The judge checks this invariant on every alarm; `POST /p/:project/reconcile` (owner key) applies it now.
 
 ## MCP
 
@@ -297,8 +298,9 @@ git log --notes=canon
 `GET /p/:project/stats` is the run report, counted from the judge's own records: agents, attempts, pushes, verdicts,
 fact checks run, rejections (and how many on the combined code after a clash), clashes caught, attempts re-applied by
 the judge, accepts by a person or by policy, the median and p90 time from push to verdict, and compute: minutes from
-push to verdict and of deliberate-break runs, with `computeUsdUpperBound`, every one of those seconds priced as a busy
-`standard-4` container at list price (an upper bound: part of it is the judge's probes, when no container runs).
+push to verdict and of timed deliberate-break runs, with `computeUsdEstimate`, every one of those seconds priced as a
+busy `standard-4` container at list price (generous per second, but partial: re-applies, trains and releases aren't
+timed by the judge).
 
 ## Checks
 

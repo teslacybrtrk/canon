@@ -71,10 +71,36 @@ the discount's own test passes, because the discount is what its author meant. R
 What it cost: every verification, deliberate-break run, re-apply, merge train and release in the run took 84 minutes
 of Cloudflare Workflows time in all (64 verifications, 40 mutation runs, 27 re-applies, 2 trains, 4 releases, by the
 platform's own instance records). Counted as a fully busy `standard-4` container for every second at list price, that
-is about $0.56 for the whole run, under a cent per verification. The judge keeps a running upper bound in its stats
-(`computeUsdUpperBound`).
+is about $0.56 for the whole run, under a cent per verification. Those counts are Workflows instances, retries and
+setup included, so they run higher than the judge's own records (59 verdicts, 26 mutation runs in the two stats pages).
+The judge's stats keep a running `computeUsdEstimate` of the part it times itself (push to verdict and timed mutation
+runs; $0.33 for the run), which is why it's lower than the full Workflows total.
 
 One run is evidence, not a benchmark. Not measured yet: scale beyond 18 agents.
+
+## Live tests after the run
+
+The features built after the Oct 12 run were each tested live on throwaway projects on canon.rodeo the same day
+(deleted afterwards, so the boards above stay as the run left them):
+
+- **Heads-up**: agent-2's unfinished double-booking guard (it refused a second booking with 400 instead of 409) and
+  agent-3's shared stalls were flagged to both agents while agent-2 was still unproven; when agent-2 finished, the
+  heads-up became a clash.
+- **Reviewer**: on a Ready booking change, the reviewer model's notes pointed at the guards no fact covered, each quoting
+  its line. Getting there took three tries: Llama 3.3 returned nothing, and Kimi needed room to reason.
+- **Speculative train**: two riders became Ready while canon #5 was releasing; the train was built and checked on #5
+  during that release and landed with both as soon as it shipped.
+- **Bisection**: a train of four, one with a schema change that breaks on existing data, was held back at release. It
+  split; the clean half (two facts) shipped; the other half was held again; alone, the schema change was held and
+  named, and its partner shipped. Canon stepped back with every hold.
+
+What broke in those tests, and is fixed: a freshly deployed release candidate answered one check with a 500 and held
+back a correct release (it now settles for 20 s, and a fact must fail every time over ~45 s); a production URL that
+Cloudflare's edge answered with 530 rolled back a correct release (edge statuses never count against the code now);
+retrying every failing fact on a candidate ran into a platform RPC failure and left a release unrecorded (the check
+stops at the first consistent failure, and an unrecorded release is resolved on production); the "held back twice"
+valve counted a train's hold against each rider (only solo releases count); and an API error page during a build
+rejected a correct change (platform failures are retried, never rejections).
 
 ## How it compares
 

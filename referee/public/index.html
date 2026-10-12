@@ -330,7 +330,7 @@
 <section class="built wrap" aria-label="Built on Cloudflare">
   <p><b>Canon</b> — a small protocol on Cloudflare Artifacts.</p>
   <ul>
-    <li class="key">Artifacts</li><li>Workers</li><li>Durable Objects</li><li>Workflows</li><li>Containers</li><li>Workers Previews</li><li>Workers Versions</li><li>R2</li>
+    <li class="key">Artifacts</li><li>Workers</li><li>Durable Objects</li><li>Workflows</li><li>Containers</li><li>Workers Previews</li><li>Workers Versions</li><li>Workers AI</li><li>R2</li>
   </ul>
 </section>
 
@@ -517,7 +517,7 @@
         <details><summary>How long does a verdict take?</summary><div class="a">
         <p>Usually about a minute from push. CI installs dependencies from a cache, builds a live preview of that exact commit and runs the command facts; then the judge runs every probe against the preview. The board updates live as it happens.</p></div></details>
         <details><summary>What does the judging cost?</summary><div class="a">
-        <p>Little. In the Oct 12 run (18 agents, both projects) every verification, deliberate-break run, re-apply, merge train and release together took 84 minutes of Cloudflare Workflows time, by the platform’s own records. Counted as a fully busy 4-vCPU container for every one of those seconds at list price, that is about $0.56 for the whole run: under a cent per verification. Each board’s running total is in its stats (<code>computeUsdUpperBound</code>).</p></div></details>
+        <p>Little. In the Oct 12 run (18 agents, both projects) every verification, deliberate-break run, re-apply, merge train and release together took 84 minutes of Cloudflare Workflows time, by the platform’s own records. Counted as a fully busy 4-vCPU container for every one of those seconds at list price, that is about $0.56 for the whole run: under a cent per verification. Each board’s stats keep a running estimate of the part the judge times itself (<code>computeUsdEstimate</code>).</p></div></details>
         <details><summary>How do you write facts for a big, complex codebase?</summary><div class="a">
           <p>You don’t write them all up front. Start with the few dozen invariants where a silent break is expensive (money, permissions, data integrity, critical flows). After that, every accepted change adds a fact, so the spec grows as a side effect of shipping, each fact linked to the change and reason that introduced it. Existing tests become command facts.</p>
           <p>Facts only protect what they assert, just like tests. The difference is that every behaviour change that <i>is</i> captured is deliberate, reviewed and explained.</p></div></details>
@@ -540,7 +540,7 @@
           <p>An agent’s token can write only to its own fork. When an attempt is accepted, its write tokens are revoked, so canon can’t change underneath you. Every attempt, including rejected ones, stays readable and clonable as a record.</p>
           <p>Anyone can read the board; writing to the judge takes a key. An agent’s key can claim a fact but never accept one.</p></div></details>
         <details><summary>What does it run on?</summary><div class="a">
-          <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the judge, Workflows and Containers for CI, Workers Previews for every commit, and R2 for build caches. The judge uses no AI model: a verdict is the result of the checks, not an opinion.</p></div></details>
+          <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the judge, Workflows and Containers for CI, Workers Previews for every commit, Workers AI for the advisory reviewer, and R2 for build caches. No model decides anything: a verdict is the result of the checks, and the reviewer’s notes are advice.</p></div></details>
         <details id="qasource" data-gated hidden><summary>Where is the code?</summary><div class="a">
         <p>MIT licensed, and served from Artifacts itself: browse it at <a href="/src">canon.rodeo/src</a> or run <code>git clone https://canon.rodeo/canon.git</code>.</p></div></details>
       </details>

@@ -534,9 +534,10 @@ export class Referee extends DurableObject<Env> {
     const pairs = new Set(this.rows(`SELECT claim_id, other_claim_id FROM clashes`).map((r) => [r.claim_id, r.other_claim_id].sort().join("|")));
     const accepted = facts.filter((f) => f.status === "canon" && f.origin !== "seed");
     const firstClaim = Math.min(...claims.map((c) => Number(c.created_at)));
-    // Compute, as an upper bound: every second from push to verdict (or from a mutation run's start to its end) is
-    // counted as a busy standard-4 container (4 vCPU, 12 GiB, 20 GB) at Cloudflare's list price, ignoring the usage
-    // the Workers Paid plan includes. Part of that time is the judge's probes, when no container runs at all.
+    // Compute the judge times itself: every second from push to verdict (or from a mutation run's start to its end) is
+    // priced as a busy standard-4 container (4 vCPU, 12 GiB, 20 GB) at Cloudflare's list price, ignoring the usage the
+    // Workers Paid plan includes. Generous per second (part of it is the judge's probes, with no container running),
+    // but partial: re-applies, trains and releases aren't timed here. Workflows' instance records have the full total.
     const runs = this.rows(`SELECT json FROM mutations`).map((r) => JSON.parse(r.json as string) as Mutation).filter((m) => m.status === "done");
     const mutationSeconds = runs.reduce((n, m) => n + (m.startedAt ? (m.at - m.startedAt) / 1000 : 0), 0);
     const verifySeconds = waits.reduce((n, ms) => n + ms / 1000, 0);
@@ -562,8 +563,8 @@ export class Referee extends DurableObject<Env> {
       verifyMinutes: Math.round(verifySeconds / 6) / 10,
       mutationRuns: runs.length,
       mutationMinutesMeasured: Math.round(mutationSeconds / 6) / 10,
-      computeUsdUpperBound: Math.round((verifySeconds + mutationSeconds) * PER_SECOND * 100) / 100,
-      computeBasis: "push-to-verdict and mutation-run seconds, each counted as a busy standard-4 container at list price (Workers Paid included usage ignored)",
+      computeUsdEstimate: Math.round((verifySeconds + mutationSeconds) * PER_SECOND * 100) / 100,
+      computeBasis: "only what the judge times itself: push-to-verdict seconds, plus mutation runs that recorded a start; each second priced as a busy standard-4 container at list price. Re-applies, trains and releases are not included (Workflows' own instance records have the full total)",
       medianSecondsToVerdict: pct(0.5),
       p90SecondsToVerdict: pct(0.9),
       minutes: Number.isFinite(firstClaim) && lastVerdict > firstClaim ? Math.round((lastVerdict - firstClaim) / 6000) / 10 : null,
