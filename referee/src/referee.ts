@@ -342,6 +342,8 @@ export class Referee extends DurableObject<Env> {
 
   /** An attempt that does not build breaks every fact. */
   async buildFailed(repo: string, sha: string, detail: string): Promise<void> {
+    const train = this.rows(`SELECT * FROM trains WHERE id = ? AND status IN ('building', 'judging')`, repo)[0];
+    if (train) return this.trainFailed(train, `the combined candidate didn't build: ${detail.slice(0, 160)}`);
     const attempt = this.attempt(repo);
     if (!attempt || (attempt.headSha && attempt.headSha !== sha)) return;
     await this.evaluate(attempt, sha, "", { held: false, detail: `build failed: ${detail.slice(0, 300)}`, ms: 0 });
@@ -349,7 +351,9 @@ export class Referee extends DurableObject<Env> {
   }
 
   /** The platform failed (container capacity, RPC, Workflows), not the code: say so, and let the agent push again. */
-  couldNotJudge(repo: string, sha: string, detail: string): void {
+  async couldNotJudge(repo: string, sha: string, detail: string): Promise<void> {
+    const train = this.rows(`SELECT * FROM trains WHERE id = ? AND status IN ('building', 'judging')`, repo)[0];
+    if (train) return this.trainFailed(train, `the combined candidate couldn't be judged (platform): ${detail.slice(0, 160)}`);
     const attempt = this.attempt(repo);
     if (!attempt || (attempt.headSha && attempt.headSha !== sha)) return;
     const message = `could not be judged (platform error, not your code): ${detail.replace(/\s+/g, " ").slice(0, 200)}. Push again.`;
@@ -582,6 +586,9 @@ export class Referee extends DurableObject<Env> {
       await this.keepCanonReleased().catch(() => {});
       await this.depart().catch(() => {});
       await this.retryPlatformErrors().catch(() => {});
+      for (const t of this.rows(`SELECT * FROM trains WHERE status IN ('building', 'judging') AND created_at < ?`, Date.now() - 20 * 60_000)) {
+        await this.trainFailed(t, "it was still being checked after 20 minutes").catch(() => {});
+      }
       for (const c of this.rows(`SELECT * FROM claims WHERE status = 'ready' ORDER BY created_at LIMIT 20`).map(toClaim)) {
         const v = this.latestVerdict(c.attemptId);
         if (v) await this.startMutation(c.id, v).catch(() => {});
@@ -622,7 +629,9 @@ export class Referee extends DurableObject<Env> {
       const boarding = Number(this.meta("boardingUntil") ?? 0);
       const next = this.meta("rejudge") === "1" ? Date.now() + 1_000 : Number(this.meta("prodCheckAt") ?? 0);
       const soonest = [next, boarding ? Math.max(boarding, Date.now() + 1_000) : 0].filter(Boolean);
-      if (soonest.length) await this.ctx.storage.setAlarm(Math.min(...soonest));
+      // Something this run did may already have set an earlier wake-up (a platform error retry): keep that one.
+      const pending = await this.ctx.storage.getAlarm();
+      if (soonest.length && (pending === null || pending > Math.min(...soonest))) await this.ctx.storage.setAlarm(Math.min(...soonest));
     }
   }
 
@@ -721,6 +730,7 @@ export class Referee extends DurableObject<Env> {
         this.setMeta("trainFailed", JSON.stringify([...failedRiders].slice(-200)));
         this.setClaimStatus(claim.id, "ready");
       } else if (claim && verdict) {
+        if (!why) this.sql.exec(`UPDATE attempts SET frozen = 0 WHERE id = ?`, claim.attemptId); // only the platform failed: it may land again
         const brokeFact = why ? ((facts.find((f) => why.includes(`“${f.sentence}”`))?.id as string | undefined) ?? "release") : "";
         const v: Verdict = why
           ? { ...verdict, outcome: "contradicts", heldBack: why, lost: [...verdict.lost.filter((l) => !l.detail.startsWith("at release")), { factId: brokeFact, detail: `at release, ${why}` }] }
@@ -729,7 +739,12 @@ export class Referee extends DurableObject<Env> {
         this.setClaimStatus(claim.id, why ? "contradicts" : "ready");
       }
       // Claims the accept superseded race for the fact again.
-      for (const c of this.rows(`SELECT * FROM claims WHERE fact_id = ? AND status = 'superseded' AND id != ?`, factId, claim?.id ?? "").map(toClaim)) {
+      for (const c of this.rows(
+        `SELECT * FROM claims c WHERE c.fact_id = ? AND c.status = 'superseded' AND c.id != ?
+           AND NOT EXISTS (SELECT 1 FROM claims n WHERE n.refreshed_from = c.id
+             OR (n.fact_id = c.fact_id AND n.agent = c.agent AND n.created_at > c.created_at AND n.id != ?))`,
+        factId, claim?.id ?? "", claim?.id ?? "",
+      ).map(toClaim)) {
         this.setClaimStatus(c.id, (this.latestVerdict(c.attemptId)?.outcome as ClaimStatus | undefined) ?? "open");
       }
       }
@@ -776,8 +791,12 @@ export class Referee extends DurableObject<Env> {
       const t = tries[`${a.id}:${a.headSha}`] ?? { n: 0, at: 0 };
       if (t.n >= 3 || Date.now() - t.at < 120_000) continue;
       tries[`${a.id}:${a.headSha}`] = { n: t.n + 1, at: Date.now() };
-      this.setClaimStatus(c.id, "checking");
-      await this.env.CI_WORKFLOW.create({ id: `retry-${a.id}-${a.headSha.slice(0, 12)}-${t.n + 1}`, params: this.ciParams(a.id, a.headSha) }).catch(() => {});
+      try {
+        await this.env.CI_WORKFLOW.create({ id: `retry-${a.id}-${a.headSha.slice(0, 12)}-${t.n + 1}`, params: this.ciParams(a.id, a.headSha) });
+        this.setClaimStatus(c.id, "checking");
+      } catch {
+        // the next alarm tries again
+      }
     }
     this.setMeta("errorRetries", JSON.stringify(Object.fromEntries(Object.entries(tries).slice(-300))));
   }
@@ -1362,6 +1381,8 @@ export class Referee extends DurableObject<Env> {
     const result: Mutation = { status: checked.length || mutants.length ? "done" : "none", total: checked.length, caught: checked.filter((m) => m.caught).length, mutants, at: Date.now() };
     this.sql.exec(`INSERT OR REPLACE INTO mutations (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, repo, sha, JSON.stringify(result), Date.now());
     this.broadcast();
+    const pending = await this.ctx.storage.getAlarm();
+    if (pending === null || pending > Date.now() + 2_000) await this.ctx.storage.setAlarm(Date.now() + 1_000);
     // With a charter threshold, autopilot was waiting for this.
     const v = this.latestVerdict(repo);
     if (claim && v && v.sha === sha) await this.autopilot(claim.id, v);
@@ -1377,7 +1398,13 @@ export class Referee extends DurableObject<Env> {
     if (this.activeTrain() || this.releasing()) return void this.setMeta("boardingUntil", String(Date.now() + 15_000));
     this.setMeta("boardingUntil", "0");
     const riders = this.trainRiders();
-    if (riders.length >= 2) return this.startTrain(riders);
+    if (riders.length >= 2) {
+      try {
+        return await this.startTrain(riders);
+      } catch {
+        return void this.setMeta("boardingUntil", String(Date.now() + 15_000));
+      }
+    }
     // One rider, or only claims that can't ride (a rule change, or a failed train's riders): one lands on its own,
     // and the next departure takes the next one.
     const one = riders[0] ?? this.trainRiders(true)[0];
@@ -1548,7 +1575,7 @@ export class Referee extends DurableObject<Env> {
       const v = this.latestVerdict(claim.attemptId);
       const row = v ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, v.sha)[0] : null;
       const m = row ? (JSON.parse(row.json as string) as Mutation) : null;
-      if (!m || m.status === "running") return { wait: "the judge is testing its checks first (deliberate breaks of its change)" };
+      if (!m || (m.status === "running" && Date.now() - m.at < 20 * 60_000)) return { wait: "the judge is testing its checks first (deliberate breaks of its change)" };
       if (m.status === "done" && m.total > 0 && m.caught / m.total < charter.mutation) {
         return { wait: `its facts caught ${m.caught} of ${m.total} deliberate breaks of its change, and the charter wants ${Math.round(charter.mutation * 100)}%` };
       }

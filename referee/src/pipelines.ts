@@ -254,7 +254,10 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const { repo, sha } = event.payload;
     const referee = refereeForRepo(this.env, repo);
     const files = await step.do("mutation job", async () => await referee.mutationJob(repo));
-    if (!files) return;
+    if (!files) {
+      await step.do("no source changes", () => referee.mutantsBuilt(repo, sha, []));
+      return;
+    }
     const prefix = `${repo}-mut`;
     let built: Array<{ file: string; line: number; op: string; before: string; after: string; preview: string | null }> = [];
     try {
@@ -359,11 +362,11 @@ const TRAIN_SCRIPT = [
   `node -e 'for (const p of require("/tmp/canon-train-parts.json")) console.log([p.claim, p.url, p.base, p.head].join(" "))' > /tmp/canon-train-list`,
   `included=""`,
   `while read -r claim url base head; do`,
-  `  git fetch -q "$url" main`,
-  `  git diff --binary "$base" "$head" -- . ':(exclude)canon.json' > /tmp/canon-train.patch`,
+  `  git fetch -q "$url" main || { echo "CANON_TRAIN_DROPPED $claim (fetch)"; continue; }`,
+  `  git diff --binary "$base" "$head" -- . ':(exclude)canon.json' > /tmp/canon-train.patch || { echo "CANON_TRAIN_DROPPED $claim (diff)"; continue; }`,
   `  if [ ! -s /tmp/canon-train.patch ]; then echo "CANON_TRAIN_DROPPED $claim (no change)"; continue; fi`,
   `  if git apply --3way --index /tmp/canon-train.patch >/dev/null 2>&1; then`,
-  `    git commit -q -m "merge train: $claim" --trailer "Canon-Claim: $claim"; included="$included $claim"`,
+  `    if git commit -q -m "merge train: $claim" --trailer "Canon-Claim: $claim"; then included="$included $claim"; else git reset -q --hard HEAD; echo "CANON_TRAIN_DROPPED $claim (nothing new)"; fi`,
   `  else git reset -q --hard HEAD; echo "CANON_TRAIN_DROPPED $claim"; fi`,
   `done < /tmp/canon-train-list`,
   `if [ -z "$included" ]; then echo CANON_TRAIN_EMPTY; exit 0; fi`,

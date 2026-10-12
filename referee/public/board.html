@@ -814,7 +814,8 @@
 
     // The latest canon, the way a code host shows the last commit above the files.
     const c = s.canon;
-    const landed = c && s.claims.find((x) => x.status === "accepted" && x.attemptId === c.attemptId);
+    const landed = c && (s.claims.find((x) => x.status === "accepted" && x.attemptId === c.attemptId)
+      ?? (MOCK ? null : s.claims.find((x) => x.status === "accepted" && x.factId === (s.deploys ?? []).find((d) => d.seq === c.seq)?.facts?.[0])));
     const landedAt = c && s.facts.filter((f) => f.madeTrueBy === c.attemptId && f.acceptedAt).map((f) => f.acceptedAt)[0];
     // A merge train lands several facts at once; a revert goes back to the code production runs.
     const thisDeploy = MOCK ? null : (s.deploys ?? []).find((d) => d.seq === c?.seq);
