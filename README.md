@@ -58,7 +58,8 @@ change yourself, then 40 the Canon way.
 
 ## Evidence map
 
-Every claim in this README, with where to check it. **Recorded** links are real records from canon.rodeo (projects
+**Submission revision: [`79ddce9`](https://github.com/teslacybrtrk/canon/tree/79ddce9)** (tag `submission`). Every
+claim in this README, with where to check it. **Recorded** links are real records from canon.rodeo (projects
 left up for inspection); **simulated** results come from a local harness; **unit-tested** behaviour is in `npm test`.
 
 | Claim | Evidence | Reproduce |
