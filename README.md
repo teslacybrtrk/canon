@@ -170,7 +170,26 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   split; the clean half (two facts) shipped; the other half was held again; alone, the schema change was held and
   named, and its partner shipped. Canon stepped back with every hold.
 
-What broke in those tests, and is fixed: a freshly deployed release candidate answered one check with a 500 and held
+- **Required evidence** (Oct 12, evening, on a test project, `evid`, left up so its records can be inspected;
+  charter `{"mutation": 0.5, "reviewRisk": true}`): a command fact waited for the owner ("deliberate breaks are only
+  judged by probe facts"; before, it waited forever with a misleading message). A product page whose change also
+  dropped a table had its review fail with Workers AI out of capacity: unavailable, so it waited for the owner, and
+  the judge flagged the `DROP TABLE` as destructive. Accepted by the owner anyway, its
+  [acceptance record](https://canon.rodeo/p/evid/canon/2/acceptance) names both exceptions and says a failed release
+  won't be rolled back automatically; the release Workflow checked the commit against it before deploying, and the
+  Git note on that canon commit carries it. A line limit with every piece of evidence passed landed on autopilot with
+  no exceptions ([record](https://canon.rodeo/p/evid/canon/3/acceptance)). A stall-products route that put the URL
+  into SQL was flagged by the reviewer (a SQL injection, quoting the line) and waited; re-applied by the judge after
+  canon moved, it was flagged again on its own.
+- **A race**: a concurrent step (8 bookings of one stall at once, exactly one may win) held on farmstand's production
+  booking code, which an agent wrote in the run.
+
+What broke in those tests, and is fixed: the first line-limit attempt was flagged by the reviewer (two adds of 50 and
+60 make a line of 110) and waited, but its re-apply drew a review without that risk and landed, so a risk named on an
+attempt now stands on its re-applies until an agent changes the code (deployed; in the live retest the reviewer named
+the risk again itself, so that rule didn't have to act). Two reviews were cut off by a deploy and sat at "reading"
+(a stuck review is now retried once, and the wait is re-checked when it would time out; the retry finished and named
+the SQL injection). Earlier: a freshly deployed release candidate answered one check with a 500 and held
 back a correct release (it now settles for 20 s, and a fact must fail every time over ~45 s); a production URL that
 Cloudflare's edge answered with 530 rolled back a correct release (edge statuses never count against the code now);
 retrying every failing fact on a candidate ran into a platform RPC failure and left a release unrecorded (the check

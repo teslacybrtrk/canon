@@ -51,7 +51,8 @@ const LIVE_CHECK_TTL_MS = 30_000;
 const BOARDING_MS = 60_000;
 // Canon accepted before this moment has no acceptance record (they were added then); anything later must have one.
 const ACCEPTANCE_RECORDS_SINCE = Date.parse("2026-10-13T00:00:00Z");
-const VERIFY_SLOTS = 6; // commits a project verifies at once; the rest queue (see admit)
+const VERIFY_SLOTS = 6;
+const REVIEW_STUCK_MS = 10 * 60_000; // a review still running after this never finished (evidence.ts agrees) // commits a project verifies at once; the rest queue (see admit)
 const SPECULATIVE_BOARDING_MS = 3_000; // boarding while a release runs: the riders leave as a speculative train
 const PRODUCTION_CHECK_EVERY_MS = 60 * 60_000;
 // The forked-from files travel to CI inside the command line; past this size the novelty check is skipped.
@@ -698,7 +699,15 @@ export class Referee extends DurableObject<Env> {
       }
       for (const c of this.rows(`SELECT * FROM claims WHERE status = 'ready' ORDER BY created_at LIMIT 20`).map(toClaim)) {
         const v = this.latestVerdict(c.attemptId);
-        if (v) await this.startMutation(c.id, v).catch(() => {});
+        if (!v) continue;
+        await this.startMutation(c.id, v).catch(() => {});
+        // A review that never finished (a deploy or an eviction cut it off) gets one more try; after that it stays
+        // unavailable. Either way autopilot looks again, so a wait that timed out says so instead of "reading".
+        const r = this.charter()?.reviewRisk ? this.reviewOf(c.attemptId, v.sha) : null;
+        if (r?.status === "running" && Date.now() - r.at > REVIEW_STUCK_MS && !r.detail) {
+          this.sql.exec(`DELETE FROM reviews WHERE attempt_id = ? AND sha = ?`, c.attemptId, v.sha);
+          this.ctx.waitUntil(this.startReview(c.id, v, true).catch(() => {}));
+        } else if (c.autoWait) await this.autopilot(c.id, v).catch(() => {});
       }
       // An alarm set before the production check existed was a re-judge.
       if (this.meta("rejudge") === "1" || this.meta("prodCheckAt") === null) {
@@ -1581,6 +1590,12 @@ export class Referee extends DurableObject<Env> {
     // take it while the release runs instead of after.
     const queued = batch && !!decision && "wait" in decision && ((d) => !!d && !("wait" in d))(this.autoDecision(claim, true));
     this.sql.exec(`UPDATE claims SET auto_wait = ? WHERE id = ?`, decision && "wait" in decision ? decision.wait : null, claim.id);
+    // Waiting on evidence still being produced: come back when it would time out, so the wait never goes stale.
+    if (decision && "wait" in decision && Object.values(this.evidenceFor(claim)).some((e) => e.state === "pending")) {
+      const at = Date.now() + REVIEW_STUCK_MS + 30_000;
+      const current = await this.ctx.storage.getAlarm();
+      if (current === null || current > at) await this.ctx.storage.setAlarm(at);
+    }
     if (!decision || ("wait" in decision && !queued)) return this.broadcast();
     if (batch) {
       // Boarding: the first claim that may land opens a short window, so others that become Ready meanwhile leave with
@@ -1687,7 +1702,7 @@ export class Referee extends DurableObject<Env> {
    * the deliberate breaks no fact caught, and the lines it added. Its notes are advice for whoever decides, never a
    * verdict, and each must quote the exact line it is about (see review.ts): a note quoting nothing real is dropped.
    */
-  private async startReview(claimId: string, verdict: Verdict) {
+  private async startReview(claimId: string, verdict: Verdict, again = false) {
     const claim = this.claim(claimId);
     const attempt = claim ? this.attempt(claim.attemptId) : null;
     const own = claim ? this.fact(claim.factId) : null;
@@ -1698,7 +1713,7 @@ export class Referee extends DurableObject<Env> {
       this.broadcast();
     };
     const base = { model: REVIEW_MODELS[0], notes: [], dropped: 0, at: Date.now() };
-    put({ status: "running", ...base });
+    put({ status: "running", ...base, ...(again ? { detail: "a second try: the first review never finished" } : {}) });
     try {
       const paths = ((await this.changedPaths(attempt, verdict.sha)) ?? []).filter((p) => /\.(ts|tsx|js|jsx|mjs|sql)$/.test(p) && !/(^|\/)(node_modules|dist)\//.test(p)).slice(0, 4);
       if (!paths.length) return put({ status: "none", ...base, detail: "no source files changed" });
@@ -2096,6 +2111,22 @@ export class Referee extends DurableObject<Env> {
     return "none";
   }
 
+  /** A reviewer's risk on an attempt the judge re-applied into this one, unless an agent has pushed since. */
+  private inheritedRisk(claim: Claim): string | null {
+    let cur: Claim | null = claim;
+    for (let depth = 0; cur?.refreshedFrom && depth < 20; depth++) {
+      // More than the judge's own push: the agent changed the code, and its new review is what counts.
+      if (Number(this.rows(`SELECT COUNT(*) AS n FROM pushes WHERE attempt_id = ?`, cur.attemptId)[0]?.n ?? 0) > 1) return null;
+      const prev: Claim | null = this.claim(cur.refreshedFrom);
+      if (!prev) return null;
+      const v = this.latestVerdict(prev.attemptId);
+      const risk = v ? this.reviewOf(prev.attemptId, v.sha)?.notes.find((n) => n.kind === "risk") : undefined;
+      if (risk) return `the reviewer flagged a risk at ${risk.file}:${risk.line} (${risk.note.slice(0, 120)}) on the attempt this one re-applies, and the code hasn't changed since`;
+      cur = prev;
+    }
+    return null;
+  }
+
   /** Required evidence that isn't a pass: what a person accepts over, and what autopilot never does. */
   private exceptionsIn(ev: { mutation: Evidence; review: Evidence; data: Evidence }): string[] {
     return (["mutation", "review", "data"] as const).filter((k) => ["failed", "unavailable", "pending"].includes(ev[k].state)).map((k) => `${k} ${ev[k].state} (${ev[k].detail})`);
@@ -2182,7 +2213,11 @@ export class Referee extends DurableObject<Env> {
     const now = Date.now();
     const row = v ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, v.sha)[0] : null;
     const mutation = mutationEvidence(charter.mutation, this.fact(claim.factId)?.check.kind, row ? (JSON.parse(row.json as string) as Mutation) : null, now);
-    const review = reviewEvidence(charter.reviewRisk, !!this.env.AI, v ? this.reviewOf(claim.attemptId, v.sha) : null, now);
+    let review = reviewEvidence(charter.reviewRisk, !!this.env.AI, v ? this.reviewOf(claim.attemptId, v.sha) : null, now);
+    // A risk named on the attempt this one re-applies stands until someone changes the code: re-running the same
+    // change mustn't clear it by drawing a kinder review (a model's reviews vary from run to run).
+    const inherited = review.state === "passed" || review.state === "not-applicable" ? this.inheritedRisk(claim) : null;
+    if (inherited) review = { state: "failed", detail: inherited };
     const d = v?.data;
     const data: Evidence = d?.destructive.length
       ? { state: "failed", detail: `it changes stored data destructively (${d.destructive[0]}), and rolling the Worker back wouldn't bring the data back` }

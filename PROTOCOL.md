@@ -289,7 +289,9 @@ The notes (`reviewer` on the claim and the verdict, `REVIEWER` in `canon verdict
 never a verdict: the facts decide, the reviewer only points. The owner can ask for a fresh review with
 `POST /p/:project/attempts/:id/review`. With `"reviewRisk": true` in the charter, the reviewer becomes a gate in one
 direction only: a change it flags with a `risk` note waits for the owner instead of landing on autopilot (it can
-never land or reject anything itself).
+never land or reject anything itself). A model's reviews vary from run to run, so a risk named on an attempt stands on
+every re-apply of it until an agent changes the code: the judge re-applying the same change can't clear it by drawing
+a kinder review. A review that never finishes (a deploy can cut one off) is retried once; after that it is unavailable.
 
 **Required evidence is required.** Each piece of evidence the charter asks for has an explicit state: `passed`,
 `failed`, `unavailable`, `not-applicable`, `not-required` or `pending` (`referee/src/evidence.ts`). The gates are
