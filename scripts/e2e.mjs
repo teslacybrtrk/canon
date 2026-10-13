@@ -137,7 +137,7 @@ const lines = [
   "",
   "Acceptance records: " + records.map((r) => `[canon #${r.seq}](${URL_}/p/${PROJECT}/canon/${r.seq}/acceptance)`).join(", ") + ".",
   "",
-  ...records.flatMap((r) => r.record ? [`- canon #${r.seq} (${r.facts.join(", ")}): authorized by ${r.record.authorizedBy}; rehearsal ${r.record.recovery?.rehearsal?.state ?? "none"}${r.record.recovery?.rehearsal ? ` (${r.record.recovery.rehearsal.detail.slice(0, 160)})` : ""}; exposure ${(r.record.exposure ?? []).map((e) => `${e.percent}%: ${e.verdict}`).join(", ") || "none recorded"}.`] : []),
+  ...records.flatMap((r) => r.record ? [`- canon #${r.seq} (${r.facts.join(", ")}): authorized by ${r.record.authorizedBy}; rehearsal ${r.record.recovery?.rehearsal?.state ?? "none"}${r.record.recovery?.rehearsal ? ` (${r.record.recovery.rehearsal.detail.slice(0, 260)})` : ""}; exposure ${(r.record.exposure ?? []).map((e) => `${e.percent}%: ${e.verdict}`).join(", ") || "none recorded"}.`] : []),
   "",
   "## Timeline",
   "",

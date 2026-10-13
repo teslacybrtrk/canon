@@ -178,7 +178,8 @@ projects sharing one account's container limit.
 own records ([docs/timings.md](docs/timings.md)). On the push-to-verdict path an agent waits on, the preview upload
 (median 18 s), the dependency install (17 s) and the command facts (9.5 s) were the three longest steps, and the
 preview and the command facts ran one after the other although they need nothing from each other: they now run side
-by side (before and after in the report). Releases spend most of their time deploying the release candidate (22 s median) and checking it
+by side: build to verdict went from a median of 54 s to 48 s, and p90 from 79 s to 60 s (same day, 46 verifications
+before and 28 after; a small sample). Releases spend most of their time deploying the release candidate (22 s median) and checking it
 (26 s, including a 20-second settle while Durable Objects pick up new code); the canary's holds are policy, not
 overhead. What wasn't changed, and why: the install cache is per attempt, because every attempt is its own repo, and
 sharing a cached workspace between attempts would carry one agent's files into another's checkout.
@@ -459,7 +460,7 @@ to wrangler, so give the agent key only to agents you run.
 
 Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
 (for example, Previews that pin Durable Object code per commit, version overrides that reach Durable Objects, and
-Workers Builds for forks). All twenty-six are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+Workers Builds for forks). All twenty-seven are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
 ## Roadmap
 

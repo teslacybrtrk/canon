@@ -140,6 +140,12 @@ Found while building, October 2026.
     the app answered. *We did:* the canary also sends raw requests (no retries) to both versions, pinned with the
     version-override header, and compares their 5xx rates. *Would help:* response status classes per `scriptVersion`
     in the analytics, so a rollout can be judged on users' real error rate.
+27. **`wrangler versions upload` refuses a Worker that doesn't exist yet.** A release pipeline built on "upload a
+    version that serves nobody, then let one writer move traffic" has to special-case the very first release ("You
+    cannot upload a new version of a Worker that does not yet exist. Please run the `deploy` command first"). Our
+    first end-to-end run on a fresh project passed everything and was held back on it. *We did:* a project's first
+    release deploys directly (there's nothing to stage beside). *Would help:* `versions upload` creating the Worker
+    with that version undeployed (0% of no traffic), so the first release takes the same path as every other.
 
 ## Things that worked especially well
 
