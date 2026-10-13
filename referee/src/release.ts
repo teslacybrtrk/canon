@@ -31,3 +31,19 @@ export function deploymentOwner(l: Lease | null, pending: { seq: number; at: num
   if (l && l.seq === pending.seq) return null; // its run took the lease, and that lease has ended or run out
   return now - pending.at < RELEASE_START_MS ? `canon #${pending.seq}'s release, starting` : null;
 }
+
+/** A judge deployment write's own request timeout. */
+export const JUDGE_WRITE_MS = 20_000;
+/** How long a judge write whose outcome is unknown (timed out, connection lost, judge evicted) may still land. */
+export const UNKNOWN_WRITE_QUARANTINE_MS = 120_000;
+
+/**
+ * The production-write barrier after a judge deployment write: it lifts when the API answered (the write's outcome is
+ * known), and otherwise only after a quarantine, because a request the client gave up on may still land remotely. A
+ * timeout is never taken for a cancelled write. Before the request it's armed for the whole window (judge evicted mid-
+ * write: the outcome is unknown too).
+ */
+export function writeBarrier(phase: "sending" | "answered" | "unknown", now: number): number {
+  if (phase === "answered") return 0;
+  return now + (phase === "sending" ? JUDGE_WRITE_MS : 0) + UNKNOWN_WRITE_QUARANTINE_MS;
+}

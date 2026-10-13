@@ -34,10 +34,10 @@ import { edgeFailure, platformFailure } from "./platform";
 import { addedText, callsInto, changedSymbols } from "./symbols";
 import { fileFromAnswer, parseConflicts, repairPrompt, validResolution } from "./repair";
 import { SCHEMA, UPGRADES } from "./schema";
-import { deploymentOwner, holdsLease, leaseDecision, RELEASE_LEASE_MS, RELEASE_START_MS, type Lease } from "./release";
+import { deploymentOwner, holdsLease, JUDGE_WRITE_MS, leaseDecision, RELEASE_LEASE_MS, RELEASE_START_MS, writeBarrier, type Lease } from "./release";
 import { ACCOUNT_SLOTS, BACKGROUND_SLOTS } from "./slots";
 import { canaryVerdict, versionTraffic } from "./telemetry";
-import { compatibilityVerdict, dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence, storageBindings, type CompatibilityCoverage, type DataChanges, type Evidence } from "./evidence";
+import { compatibilityVerdict, dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence, statelessBasis, storageBindings, type CompatibilityCoverage, type DataChanges, type Evidence } from "./evidence";
 import { changedLines, judgeAnswer, rankNotes, REVIEW_SCHEMA, reviewBatches, reviewPrompt, specialistsFor, type Review, type ReviewFile, type ReviewNote, type Specialist, type UnresolvedNote } from "./review";
 
 // The advisory reviewer: a different model from the agents' (they are Claude or Grok), on Workers AI.
@@ -476,6 +476,7 @@ export class Referee extends DurableObject<Env> {
       this.setMeta("charter", JSON.stringify(file.ok && file.policy?.charter ? file.policy.charter : null));
       this.setMeta("batch", file.ok && file.policy?.batch ? "1" : "0");
       this.setMeta("canary", JSON.stringify(file.ok && file.policy?.canary !== undefined ? file.policy.canary : null));
+      this.setMeta("state", file.ok && file.policy?.state === "none" ? "none" : "unknown");
       if (file.ok && typeof file.production === "string" && /^https:\/\/[\w.-]+$/.test(file.production)) this.setMeta("productionUrl", file.production);
     }
     const verdict = await this.evaluate(this.attempt(repo)!, sha, previewUrl, undefined, commands);
@@ -782,17 +783,30 @@ export class Referee extends DurableObject<Env> {
     return deploymentOwner(this.lease(), row ? { seq: row.seq as number, at: Number(row.at) } : null, Date.now());
   }
 
-  // The judge's own deployment write in flight (reconciliation, rollback): a release run's first write waits for it to
-  // land, so the two never cross on the wire.
-  private judgeWriting: Promise<unknown> | null = null;
-
+  // The judge's own deployment write (reconciliation, restore, rollback) and every release run's production write are
+  // ordered by one barrier, kept in storage (it survives an eviction): armed before the judge's request goes out,
+  // lifted when the API answers, and held for a quarantine when the outcome is unknown (see writeBarrier). The release
+  // run's fence and the gate's writes wait for it, so no release or republish write, direct deploys included, can be
+  // overtaken by a judge write that was already on the wire.
   private async judgeWrite(api: string, init: RequestInit): Promise<Response> {
-    const p = fetch(api, { ...init, signal: AbortSignal.timeout(20_000) });
-    this.judgeWriting = p.catch(() => null);
+    this.setMeta("judgeWriteUntil", String(writeBarrier("sending", Date.now())));
+    let res: Response;
     try {
-      return await p;
-    } finally {
-      this.judgeWriting = null;
+      res = await fetch(api, { ...init, signal: AbortSignal.timeout(JUDGE_WRITE_MS) });
+    } catch (err) {
+      this.setMeta("judgeWriteUntil", String(writeBarrier("unknown", Date.now())));
+      throw err;
+    }
+    this.setMeta("judgeWriteUntil", String(writeBarrier("answered", Date.now())));
+    return res;
+  }
+
+  /** Waits until no judge deployment write can still land (see judgeWrite). */
+  private async judgeWriteSettled() {
+    for (;;) {
+      const left = Number(this.meta("judgeWriteUntil") ?? 0) - Date.now();
+      if (left <= 0) return;
+      await new Promise((r) => setTimeout(r, Math.min(1_000, left)));
     }
   }
 
@@ -1199,7 +1213,7 @@ export class Referee extends DurableObject<Env> {
     const FENCED = "fenced out: this run no longer holds the release, so it makes no deployment write (the judge reconciles production)";
     class Fenced extends Error {}
     const write = async (versions: Array<{ version_id: string; percentage: number }>, message: string) => {
-      while (this.judgeWriting) await this.judgeWriting; // a judge write already on the wire lands first
+      await this.judgeWriteSettled(); // a judge write already on the wire lands (or its quarantine passes) first
       if (holder !== undefined && !this.holds(seq, holder)) throw new Fenced();
       const res = await fetch(api, { method: "POST", headers, body: JSON.stringify({ strategy: "percentage", versions, annotations: { "workers/message": message.slice(0, 100) } }) });
       if (!res.ok) throw new Error(`deployments API returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -1207,7 +1221,7 @@ export class Referee extends DurableObject<Env> {
     const liveNow = async () =>
       (await (await fetch(api, { headers })).json<{ result?: { deployments?: Array<{ versions: Array<{ version_id: string; percentage: number }> }> } }>()).result?.deployments?.[0]?.versions ?? [];
     try {
-      while (this.judgeWriting) await this.judgeWriting; // read the deployment after any judge write in flight lands
+      await this.judgeWriteSettled(); // read the deployment after any judge write in flight lands
       const live = await liveNow();
       const current = (live.find((v) => v.percentage === 100) ?? live[0])?.version_id;
       if (!smoke || !current || current === versionId) {
@@ -2675,7 +2689,10 @@ export class Referee extends DurableObject<Env> {
    * why not. `settle`: the refusal means canon #seq can't be released as accepted (an unauthorized commit), so canon
    * goes back; otherwise the run just stops (a newer canon, another run, or its lease ran out).
    */
-  fence(seq: number, sha: string, holder: string): { go: true; until: number } | { go: false; why: string; settle: boolean } {
+  async fence(seq: number, sha: string, holder: string): Promise<{ go: true; until: number } | { go: false; why: string; settle: boolean }> {
+    // Every production-changing step of a release run asks here first, direct deploys included: none of them may be
+    // overtaken by a judge write already on the wire. Everything below runs after the wait, in one turn.
+    await this.judgeWriteSettled();
     const refusal = this.releaseRefusal(seq, sha);
     if (refusal) return { go: false, why: refusal, settle: !refusal.includes("no longer the latest") };
     const row = this.rows(`SELECT deployed FROM canon WHERE seq = ?`, seq)[0];
@@ -2745,8 +2762,8 @@ export class Referee extends DurableObject<Env> {
           const control = this.fixtures(seq, `ctl-${seq}`);
           const coverage: CompatibilityCoverage = { compared: [], incompatible: [], inconclusive: [], unsupported: [], notApplicable: [], storage: "" };
           const config = await this.wranglerConfig(record.attemptId, record.sha);
-          const storage = storageBindings(config);
-          coverage.storage = !storage.known ? "unknown: no Wrangler config found" : storage.bindings.length ? `storage bindings: ${storage.bindings.join(", ")}` : "no storage bindings";
+          const basis = statelessBasis(storageBindings(config), this.meta("state") === "none");
+          coverage.storage = basis.storage;
           for (const f of this.continuityFacts(seq).before) {
             const contract = fixtureContract(f.check as ProbeCheck);
             if (contract.kind === "not-applicable") coverage.notApplicable.push({ id: f.id, why: contract.why });
@@ -2759,7 +2776,7 @@ export class Referee extends DurableObject<Env> {
             }
           }
           const fresh = before.filter((f) => f.check.kind === "probe").length;
-          const v = compatibilityVerdict(coverage, storage.known && !storage.bindings.length);
+          const v = compatibilityVerdict(coverage, basis.stateless);
           this.setRehearsal(seq, v.state, v.state === "passed" ? `the previous version kept all ${fresh} of its facts; ${v.detail}` : v.detail, coverage);
         }
       }

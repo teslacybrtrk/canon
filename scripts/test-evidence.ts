@@ -109,8 +109,8 @@ ok("a policy version names the exact charter");
   ok("zero comparisons on an app that keeps data (or might) is unavailable, not a pass");
   const stateless = compatibilityVerdict(cov({ storage: "no storage bindings" }), true);
   assert.equal(stateless.state, "passed");
-  assert.match(stateless.detail, /keeps no stored data/);
-  ok("an app whose config has no storage bindings needs no stateful comparison: established from its config, not assumed");
+  assert.match(stateless.detail, /keeps no persistent state/);
+  ok("with the stateless basis established, nothing to compare is a pass that names its basis");
   assert.equal(compatibilityVerdict(cov({ compared: ["a", "b"], notApplicable: [{ id: "c", why: "x" }] }), false).state, "passed");
   ok("compatible fixtures pass, with the coverage counted");
   assert.deepEqual(storageBindings('{\n  // a stateless Worker\n  "name": "x"\n}').bindings, []);
@@ -118,4 +118,27 @@ ok("a policy version names the exact charter");
   assert.deepEqual(storageBindings('[[d1_databases]]\nbinding = "DB"').bindings, ["d1_databases"]);
   assert.equal(storageBindings(null).known, false);
   ok("storage bindings are read from the Wrangler config (JSON, JSONC or TOML); no config is unknown, never stateless");
+}
+
+// No storage bindings is not "no persistent state": an app can write an external database over HTTP. Only an explicit
+// owner declaration, with no bindings, lets a rehearsal pass with nothing to compare.
+{
+  const { statelessBasis, compatibilityVerdict } = await import("../referee/src/evidence.ts");
+  const none = { known: true, bindings: [] as string[] };
+  const external = statelessBasis(none, false);
+  assert.equal(external.stateless, false);
+  const cov = { compared: [], incompatible: [], inconclusive: [], unsupported: [], notApplicable: [], storage: external.storage };
+  const v = compatibilityVerdict(cov, external.stateless);
+  assert.equal(v.state, "unavailable");
+  assert.match(v.detail, /external database|declared/);
+  ok("an app with no storage bindings (that may write an external database over HTTP) gets no zero-comparison pass");
+  const declared = statelessBasis(none, true);
+  assert.equal(declared.stateless, true);
+  const pass = compatibilityVerdict({ ...cov, storage: declared.storage }, true);
+  assert.equal(pass.state, "passed");
+  assert.match(pass.detail, /owner's declaration/);
+  ok("an app its owner declares stateless (and with no bindings) keeps the lightweight path, and the record names the declaration as its basis");
+  assert.equal(statelessBasis({ known: true, bindings: ["d1_databases"] }, true).stateless, false);
+  assert.equal(statelessBasis({ known: false, bindings: [] }, true).stateless, false);
+  ok("a declaration never overrides storage bindings in the config, or an unreadable config");
 }

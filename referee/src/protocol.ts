@@ -99,6 +99,10 @@ export interface Policy {
   // The gradual rollout for a Worker without Durable Objects, after its 0% smoke test: the share of real traffic at each
   // step and how long each is watched. Default {"steps": [10, 50], "holdSeconds": 45}; false releases at 100% at once.
   canary?: { steps?: number[]; holdSeconds?: number } | false;
+  // "none": the owner declares the app keeps no persistent state anywhere: no Cloudflare storage, and no external
+  // database or service it writes to over HTTP. Only then, and only if its Wrangler config has no storage bindings
+  // either, can a rollback rehearsal pass with nothing to compare. Without it, statefulness is unknown.
+  state?: "none";
 }
 
 // ---- Checks -------------------------------------------------------------------

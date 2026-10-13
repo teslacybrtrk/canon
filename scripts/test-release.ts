@@ -1,6 +1,6 @@
 // The release fence: a stalled or superseded release run can't take another step that changes a Worker.
 import assert from "node:assert/strict";
-import { deploymentOwner, holdsLease, leaseDecision, RELEASE_LEASE_MS, RELEASE_START_MS, type Lease } from "../referee/src/release.ts";
+import { deploymentOwner, holdsLease, JUDGE_WRITE_MS, leaseDecision, RELEASE_LEASE_MS, RELEASE_START_MS, UNKNOWN_WRITE_QUARANTINE_MS, writeBarrier, type Lease } from "../referee/src/release.ts";
 
 const ok = (name: string) => console.log(`ok   ${name}`);
 const now = 1_000_000;
@@ -41,3 +41,12 @@ ok("expired or ended ownership (and a release that never started) lets the judge
 assert.equal(holdsLease({ ...held("run-old"), ended: "superseded" }, 5, "run-old", now), false);
 assert.equal(holdsLease(held("run-new"), 5, "run-old", now), false);
 ok("a stale run that lost the lease holds nothing, so its captured version is never written over the new owner's");
+
+// The production-write barrier: a release or republish write (the gate's, or a direct deploy's fence) waits until no
+// judge write can still land. Answered: lifted. Timed out or lost: it may still land remotely, so it's held.
+assert.equal(writeBarrier("sending", now), now + JUDGE_WRITE_MS + UNKNOWN_WRITE_QUARANTINE_MS);
+ok("armed for the whole window before the judge's request goes out (an eviction mid-write leaves it armed)");
+assert.equal(writeBarrier("answered", now), 0);
+ok("lifted as soon as the deployments API answers: the write's outcome is known");
+assert.equal(writeBarrier("unknown", now + 20_000), now + 20_000 + UNKNOWN_WRITE_QUARANTINE_MS);
+ok("a client timeout is not a cancelled write: the barrier holds for a quarantine after it");

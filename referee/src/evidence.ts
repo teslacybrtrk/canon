@@ -162,6 +162,18 @@ export interface CompatibilityCoverage {
   storage: string; // what the app's config says about stored data ("bindings: durable_objects", "no storage bindings", "unknown: ...")
 }
 
+/**
+ * Whether a rehearsal may pass with nothing to compare: only when the app's config has no storage bindings AND its
+ * owner declares (canon.json policy "state": "none") that it keeps no state elsewhere either, such as an external
+ * database over HTTP, which no config shows. Either alone leaves statefulness unknown.
+ */
+export function statelessBasis(storage: { known: boolean; bindings: string[] }, declared: boolean): { stateless: boolean; storage: string } {
+  const config = !storage.known ? "unknown: no Wrangler config found" : storage.bindings.length ? `storage bindings: ${storage.bindings.join(", ")}` : "no storage bindings";
+  if (storage.known && !storage.bindings.length && declared) return { stateless: true, storage: `${config}, and the owner declares no persistent state elsewhere (policy "state": "none")` };
+  if (storage.known && !storage.bindings.length) return { stateless: false, storage: `${config}, but the app may keep state elsewhere (an external database over HTTP); the owner hasn't declared "state": "none"` };
+  return { stateless: false, storage: config };
+}
+
 export function compatibilityVerdict(c: CompatibilityCoverage, stateless: boolean): { state: "passed" | "failed" | "unavailable"; detail: string } {
   const counts = `${c.compared.length} compared, ${c.incompatible.length} incompatible, ${c.inconclusive.length} inconclusive, ${c.unsupported.length} unsupported, ${c.notApplicable.length} not applicable`;
   if (c.incompatible.length) {
@@ -178,7 +190,7 @@ export function compatibilityVerdict(c: CompatibilityCoverage, stateless: boolea
   }
   if (!c.compared.length) {
     return stateless
-      ? { state: "passed", detail: `nothing to compare, and none needed: the app keeps no stored data (${c.storage}) [${counts}]` }
+      ? { state: "passed", detail: `nothing to compare, on the owner's declaration that the app keeps no persistent state (${c.storage}) [${counts}]` }
       : { state: "unavailable", detail: `no fact read back what this release wrote, so compatibility with stored data is unknown (${c.storage}); a stateful fact with a GET step would establish it [${counts}]` };
   }
   return { state: "passed", detail: `the previous version read back what this release wrote in every comparison [${counts}]` };

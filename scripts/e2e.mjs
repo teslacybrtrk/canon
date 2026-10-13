@@ -35,7 +35,7 @@ const ITEM_LINK = { id: "item-link", sentence: "A quote links to its item's page
 const canonFile = {
   ...stateless,
   backlog: [...stateless.backlog.filter((f) => ["bulk-discount", "quote-has-name"].includes(f.id)), ITEM_PAGE, ITEM_LINK],
-  policy: { autoAccept: "backlog", batch: true, canary: { steps: [10, 50], holdSeconds: 30 } },
+  policy: { autoAccept: "backlog", batch: true, canary: { steps: [10, 50], holdSeconds: 30 }, state: "none" },
   production: `https://${PROJECT}.canon-rodeo.workers.dev`,
 };
 const work = mkdtempSync(join(tmpdir(), "canon-e2e-"));

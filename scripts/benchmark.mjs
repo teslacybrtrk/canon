@@ -108,6 +108,14 @@ function shuffled(list, seed) {
   return out;
 }
 
+// Production's storage is copied while its server runs, and SQLite's side files come and go mid-copy: copy again.
+function copyState(from, to) {
+  for (let i = 0; ; i++) {
+    try { rmSync(to, { recursive: true, force: true }); cpSync(from, to, { recursive: true }); return; }
+    catch (e) { if (e.code !== "ENOENT" || i >= 9) throw e; }
+  }
+}
+
 // ---- A local app: wrangler dev on a checkout, its storage in a directory (kept for production, fresh for a preview)
 
 // A local server that never comes up is the harness's failure, not the code's: it's started again (up to three times),
@@ -242,11 +250,17 @@ async function run(workloadName, systemName, order = 1) {
     // parallel with the rest, which is counted). A queue doesn't know two changes build the same thing: it integrates it.
     const duplicate = m.landed.includes(factId);
     if (duplicate && !sys.queue) {
+      // Its own verdict, as deployed Canon gives it before it can be Ready: the command facts (CI) on its checkout, then
+      // every probe on its own preview. Counted in full (checks and elapsed time: here it runs in sequence, not beside
+      // the others). What it avoids is the integration, the re-verification on the merged tree, and the release.
       const own = checkout(repo, git(repo, "rev-parse", `a${i}`));
-      const pv = await serve(own, mkdtempSync(join(tmpdir(), "bench-fresh-")));
       const before = m.checks;
-      await factsHold(pv.url, [...w.canon.facts, fact], `own:${i}`, m);
-      await pv.stop();
+      const ci = commandsHold(own, [...w.canon.facts, fact], m);
+      if (ci.held) {
+        const pv = await serve(own, mkdtempSync(join(tmpdir(), "bench-fresh-")));
+        await factsHold(pv.url, [...w.canon.facts, fact], `own:${i}`, m);
+        await pv.stop();
+      }
       m.redundant.attempts++;
       m.redundant.checks += m.checks - before;
       continue;
@@ -302,7 +316,7 @@ async function run(workloadName, systemName, order = 1) {
     if (sys.safeguards) {
       // The release candidate: a copy of production's data, the new code, every fact.
       const candState = mkdtempSync(join(tmpdir(), "bench-cand-"));
-      cpSync(prodState, candState, { recursive: true });
+      copyState(prodState, candState);
       if (sys.candidate) {
         const cand = await serve(code, candState);
         const c = await factsHold(cand.url, [...canonFacts, fact], `candidate:${i}`, m);
@@ -343,7 +357,7 @@ async function run(workloadName, systemName, order = 1) {
     }
     // After the fact: could this release be rolled back safely? (the old code on a copy of production's data)
     const after = mkdtempSync(join(tmpdir(), "bench-after-"));
-    cpSync(prodState, after, { recursive: true });
+    copyState(prodState, after);
     const back = await serve(oldDir, after);
     const rollbackOk = (await factsHold(back.url, canonFacts.filter((f) => f !== fact), `after:${i}`, m)).held;
     await back.stop();

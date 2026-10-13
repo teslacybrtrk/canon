@@ -10,6 +10,6 @@
     { "id": "bulk-discount", "sentence": "Ten or more of an item take 10% off the quote", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/quote?item=eggs&qty=10", "expect": { "status": 200, "json": { "cents": 3600 } } }, { "path": "/api/quote?item=eggs&qty=9", "expect": { "json": { "cents": 3600 } } }] } },
     { "id": "quote-has-name", "sentence": "A quote names the item", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/quote?item=honey&qty=2", "expect": { "status": 200, "json": { "name": "Wildflower honey", "cents": 2400 } } }] } }
   ],
-  "policy": { "autoAccept": "backlog", "batch": false, "canary": { "steps": [10, 50], "holdSeconds": 45 } },
+  "policy": { "autoAccept": "backlog", "batch": false, "canary": { "steps": [10, 50], "holdSeconds": 45 }, "state": "none" },
   "production": "https://canary.canon-rodeo.workers.dev"
 }
