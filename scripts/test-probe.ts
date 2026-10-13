@@ -200,3 +200,18 @@ for (const [atomic, want] of [[true, true], [false, false]] as const) {
   assert.equal(raced.held, want, raced.detail);
   console.log(`ok  race, ${atomic ? "atomic booking" : "check-then-await-then-insert"} -> sequential probe holds; concurrent step ${want ? "holds" : `fails (${raced.detail})`}`);
 }
+
+// No declared assertion is skipped: a repeated or concurrent step checks every response's body too.
+const wrongBody = createServer((req, res) => res.writeHead(201, { "content-type": "application/json" }).end(JSON.stringify({ ok: false })));
+await new Promise<void>((r) => wrongBody.listen(0, r));
+const wb = `http://127.0.0.1:${(wrongBody.address() as { port: number }).port}`;
+const raceJson = await runCheck({ kind: "probe", steps: [{ method: "POST", path: "/x", concurrent: 3, expect: { status: 201, json: { ok: true } } }] }, wb);
+assert.equal(raceJson.held, false, raceJson.detail);
+const raceText = await runCheck({ kind: "probe", steps: [{ method: "POST", path: "/x", concurrent: 3, expect: { status: 201, bodyIncludes: "booked" } }] }, wb);
+assert.equal(raceText.held, false, raceText.detail);
+const repeatJson = await runCheck({ kind: "probe", steps: [{ path: "/x", repeat: 3, expect: { status: 201, json: { ok: true } } }] }, wb);
+assert.equal(repeatJson.held, false, repeatJson.detail);
+const raceOk = await runCheck({ kind: "probe", steps: [{ method: "POST", path: "/x", concurrent: 3, expect: { status: 201, json: { ok: false } } }] }, wb);
+assert.equal(raceOk.held, true, raceOk.detail);
+wrongBody.close();
+console.log(`ok  every response checked    -> wrong JSON or missing text fails a concurrent or repeated step (${raceJson.detail})`);

@@ -37,6 +37,7 @@ const TOOLS = [
         why: { type: "string", description: "One sentence: why this fact matters. It is kept in the fact's history." },
         fact: { type: "object", description: 'A new fact: {"id": "slug", "sentence": "...", "check": {...}}. Add "replaces": "<fact id>" to revise a canon fact on purpose.' },
         join: { type: "string", description: "The id of a proposed or backlog fact to make true instead of proposing your own" },
+        touches: { type: "array", items: { type: "string" }, description: 'Optional: the files you will change, as globs (["src/index.ts"]). Declared, you are held to it: a change outside it waits for the owner.' },
       },
     },
   },
@@ -131,6 +132,7 @@ async function call(name: string, args: Args, referee: Referee, project: string)
   if (name === "canon_verdict") return verdict(referee, need("attempt"), str("sha"), args.wait === true);
   if (name === "canon_claim") {
     const req = { agent: need("agent"), why: need("why") } as DeclareRequest;
+    if (Array.isArray(args.touches)) Object.assign(req, { touches: (args.touches as unknown[]).filter((g): g is string => typeof g === "string") });
     if (str("join")) Object.assign(req, { join: str("join") });
     else if (args.fact && typeof args.fact === "object") Object.assign(req, { fact: args.fact as FactDef });
     else fail('pass "fact" (a new fact or a revision) or "join" (a fact id)');
@@ -248,6 +250,7 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
     out.push(c.breaks === "mine" ? `  HEADS-UP ${c.with.agent}'s attempt for "${c.with.factId}" breaks your fact (${why}).` : `  HEADS-UP your attempt breaks ${c.with.agent}'s fact "${c.factId}" (${why}).`);
   }
   if (v.headsUp?.length) out.push("  Not a clash yet: one side is still being written. If yours can make room for theirs, change course now; if not, say why in your claim (once both are Ready, a person picks one).");
+  if (v.outside?.length) out.push(`  OUTSIDE YOUR SCOPE: you changed ${v.outside.join(", ")}, which your claim didn't say it would touch. Undo it, or the owner decides.`);
   if (v.reviewer?.status === "done" && v.reviewer.notes.length) {
     out.push(`  REVIEWER advisory notes from ${v.reviewer.model.split("/").pop()}, a model that didn't write this (never a verdict):`);
     for (const n of v.reviewer.notes) out.push(`    ${n.kind.toUpperCase()} ${n.file}:${n.line}  ${n.quote}  ${n.note}`);

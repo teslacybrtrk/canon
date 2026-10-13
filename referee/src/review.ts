@@ -112,29 +112,50 @@ export function parseAnswer(answer: unknown): unknown {
   }
 }
 
-/** Keep only notes whose quote is really in that file (nearest match to the line the model gave); count the rest. */
-export function ground(raw: unknown, files: ReviewFile[]): { notes: ReviewNote[]; dropped: number } {
+/**
+ * Keep only notes whose quote is really in that file (nearest match to the line the model gave); count the rest, and
+ * say whether a dropped note was a risk. At most three notes are kept, risks first, so a risk is never cut for room.
+ */
+export function ground(raw: unknown, files: ReviewFile[]): { notes: ReviewNote[]; dropped: number; droppedRisk: boolean } {
   const list = Array.isArray((raw as { notes?: unknown })?.notes) ? ((raw as { notes: unknown[] }).notes as Array<Partial<ReviewNote>>) : [];
   const notes: ReviewNote[] = [];
   let dropped = 0;
-  for (const n of list.slice(0, 6)) {
+  let droppedRisk = false;
+  for (const n of list.slice(0, 12)) {
     const file = files.find((f) => f.path === n.file);
     const quote = squash(String(n.quote ?? ""));
     const kind = n.kind === "risk" || n.kind === "untested" || n.kind === "intent" ? n.kind : null;
     if (!file || quote.length < 6 || !kind || !n.note) {
       dropped++;
+      droppedRisk ||= n.kind === "risk";
       continue;
     }
     const lines = file.head.split("\n");
     const hits = lines.flatMap((l, i) => (squash(l).includes(quote) ? [i + 1] : []));
     if (!hits.length) {
       dropped++;
+      droppedRisk ||= kind === "risk";
       continue;
     }
     const want = Number(n.line) || hits[0];
     const line = hits.reduce((a, b) => (Math.abs(b - want) < Math.abs(a - want) ? b : a));
     notes.push({ file: file.path, line, quote: squash(lines[line - 1]).slice(0, 160), kind, note: String(n.note).slice(0, 400) });
-    if (notes.length === 3) break;
   }
-  return { notes, dropped };
+  const ranked = [...notes.filter((n) => n.kind === "risk"), ...notes.filter((n) => n.kind !== "risk")].slice(0, 3);
+  return { notes: ranked, dropped, droppedRisk };
+}
+
+/**
+ * What a model's answer amounts to. Only a complete answer in the notes format is a review: an empty list of notes is
+ * a finding ("nothing to flag"); an answer that was cut off, isn't the format, or names a risk it can't quote from the
+ * code is not, and the review is an error (unavailable evidence), never a silent pass.
+ */
+export function judgeAnswer(answer: unknown, finishReason: string | undefined, files: ReviewFile[]): { ok: true; notes: ReviewNote[]; dropped: number } | { ok: false; detail: string } {
+  const said = (typeof answer === "string" ? answer : JSON.stringify(answer ?? null)).slice(0, 200);
+  if (finishReason === "length") return { ok: false, detail: `the answer was cut off before it finished: ${said}` };
+  const parsed = parseAnswer(answer);
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { notes?: unknown }).notes)) return { ok: false, detail: `the answer wasn't a list of notes: ${said}` };
+  const { notes, dropped, droppedRisk } = ground(parsed, files);
+  if (droppedRisk && !notes.some((n) => n.kind === "risk")) return { ok: false, detail: "the reviewer named a risk but quoted no line that is in the code" };
+  return { ok: true, notes, dropped };
 }

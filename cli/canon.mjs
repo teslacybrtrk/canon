@@ -4,6 +4,7 @@
 //   canon read [--for <path>]                   1. read canon, the backlog and claims in flight (--for: facts governing a file)
 //   canon claim --fact <file.json> --why "..."  2. declare a new fact (or a revision: "replaces" a canon fact)
 //   canon claim --join <fact-id>   --why "..."     ...or race for a fact someone already proposed
+//               [--touches "src/index.ts,src/cart/**"]  optional: the files you will change (you're held to it)
 //   canon overlap                               before pushing: other attempts in flight changing the same files
 //   git push                                    3. push the attempt (plain Git, from inside the attempt)
 //   canon verdict [--wait]                      4. which facts held, which broke, accepted or not
@@ -76,6 +77,8 @@ async function read() {
 async function claim() {
   if (!args.why) fail('--why "<reason>" is required: it becomes part of the fact chain');
   const body = { agent: AGENT, why: args.why };
+  // --touches "src/index.ts,src/cart/**": the files this attempt will change; a change outside them waits for the owner.
+  if (args.touches) body.touches = String(args.touches).split(",").map((g) => g.trim()).filter(Boolean);
   if (args.join && args.fact) fail("use either --fact <file.json> (a new fact or a revision) or --join <fact-id>, not both");
   if (args.join) body.join = args.join;
   else if (args.fact) body.fact = JSON.parse(readFileSync(factFile(args.fact), "utf8"));
@@ -231,6 +234,7 @@ async function verdict() {
       : `  HEADS-UP your attempt breaks ${c.with.agent}'s fact "${c.factId}" (${why}).`);
   }
   if (v.headsUp?.length) console.log(`  Not a clash yet: one side is still being written. If yours can make room for theirs, change course now; if not, say why in your claim (once both are Ready, a person picks one).`);
+  if (v.outside?.length) console.log(`  OUTSIDE YOUR SCOPE: you changed ${v.outside.join(", ")}, which your claim didn't say it would touch. Undo it, or the owner decides.`);
   if (v.reviewer?.status === "done" && v.reviewer.notes.length) {
     console.log(`  REVIEWER advisory notes from ${v.reviewer.model.split("/").pop()}, a model that didn't write this (never a verdict):`);
     for (const n of v.reviewer.notes) console.log(`    ${n.kind.toUpperCase().padEnd(8)} ${n.file}:${n.line}  ${n.quote}\n             ${n.note}`);

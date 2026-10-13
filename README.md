@@ -29,8 +29,9 @@ candidate; if not, canon steps back.
   config, its own long-lived data) first, a version that breaks one is held back, and canon always equals what
   production runs: a held-back release reverts it.
 - **Throughput**: on autopilot with `"batch": true`, claims that queue behind a release leave together as one merge train: one candidate, checked once,
-  released once. A train that doesn't hold splits in halves (four or more riders) or goes one by one, so the gate
-  finds the culprit in a few checks. Trains are
+  released once. A train that doesn't hold splits in halves (four or more riders) or goes one by one, so a failure is
+  narrowed down in a few checks (as diagnosis: a break that needs two riders together shows up when the second lands on
+  the first). Trains are
   speculative: the next one is built and checked on the canon still being released, and lands the moment it ships.
 - **Why**: the fact chain. Every fact links to the attempt that made it true and to the attempts that failed it.
   Failed attempts stay clonable, so they remain the project's memory. The chain is in Git too, as notes on the canon
@@ -183,13 +184,26 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   canon moved, it was flagged again on its own.
 - **A race**: a concurrent step (8 bookings of one stall at once, exactly one may win) held on farmstand's production
   booking code, which an agent wrote in the run.
+- **Rollback rehearsal** (a second test project, `rehearse`, on autopilot): a stall-booking change (a new table and
+  inserts) was rehearsed before production: the previous version kept all 6 of its facts on the data the new code
+  wrote, so it shipped marked rollback-safe ([record](https://canon.rodeo/p/rehearse/canon/2/acceptance)). A change
+  that moved sold-out goods into their own table (a `DELETE FROM products`, not a schema change, so no pattern would
+  flag it) passed every fact, but the rehearsal showed the previous version listing 5 products, not 6, on the migrated
+  data: autopilot held it back, production never ran it
+  ([record](https://canon.rodeo/p/rehearse/canon/7/acceptance), with the candidate rebuild).
+- **Scope**: a claim that declared `src/index.ts` and also edited `README.md` waited for the owner ("outside the files
+  its claim said it would touch"); one that stayed in scope landed, its record saying so
+  ([record](https://canon.rodeo/p/rehearse/canon/9/acceptance), which also lists the alternatives it passed over).
 
 What broke in those tests, and is fixed: the first line-limit attempt was flagged by the reviewer (two adds of 50 and
 60 make a line of 110) and waited, but its re-apply drew a review without that risk and landed, so a risk named on an
 attempt now stands on its re-applies until an agent changes the code (deployed; in the live retest the reviewer named
 the risk again itself, so that rule didn't have to act). Two reviews were cut off by a deploy and sat at "reading"
 (a stuck review is now retried once, and the wait is re-checked when it would time out; the retry finished and named
-the SQL injection). Earlier: a freshly deployed release candidate answered one check with a 500 and held
+the SQL injection). The first held-back data migration left the release candidate's data in a shape production
+never had, and the next, correct, release was held back on it (it's in that release's alternatives above); a release
+that touched data and didn't ship now rebuilds the candidate from production's code, and the next correct release
+shipped. Earlier: a freshly deployed release candidate answered one check with a 500 and held
 back a correct release (it now settles for 20 s, and a fact must fail every time over ~45 s); a production URL that
 Cloudflare's edge answered with 530 rolled back a correct release (edge statuses never count against the code now);
 retrying every failing fact on a candidate ran into a platform RPC failure and left a release unrecorded (the check
@@ -256,17 +270,25 @@ Producing evidence, approving it and releasing code are separate steps, and each
 
 - **Every required check has a state**: passed, failed, unavailable, not applicable, not required, pending. Autopilot
   lands only on passes (and "nothing to check" that the judge established); a mutation run that couldn't build, a
-  review that errored or timed out, or a diff that couldn't be read is unavailable, and waits for the owner.
-- **Destructive data changes wait for a person.** Dropping or renaming a table or column, or a Durable Object class,
-  never lands on autopilot, and a release of one that breaks in production isn't rolled back automatically: an earlier
-  Worker version doesn't bring data back. Additive changes land as usual.
+  review that errored, timed out or came back in a form that isn't a review, or a diff that couldn't be read is
+  unavailable, and waits for the owner.
+- **Data: not found is not safe.** The judge says whether it read every changed file; if not, the data evidence is
+  unavailable. Dropping or renaming a table or column, or a Durable Object class, never lands on autopilot. A change
+  that writes stored data or adds schema lands, but is called rollback-safe only after its release **rehearses the
+  rollback**: the code production runs now is deployed onto the release candidate, over the data the new code wrote,
+  and the old facts must hold. Autopilot doesn't release what it can't take back.
+- **Scope**: a claim can declare the files it will change; anything outside it waits for the owner.
 - **An acceptance record per canon**: the exact commit, the canon it was judged on, each fact with its check version
   and evidence, who or what authorized it, any exception a person accepted over, the charter that allowed it, and how a
   failed release recovers. `GET /p/<project>/canon/<seq>/acceptance`, linked from the board, and in the Git note.
-- **The release consumes it**: the release Workflow deploys only the commit canon #seq authorized, and only while #seq
-  is still the latest canon; anything else is refused before it touches a Worker.
+- **A release fence, not a start-time check**: the release Workflow holds canon #seq's release as a lease, renewed
+  before every step that changes a Worker; each of those commands checks the deadline itself, a run that stalls is
+  fenced out and the judge settles without it, and a production change reported by a fenced-out run is undone.
 - **Races are facts too**: a probe step can send several copies at once and say how the answers must add up (one
-  booking wins, the rest get 409), which a sequential check can't tell apart from a check-then-await-then-insert.
+  booking wins, the rest get 409), which a sequential check can't tell apart from a check-then-await-then-insert. Every
+  response is held to the step's other assertions; an assertion a step can't apply is refused, never skipped.
+- **Adopt it in steps**: your CI as facts first, behaviour facts beside them, review routing, then autonomy
+  ([docs/USING.md](docs/USING.md#adopt-it-in-steps)).
 
 ## Run it
 
@@ -316,7 +338,7 @@ to wrangler, so give the agent key only to agents you run.
 
 Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
 (for example, Previews that pin Durable Object code per commit, version overrides that reach Durable Objects, and
-Workers Builds for forks). All twenty-four are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+Workers Builds for forks). All twenty-five are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
 ## Roadmap
 
@@ -340,6 +362,14 @@ Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
   Objects) on the production URL at 0% traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,
   with error rates as facts.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
+- **Prerequisites between attempts**: an attempt that must account for another ("build on agent-2's bookings") says so,
+  and the scheduler orders and re-applies them together instead of discovering the dependency as a clash.
+- **A fair benchmark**: Canon against a strong merge queue given the same protected checks, repair, agents and
+  compute, with each Canon mechanism switched off in turn, measured as safely accepted features per hour alongside
+  wrong accepts, needless rejects, people's time, recovery time and cost, on several workloads (a stateless Worker, a
+  stateful app, a larger repo, permission and migration changes). Today's comparisons are one real run each.
+- **Reviewer learning, held out**: record which reviewer notes proved right and which regressions it missed, and let a
+  proposed change to its guidance count only after it does better on held-out cases (versioned, never silently).
 
 ## Where the code lives
 

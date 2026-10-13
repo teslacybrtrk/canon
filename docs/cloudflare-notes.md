@@ -127,6 +127,13 @@ Found while building, October 2026.
     time ran clean. *We did:* admission control in the judge (six per project, the rest queue in their Workflow).
     *Would help:* a documented safe concurrency for `@cloudflare/ci`, or backpressure from the runner instead of a
     dropped session.
+25. **There is no way to reset a Worker's Durable Object data short of deleting the Worker, and an immediate redeploy
+    after that fails.** A release candidate keeps long-lived data on purpose; when a release that migrated data there
+    didn't ship, the candidate's data had a shape production never had, and the next release failed on it. The only
+    reset we found is `wrangler delete` (its Durable Objects go with it); a `wrangler deploy` right after fails with a
+    migrations error until the namespace is gone, then succeeds on retry. *We did:* rebuild the candidate on that path
+    (delete, then deploy production's code, retried). *Would help:* a way to reset or snapshot/restore a Durable Object
+    namespace (or fork one from production's) for staging copies.
 
 ## Things that worked especially well
 

@@ -72,42 +72,91 @@ export function gate(kind: string, e: Evidence): { ok: true; note?: string } | {
 }
 
 // ---- Data changes: a previous Worker version is not a database rollback --------------------------------------------
+//
+// Three questions, kept apart: did the judge read every changed file (complete)? Do the added lines destroy stored data
+// (destructive: only a person accepts that)? Do they touch stored data at all (additive schema or writes)? Not finding
+// anything is never the same as "safe": an incomplete inspection is unavailable evidence, and a change that touches
+// stored data is rollback-safe only once the rollback is rehearsed (the previous version run on data this one wrote).
+// The line patterns are a heuristic that routes and rehearses; they never decide that a change is good.
 
-// Schema changes that destroy or reshape stored data: rolling the Worker back doesn't bring it back. (Ordinary writes,
-// a DELETE included, are the app's behaviour, which facts judge.)
+const TABLE = String.raw`(?:[\w"\x60[\].]+|\$\{[^}]+\})`; // a table name, or an interpolated one
+// Schema changes that destroy or reshape stored data: rolling the Worker back doesn't bring it back.
 const DESTRUCTIVE = [
   /\bDROP\s+(?:TABLE|COLUMN|INDEX|VIEW|TRIGGER)\b/i,
-  /\bALTER\s+TABLE\s+[\w"`[\]]+\s+(?:DROP|RENAME)\b/i,
+  new RegExp(String.raw`\bALTER\s+TABLE\s+${TABLE}\s+(?:DROP|RENAME)\b`, "i"),
   /\bTRUNCATE\b/i,
   /"(?:deleted_classes|renamed_classes|transferred_classes)"\s*:/, // Durable Object migrations that drop or move data
 ];
-// Lines that only add: the old code ignores a new table or column, so rolling back stays safe (expand, then contract).
-const ADDITIVE = [/\bCREATE\s+(?:TABLE|INDEX|UNIQUE\s+INDEX)\b/i, /\bALTER\s+TABLE\s+[\w"`[\]]+\s+ADD\b/i, /"new_(?:sqlite_)?classes"\s*:/];
+// Schema that only adds: the old code ignores a new table or column (expand, then contract).
+const ADDITIVE = [/\bCREATE\s+(?:TABLE|INDEX|UNIQUE\s+INDEX|VIEW|TRIGGER)\b/i, new RegExp(String.raw`\bALTER\s+TABLE\s+${TABLE}\s+ADD\b`, "i"), /"new_(?:sqlite_)?classes"\s*:/];
+// Writes to stored data: what the old version will find if production rolls back.
+const WRITES = [
+  /\b(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|REPLACE\s+INTO|UPDATE\s+\S+\s+SET|DELETE\s+FROM)\b/i,
+  /\bstorage\.(?:put|delete|deleteAll|transaction|transactionSync)\s*\(/, // Durable Object storage
+  /\benv\.[A-Z][A-Z0-9_]*\.(?:put|delete)\s*\(/, // KV and R2 bindings
+];
+// Files whose added lines are read; anything else that changed is listed as not inspected.
+export const INSPECTED = /\.(?:[cm]?[jt]sx?|sql|jsonc?|toml)$/;
+const IGNORED = /(?:^|\/)(?:package-lock\.json|node_modules\/|dist\/)/;
 
 export interface DataChanges {
+  complete: boolean; // every changed file that could hold data code was read
+  why?: string; // what couldn't be read, when not complete
+  files?: number; // how many changed files were read
   destructive: string[]; // "src/index.ts: DROP TABLE carts"
   additive: string[];
+  writes: string[];
 }
 
-/** The stored-data changes in the lines a commit adds, by file. A line heuristic: it routes to a person, never decides. */
-export function dataChanges(added: Array<{ path: string; lines: string[] }>): DataChanges {
-  const out: DataChanges = { destructive: [], additive: [] };
+/** Which changed files to read for data changes (lockfiles and build output aside). */
+export function dataFiles(changed: string[]): string[] {
+  return changed.filter((p) => INSPECTED.test(p) && !IGNORED.test(p));
+}
+
+/** The stored-data changes in the lines a commit adds, by file, for the files read. Completeness is the caller's. */
+export function dataChanges(added: Array<{ path: string; lines: string[] }>, complete = true, why?: string): DataChanges {
+  const out: DataChanges = { complete, ...(why ? { why } : {}), files: added.length, destructive: [], additive: [], writes: [] };
   for (const { path, lines } of added) {
-    if (!/\.(?:ts|js|mjs|sql|jsonc?|toml)$/.test(path)) continue;
     for (const line of lines) {
       const text = `${path}: ${line.trim().slice(0, 100)}`;
       if (DESTRUCTIVE.some((re) => re.test(line))) out.destructive.push(text);
       else if (ADDITIVE.some((re) => re.test(line))) out.additive.push(text);
+      else if (WRITES.some((re) => re.test(line))) out.writes.push(text);
     }
   }
   return out;
 }
 
-/** How a release of this change recovers, given its data changes. */
-export function recoveryFor(d: DataChanges | undefined): { rollbackSafe: boolean; how: string } {
-  if (d?.destructive.length) return { rollbackSafe: false, how: `destructive data change (${d.destructive[0]}): an earlier Worker version restores the code, not the data, so a failed release is not rolled back automatically` };
-  if (d?.additive.length) return { rollbackSafe: true, how: `additive data change only (${d.additive[0]}): the earlier version ignores what it added, so rolling back is safe` };
-  return { rollbackSafe: true, how: "no stored-data change: rolling back the Worker version restores the behaviour" };
+export interface Recovery {
+  rollbackSafe: boolean; // known safe: a failed release may be rolled back automatically
+  rehearse: boolean; // the release rehearses the rollback before production (the previous version on this one's data)
+  how: string;
+  rehearsal?: Evidence & { at: number }; // the rehearsal's result, once it ran
+  // When a release that touched stored data didn't ship: the release candidate rebuilt from production's code, so its
+  // data never keeps a shape production didn't have.
+  candidateReset?: { ok: boolean; detail: string; at: number };
+}
+
+/** How a release of this change recovers, given what the judge found (undefined: it couldn't look at all). */
+export function recoveryFor(d: DataChanges | undefined): Recovery {
+  if (!d || !d.complete) return { rollbackSafe: false, rehearse: true, how: `the judge couldn't read every changed file (${d?.why ?? "it couldn't inspect the change"}), so rollback isn't known to be safe until it is rehearsed` };
+  if (d.destructive.length) return { rollbackSafe: false, rehearse: false, how: `destructive data change (${d.destructive[0]}): an earlier Worker version restores the code, not the data, so a failed release is not rolled back automatically` };
+  const touch = d.additive[0] ?? d.writes[0];
+  if (touch) return { rollbackSafe: false, rehearse: true, how: `it touches stored data (${touch}): rollback is safe only once rehearsed, the previous version run on data this one wrote` };
+  return { rollbackSafe: true, rehearse: false, how: `no added line changes schema or writes stored data (${d.files ?? 0} changed file${d.files === 1 ? "" : "s"} read): rolling back the Worker restores the behaviour` };
+}
+
+/** The data evidence autopilot needs: destructive waits for a person; not knowing waits too; the rest lands. */
+export function dataEvidence(d: DataChanges | undefined): Evidence {
+  if (!d) return { state: "unavailable", detail: "the judge couldn't inspect which files the commit changed" };
+  if (!d.complete) return { state: "unavailable", detail: `the judge couldn't read every changed file (${d.why})` };
+  if (d.destructive.length) return { state: "failed", detail: `it changes stored data destructively (${d.destructive[0]}), and rolling the Worker back wouldn't bring the data back` };
+  return { state: "passed", detail: recoveryFor(d).how };
+}
+
+/** A rollback rehearsal's outcome, as evidence for the release. */
+export function rehearsalEvidence(ran: "passed" | "failed" | "unavailable", detail: string, at: number): Evidence & { at: number } {
+  return { state: ran, detail, at };
 }
 
 /** A short, stable name for a policy (the charter as stored), so an acceptance record says which one allowed it. */

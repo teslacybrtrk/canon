@@ -1825,7 +1825,7 @@
     demo.trainRiders = riders;
     demo.trainHows = hows;
     say(half
-      ? ["train", "Half a train", `${riders.length} riders of the train that was held back try again together. If they hold, the culprit is in the other half.`]
+      ? ["train", "Half a train", `${riders.length} riders of the train that was held back try again together. If they hold, the failure is in the other half (or in how the halves combine, which shows when the next lands on top).`]
       : speculative
       ? ["train", "Speculative merge train", `${riders.length} attempts don’t wait for canon #${baseSeq} to finish releasing: the judge builds them on it now, as one candidate.`]
       : ["train", "Merge train", `${riders.length} attempts were waiting on the last release. The judge applies each one’s own change onto canon as one candidate.`]);

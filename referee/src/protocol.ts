@@ -1,5 +1,5 @@
 import type { Review } from "./review";
-import type { DataChanges, Evidence } from "./evidence";
+import type { DataChanges, Evidence, Recovery } from "./evidence";
 // The Canon protocol: four moves, one referee per project.
 //
 //   1. read     GET  /p/:project/canon               -> CanonState
@@ -160,6 +160,7 @@ export interface Claim {
   refresh: string | null;
   declineReason: string | null; // why a person declined it
   autoWait: string | null; // under autopilot: why this Ready claim isn't landing on its own
+  touches?: string[]; // the files it said it would change (DeclareRequest.touches)
 }
 
 // Two Ready claims that can't both land. `factId` failed on the other attempt's preview at a later step than on the
@@ -228,6 +229,9 @@ export type DeclareRequest = {
   agent: string;
   why: string;
   replaces?: string; // an earlier claim on the same fact that this one supersedes (canon refresh)
+  // The files this attempt will change, as globs ("src/index.ts", "src/cart/**"). Declared, the claim is held to it:
+  // a change outside it is an unclaimed edit, and autopilot leaves it to the owner. Passing a fact doesn't excuse it.
+  touches?: string[];
 } & (
   | { fact: FactDef } // propose a new fact (with `replaces`: a revision of a canon fact)
   | { join: string } // race for a fact someone else already proposed
@@ -281,6 +285,8 @@ export interface Verdict {
   // Schema changes in the lines it adds: destructive ones (DROP, RENAME, deleted Durable Object classes) wait for the
   // owner, since rolling a Worker back doesn't roll its data back. See evidence.ts.
   data?: DataChanges;
+  // Files it changed outside the scope its claim declared (`touches`); absent when it declared none.
+  outside?: string[];
   // Accepted, then held back at release (or rolled back): the canon reverted, and this says what broke where.
   heldBack?: string;
   // Added when the verdict is read (GET /attempts/:id/verdict), not stored with it:
@@ -308,14 +314,17 @@ export interface Acceptance {
     sentence: string;
     check: string; // a version of the fact's check definition (policyVersion of its JSON)
     madeTrueBy: { attemptId: string; sha: string; seed?: string; previewUrl?: string };
-    evidence: { mutation: Evidence; review: Evidence; data: Evidence };
+    evidence: { mutation: Evidence; review: Evidence; data: Evidence; scope: Evidence };
   }>;
   verdict: { kept: number; skipped: number; seed?: string; previewUrl: string; judgedAt: number };
   environment: string; // where the checks ran
   authorizedBy: string; // "the owner", or the autopilot/charter reasons
   exceptions: string[]; // required evidence that failed or was unavailable, which a person accepted anyway
+  // The other attempts at the same facts, and what became of them (declined with a reason, broke a fact, superseded):
+  // the alternatives this decision passed over.
+  alternatives?: Array<{ factId: string; attemptId: string; agent: string; outcome: string }>;
   policy: { autoAccept: string; charter: Charter; version: string };
-  recovery: { rollbackSafe: boolean; how: string };
+  recovery: Recovery; // how a failed release recovers, and the rollback rehearsal's result once the release ran it
   at: number;
 }
 

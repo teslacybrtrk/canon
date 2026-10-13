@@ -74,6 +74,10 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       return;
     }
 
+    // A newer push of the same attempt arrived while this one built: its verdict would be replaced at once, so stop
+    // here and give the slot back instead of running every check for nothing.
+    if (await step.do("still current", () => referee.superseded(repo, sha))) return;
+
     // Command facts (lint, types, tests, budgets) run on this commit's checkout in ONE container,
     // from the installed snapshot. The commands come from canon, never from the attempt.
     const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
@@ -117,24 +121,61 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const referee = refereeForRepo(this.env, repo);
     // A later accept already moved canon on: its own deploy wins, and this older one must not land after it.
     if ((await step.do("still the latest canon", () => referee.canonSeq())) > seq) return;
-    // The release deploys exactly the commit canon #seq's acceptance authorized, and only while #seq is still canon.
-    const refused = await step.do("authorized", () => referee.releaseRefusal(seq, event.payload.sha));
-    if (refused) {
-      if (!refused.includes("no longer the latest")) await step.do("refused", () => referee.releaseRefused(seq, refused));
+    // The release deploys exactly the commit canon #seq's acceptance authorized, and only while #seq is still canon and
+    // this run holds its lease (the fence, renewed before every step that changes a Worker; see Referee.fence).
+    const holder = event.instanceId;
+    const sha = event.payload.sha;
+    type Fence = { go: true; until: number } | { go: false; why: string; settle: boolean };
+    const fence = async (label: string): Promise<Fence> => JSON.parse(await step.do(label, async () => JSON.stringify(await referee.fence(seq, sha, holder))));
+    const first = await fence("authorized");
+    if (!first.go) {
+      if (first.settle) await step.do("refused", () => referee.releaseRefused(seq, first.why));
       return;
     }
+    // Every container command that changes a Worker first checks the lease's deadline (less a margin for the command
+    // itself), so a step that starts late, after the judge fenced this run out, refuses itself.
+    let deadline = first.until;
+    const fenced = async (label: string) => {
+      const f = await fence(`fence: ${label}`);
+      if (!f.go) throw new Error(`fenced out before ${label}: ${f.why}`);
+      deadline = f.until;
+    };
+    const inTime = () => `node -e 'process.exit(Date.now() < ${deadline - 3 * 60_000} ? 0 : 3)' && `;
     let ok = true;
     let versionId: string | null = null;
+    let candidateRan = false;
+    const project = repo.slice(0, repo.lastIndexOf("-"));
+    const creds = { accountId: this.env.CLOUDFLARE_ACCOUNT_ID };
     try {
       const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
-      // Each project deploys under its own Worker name, so projects never share a production app.
-      const project = repo.slice(0, repo.lastIndexOf("-"));
-      const creds = { accountId: this.env.CLOUDFLARE_ACCOUNT_ID };
+      // Each project deploys under its own Worker name (project above), so projects never share a production app.
       // Step one, the release candidate: the whole commit on its own Worker with production's config, so every fact
       // runs on all of its code (Durable Objects included) before production is touched.
-      await deps.runner({ name: "deploy release candidate", command: `npx wrangler deploy --name ${project}-candidate`, cloudflareCredentials: creds });
+      await fenced("release candidate");
+      candidateRan = true;
+      await deps.runner({ name: "deploy release candidate", command: `${inTime()}npx wrangler deploy --name ${project}-candidate`, cloudflareCredentials: creds });
       const candidateOk = await step.do("check release candidate", { timeout: "10 minutes" }, async () => await referee.candidateCheck(seq));
       if (!candidateOk) throw new Error("held back: the release candidate broke a fact");
+      // The rollback rehearsal, for a change that touches stored data (or couldn't be fully inspected): the code
+      // production runs now goes onto the release candidate, over the data this release's code just wrote, and the facts
+      // that were canon before must still hold. That's what an automatic rollback would do; now it's known in advance.
+      await fenced("rollback rehearsal");
+      const rehearsal = await step.do("rehearsal job", async () => {
+        const job = await referee.rehearsalJob(seq, holder);
+        return job ? (Object.fromEntries(Object.entries(job)) as Record<string, string>) : null;
+      });
+      if (rehearsal) {
+        let deployedPrev = true;
+        let why = "";
+        try {
+          await ci.runner({ name: "rehearse rollback", command: `${inTime()}${REHEARSE_SCRIPT(project)}`, env: rehearsal, cloudflareCredentials: creds, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
+        } catch (err) {
+          deployedPrev = false;
+          why = isCiRunnerFailure(err) ? err.message : String(err);
+        }
+        const goOn = await step.do("check rollback rehearsal", { timeout: "10 minutes" }, async () => await referee.rehearsalCheck(seq, holder, deployedPrev, why));
+        if (!goOn) throw new Error("held back: its rollback rehearsal didn't pass");
+      }
       // Step two: upload the exact commit as a new Worker version that serves nobody yet; the judge's gate stages it at
       // 0%, smoke-tests every fact on the production URL against it, and only then releases it. Not for a Worker with
       // Durable Objects: an object runs one version at a time, so at 0% the staged Worker talks to the old objects and
@@ -142,7 +183,8 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       const objects = await deps.runner({ name: "durable objects?", command: `grep -qs '"durable_objects"' wrangler.jsonc wrangler.json && echo CANON_HAS_DO || true` });
       const hasObjects = typeof objects.logs.stdout === "string" && objects.logs.stdout.includes("CANON_HAS_DO");
       let atomic = hasObjects;
-      const run = hasObjects ? null : await deps.runner({ name: "upload version", command: `npx wrangler versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
+      await fenced("production");
+      const run = hasObjects ? null : await deps.runner({ name: "upload version", command: `${inTime()}npx wrangler versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
         // Only a Durable Object class change may skip the gate: Cloudflare can't upload it as a version (it's atomic).
         // Any other upload failure stops the release.
         const why = isCiRunnerFailure(err) ? err.message : String(err);
@@ -152,8 +194,9 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       });
       if (atomic || !run) {
         // The release candidate already ran this code in full; deploy it, and the check right after the release (and
-        // its rollback) is the net.
-        const deployed = await deps.runner({ name: "deploy", command: `npx wrangler deploy --name ${project}`, cloudflareCredentials: creds });
+        // its rollback, when that's known to be safe) is the net.
+        await fenced("production deploy");
+        const deployed = await deps.runner({ name: "deploy", command: `${inTime()}npx wrangler deploy --name ${project}`, cloudflareCredentials: creds });
         const out = typeof deployed.logs.stdout === "string" ? deployed.logs.stdout : "";
         versionId = out.match(/Version ID:\s*([0-9a-f-]{36})/i)?.[1] ?? null;
       } else {
@@ -161,13 +204,39 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
         versionId = out.match(/Version ID:\s*([0-9a-f-]{36})/i)?.[1] ?? null;
         if (!versionId) throw new Error("no version id in the upload output");
         const id = versionId;
-        const released = await step.do("release gate", { timeout: "10 minutes" }, async () => (await referee.gate(seq, id)).released);
+        await fenced("release gate");
+        const released = await step.do("release gate", { timeout: "10 minutes" }, async () => (await referee.gate(seq, id, holder)).released);
         ok = released;
       }
     } catch {
       ok = false;
     }
-    await step.do("record promotion", () => referee.promoted(seq, ok, versionId));
+    // Not shipped after this release's code ran on the candidate, and it touched stored data: rebuild the candidate from
+    // production's code while this run still holds the release, so no later release is judged on data production
+    // never had. Best effort, and recorded either way.
+    if (!ok && candidateRan) {
+      try {
+        await fenced("candidate rebuild");
+        const job = await step.do("candidate rebuild job", async () => {
+          const j = await referee.candidateResetJob(seq, holder);
+          return j ? (Object.fromEntries(Object.entries(j)) as Record<string, string>) : null;
+        });
+        if (job) {
+          let rebuilt = true;
+          let why = "rebuilt from production's code (the candidate Worker and its Durable Objects deleted, then redeployed)";
+          try {
+            await ci.runner({ name: "rebuild release candidate", command: `${inTime()}${RESET_SCRIPT(project)}`, env: job, cloudflareCredentials: creds, config: { retries: { limit: 0, delay: 1_000 }, timeout: 8 * 60_000 } });
+          } catch (err) {
+            rebuilt = false;
+            why = `couldn't rebuild: ${isCiRunnerFailure(err) ? err.message : String(err)}`;
+          }
+          await step.do("candidate rebuilt", () => referee.candidateReset(seq, rebuilt, why));
+        }
+      } catch {
+        // Fenced out: the judge has settled this release; another run owns the candidate now.
+      }
+    }
+    await step.do("record promotion", () => referee.promoted(seq, ok, versionId, holder));
     // The fact chain goes into Git as notes on the canon commits. Best effort: the deploy above is what counts.
     try {
       const env = await step.do("notes job", async () => {
@@ -180,6 +249,25 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     }
   }
 }
+
+// Runs in the CI container: the rollback rehearsal. Checks out the code production runs now (PREV_URL at PREV_SHA, a
+// read-only token) and deploys it onto the release candidate, which this release's code has just run on.
+const REHEARSE_SCRIPT = (project: string) => [
+  `set -e`,
+  `rm -rf /tmp/canon-prev && git clone -q "$PREV_URL" /tmp/canon-prev && cd /tmp/canon-prev && git checkout -q "$PREV_SHA"`,
+  `npm ci --no-audit --no-fund --ignore-scripts >/dev/null`,
+  `npx wrangler deploy --name ${project}-candidate`,
+].join(" && ");
+
+// Runs in the CI container: rebuilds the release candidate from production's code. Deleting the Worker deletes its
+// Durable Objects; the namespace takes a moment to go, so the fresh deploy is retried.
+const RESET_SCRIPT = (project: string) => [
+  `set -e`,
+  `npx wrangler delete --name ${project}-candidate --force >/dev/null 2>&1 || true`,
+  `rm -rf /tmp/canon-prev && git clone -q "$PREV_URL" /tmp/canon-prev && cd /tmp/canon-prev && git checkout -q "$PREV_SHA"`,
+  `npm ci --no-audit --no-fund --ignore-scripts >/dev/null`,
+  `for i in 1 2 3 4 5; do npx wrangler deploy --name ${project}-candidate && exit 0; sleep 15; done; exit 1`,
+].join(" && ");
 
 // Runs in the CI container: writes refs/notes/canon (one note per canon commit) and pushes it to the canon attempt.
 // The previous canon's notes are fetched first, so a note the judge could not regenerate is still carried forward.

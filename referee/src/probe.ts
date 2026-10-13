@@ -90,26 +90,34 @@ async function runStep(
     return fail(`${method} ${url.pathname} returned ${res.status}, expected ${statuses.join(" or ")}`, res.status >= 500);
   }
   if (res.status >= 500 && !statuses) return fail(`${method} ${url.pathname} returned ${res.status}`, true);
-  if (expect.bodyIncludes && !text.includes(expect.bodyIncludes)) {
-    return fail(`${method} ${url.pathname} body does not include "${expect.bodyIncludes}"`);
+  const body = checkBody(step, text, vars, `${method} ${url.pathname}`);
+  if (body) return fail(body);
+  return null;
+}
+
+/**
+ * A response body against the step's bodyIncludes and json expectations, then `save`. Every kind of step uses it, so
+ * no declared assertion is ever skipped. Returns what failed, or null.
+ */
+function checkBody(step: ProbeStep, text: string, vars: Record<string, unknown>, what: string): string | null {
+  const expect = step.expect ?? {};
+  if (expect.bodyIncludes && !text.includes(fill(expect.bodyIncludes, vars) as string)) return `${what} body does not include "${fill(expect.bodyIncludes, vars)}"`;
+  if (!expect.json && !step.save) return null;
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return `${what} did not return JSON`;
   }
-  if (expect.json || step.save) {
-    let json: unknown;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      return fail(`${method} ${url.pathname} did not return JSON`);
+  for (const [path, want] of Object.entries(expect.json ?? {})) {
+    const got = pick(json, path);
+    if (isExists(want)) {
+      if ((got !== undefined) !== want.$exists) return `${path} ${want.$exists ? "missing" : "present"}`;
+    } else if (!same(got, fill(want, vars))) {
+      return `${path} is ${JSON.stringify(got)}, expected ${JSON.stringify(fill(want, vars))}`;
     }
-    for (const [path, want] of Object.entries(expect.json ?? {})) {
-      const got = pick(json, path);
-      if (isExists(want)) {
-        if ((got !== undefined) !== want.$exists) return fail(`${path} ${want.$exists ? "missing" : "present"}`);
-      } else if (!same(got, fill(want, vars))) {
-        return fail(`${path} is ${JSON.stringify(got)}, expected ${JSON.stringify(fill(want, vars))}`);
-      }
-    }
-    for (const [name, path] of Object.entries(step.save ?? {})) vars[name] = pick(json, path);
   }
+  for (const [name, path] of Object.entries(step.save ?? {})) vars[name] = pick(json, path);
   return null;
 }
 
@@ -139,11 +147,13 @@ async function runRepeated(
     for (let i = 0; i < (step.repeat ?? 1); i++) {
       const t0 = Date.now();
       const res = await fetch(url, init());
-      await res.arrayBuffer();
+      const text = await res.text();
       times.push(Date.now() - t0);
       if (statuses && !statuses.includes(res.status)) {
         return fail(`${method} ${url.pathname} returned ${res.status}, expected ${statuses.join(" or ")}`, res.status >= 500);
       }
+      const body = checkBody(step, text, vars, `${method} ${url.pathname} (request ${i + 1} of ${step.repeat})`);
+      if (body) return fail(body);
     }
     times.sort((a, b) => a - b);
     const p95 = times[Math.min(times.length - 1, Math.ceil(times.length * 0.95) - 1)];
@@ -169,9 +179,9 @@ async function runConcurrent(
   const method = step.method ?? "GET";
   const n = step.concurrent ?? 1;
   const statuses = step.expect?.status === undefined ? null : [step.expect.status].flat();
-  let answers: number[];
+  let replies: Array<{ status: number; text: string; i: number }>;
   try {
-    answers = await Promise.all(
+    replies = await Promise.all(
       Array.from({ length: n }, async (_, i) => {
         const each = { ...vars, i };
         const res = await fetch(new URL(fill(step.path, each) as string, origin), {
@@ -180,13 +190,13 @@ async function runConcurrent(
           body: step.body === undefined ? undefined : JSON.stringify(fill(step.body, each)),
           signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
         });
-        await res.arrayBuffer();
-        return res.status;
+        return { status: res.status, text: await res.text(), i };
       }),
     );
   } catch (err) {
     return fail(`${n} concurrent ${method} ${step.path} failed: ${(err as Error).message}`, true);
   }
+  const answers = replies.map((r) => r.status);
   const tally = answers.reduce<Record<string, number>>((t, s) => ((t[s] = (t[s] ?? 0) + 1), t), {});
   const got = Object.entries(tally).map(([s, c]) => `${c}× ${s}`).join(", ");
   if (answers.some((s) => s >= 500) && !statuses?.some((s) => s >= 500)) return fail(`${n} concurrent ${method} ${step.path} got ${got}`, true);
@@ -195,6 +205,11 @@ async function runConcurrent(
   const want = step.expect?.statusCounts;
   if (want && Object.entries({ ...tally, ...want }).some(([s]) => (tally[s] ?? 0) !== (want[s] ?? 0))) {
     return fail(`${n} concurrent ${method} ${step.path} got ${got}, expected ${Object.entries(want).map(([s, c]) => `${c}× ${s}`).join(", ")}`);
+  }
+  // Every copy's body meets the step's json and bodyIncludes (with its own {{i}}); `save` is refused for races.
+  for (const r of replies) {
+    const body = checkBody(step, r.text, { ...vars, i: r.i }, `concurrent copy ${r.i} (${r.status})`);
+    if (body) return fail(body);
   }
   return null;
 }

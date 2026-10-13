@@ -7,6 +7,26 @@ at its repo root. That's what the CI pipeline runs on every push: `npm ci --igno
 You need: Workers Paid with Artifacts (open beta), Node 22.18+, `npx wrangler login`, and a coding agent that
 can run shell commands (Claude Code, Codex, or anything with a terminal).
 
+## Adopt it in steps
+
+You don't have to replace how your team works to get Canon's main benefit. Each step stands on its own:
+
+1. **Your CI as facts.** `canon init`, then make the checks you already run facts: type-check, lint, your test
+   suite, a bundle budget (command facts run your tools on every commit, in a clean container). Nothing changes for
+   people yet; agents now get a verdict on every push instead of a red CI run after a merge.
+2. **Behaviour facts beside them.** Add the few behaviours that must never break silently (money, permissions, data)
+   as probe facts on a live preview of each commit. Keep reviewing code as you do today; the facts tell you which
+   pushes not to bother reading.
+3. **Review routing.** Add a charter with `review` paths (auth, migrations, deploy config) that always wait for a
+   person, and turn on the advisory reviewer with `reviewRisk` so a change it flags waits too.
+4. **Let backlog facts land.** `"autoAccept": "backlog"`: the facts people write land on their own once an agent
+   makes them true without breaking any other, with the release candidate, rollback rehearsal and acceptance record
+   behind every one.
+5. **Charter autonomy.** `"autoAccept": "charter"`, with `mutation` minimums, locked rules and priorities: agents
+   propose and confirm facts for each other, and people change the charter, not the code.
+
+Stop at any step. Every decision, automatic or not, leaves an acceptance record and a Git note either way.
+
 ## 1. Deploy your own Canon
 
 From a clone of this repo:

@@ -136,6 +136,9 @@ Attempts that still carry the old fact are behind and refresh. Without a revisio
   differ), and `"expect": {"statusCounts": {"201": 1, "409": 5}}` says how the answers must add up: exactly one booking
   wins. A sequential "book twice, the second gets 409" passes a check-then-insert with an await in between; the race
   doesn't (`scripts/test-probe.ts` shows both). The backlog's double-booking fact (`agents/canon.autopilot.json`) carries one.
+  Every response of a concurrent or repeated step is held to the step's `json` and `bodyIncludes` too; `save` (which
+  needs one response) and `p95Ms` on a step that isn't repeated are refused when the fact is declared, so no assertion
+  a fact declares is ever silently skipped.
 - **Scope:** `"scope": ["src/db/**", "migrations/**"]` judges a fact only on attempts that change a matching file. The judge diffs
   the attempt's Git tree against the commit it forked from (in Artifacts), skipping identical subtrees. `canon read --for <path>`
   lists the facts that govern a file.
@@ -255,8 +258,11 @@ once, against every canon fact and every rider's fact. If it all holds, every ri
 entry (`facts` in `deploys`) and one release through the gate. A train that doesn't hold (on its combined preview, or
 held back at release) doesn't say which rider broke it: four or more riders split in two halves, each its own train at
 the next departures (`half` in `trains`), and a half that fails splits again; fewer land one at a time. A train of eight
-finds its culprit in about three checks instead of eight. A revert undoes a train as
-a unit. Rule changes never ride a train.
+narrows a failure down in about three checks instead of eight. Splitting is diagnosis, not a verdict on one rider: each
+half lands on top of what landed before it, so a failure that only appears when two riders combine shows up when the
+second is checked on top of the first, and the attempt held back is told what broke on the combined code, not that it
+alone is to blame (the "held back twice" valve counts only releases where a fact went out alone). A revert undoes a
+train as a unit. Rule changes never ride a train.
 
 **Admission.** A project verifies at most six pushes at a time; the rest wait in their own Workflow and start as slots
 free (a slot frees when the judge gets the result, or after 15 minutes). Turns are fair and value-aware: a free slot goes to the
@@ -267,7 +273,9 @@ limit made the CI runner fail, ten let platform retries back the queue up, and s
 under four minutes (median 115 s); 4 and 8 were both slower, and 60 pushes at six took under 11 minutes for the last.
 A latency budget that fails under load is compared with canon's own preview at the same moment: if canon misses it
 too, the verdict is a platform error (retried), not a rejection. Waiting never turns into permission: a push not
-admitted in about three and a half hours isn't verified at all; it gets a platform error, which the judge retries.
+admitted in about three and a half hours isn't verified at all; it gets a platform error, which the judge retries. A
+verification that a newer push of the same attempt has made pointless stops as soon as its preview is built, before
+any check runs, and gives its slot back.
 
 **Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release
 runs board for 3 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is
@@ -292,6 +300,11 @@ direction only: a change it flags with a `risk` note waits for the owner instead
 never land or reject anything itself). A model's reviews vary from run to run, so a risk named on an attempt stands on
 every re-apply of it until an agent changes the code: the judge re-applying the same change can't clear it by drawing
 a kinder review. A review that never finishes (a deploy can cut one off) is retried once; after that it is unavailable.
+Only a complete answer in the notes format counts as a review: an empty list of notes is a finding ("nothing to
+flag"), but an answer that was cut off, isn't the notes format, or names a risk it can't quote from the code is an
+error (unavailable), never a clean review. Not knowing which files changed is an error too (never "no source files
+changed"), and a change touching more than six source files is too big for one review (unavailable: the owner decides).
+A risk is never dropped to make room for other notes.
 
 **Required evidence is required.** Each piece of evidence the charter asks for has an explicit state: `passed`,
 `failed`, `unavailable`, `not-applicable`, `not-required` or `pending` (`referee/src/evidence.ts`). The gates are
@@ -301,20 +314,49 @@ a failure assumed away). A check that didn't run is `unavailable`, not a pass: d
 built, a mutation run or review that timed out or errored, a review the charter requires with no model to ask, a
 command fact (deliberate breaks are judged by probe facts only), or a commit whose changed files couldn't be read
 while the charter has `review` paths. Autopilot then waits and says why; only the owner can accept over it, and the
-accept names the exception. Data is always required of autopilot: a change whose added lines drop or rename a table
-or column, or delete or rename a Durable Object class, waits for the owner, because rolling a Worker back doesn't bring
-its data back. Additive schema changes (`CREATE TABLE`, `ADD COLUMN`, a new class) land as usual: the earlier version
-ignores them, so rollback stays safe (expand first, contract by a person).
+accept names the exception. Data is always required of autopilot, and the judge keeps three questions apart.
+Did it read every changed file that could hold data code (code in any JS/TS flavour, SQL, config; up to 60 files, and
+a failed read is told apart from a deleted file)? If not, the data evidence is unavailable and the owner decides. Do
+the added lines destroy stored data (drop or rename a table or column, even on an interpolated name; delete or rename a
+Durable Object class)? Then it waits for the owner, because rolling a Worker back doesn't bring data back. Do they
+touch stored data at all (additive schema or writes)? Then it lands, but it isn't called rollback-safe until the
+release has rehearsed the rollback (below). Not finding anything is never the same as "safe"; the line patterns are a
+heuristic that routes and rehearses, never one that approves.
+
+**Scope.** A claim may declare the files it will change (`touches`, globs; `canon claim --touches`). Declared, the
+verdict lists anything changed outside it (`outside`), the agent sees OUTSIDE YOUR SCOPE, and autopilot leaves it to
+the owner: passing a fact doesn't excuse an unclaimed edit. Undeclared, scope is not required.
 
 **The acceptance record.** When canon moves, the judge writes what exactly was authorized, in the same write as the
 canon pointer: the commit, the canon its verdict was judged on, each fact it lands with a version of its check, the
 commit and seed that made it true, its evidence (mutation, review, data, each with its state and why), who or what
 authorized it (the owner, or the autopilot reasons), any exception a person accepted over, the policy that allowed
-it (the charter as stored, and a version of it), and how a failed release recovers. `GET
+it (the charter as stored, and a version of it), the other attempts at the same facts and what became of them (the
+alternatives it passed over, with a person's reason when they declined one), and how a failed release recovers. `GET
 /p/:project/canon/:seq/acceptance` returns it, the board links it, and the Git note on that canon commit carries it.
-The release Workflow consumes it: before touching anything it asks whether this exact commit is what canon #seq
-authorized and whether #seq is still the latest canon; a stale or unauthorized candidate is refused (nothing deploys,
-and canon goes back).
+
+**The release fence.** The release Workflow consumes the record, and holds the release as a lease. Its first step asks
+whether this exact commit is what canon #seq authorized and whether #seq is still the latest canon; a stale or
+unauthorized candidate is refused (nothing deploys, and canon goes back). The lease lasts 15 minutes and is renewed
+before every step that changes a Worker (the release candidate, the rollback rehearsal, the version upload, the gate,
+production), and each of those container commands checks the lease's deadline itself before it runs, so a step that
+starts late refuses itself. A run that stalls past its lease is fenced out: the judge settles the release without it
+(asking production what it actually runs) and refuses its every later step, the 0% gate checks the lease before each
+deployment change, and if a fenced-out run still reports a production change, production is put back on the version
+canon says it runs. Authorization is checked at every production-changing step, not only at the start.
+
+**Rollback rehearsal.** For a change that touches stored data, or whose files couldn't all be read, the release
+rehearses its own rollback before production: after the release candidate passes (this release's code, running on
+the candidate's long-lived data), the code production runs now is deployed onto the candidate, over the data the new
+code just wrote, and the facts that were canon before must still hold (the new fact must fail there first: proof the
+old code is the one answering). Passed: rollback is known safe, and the record says so. Failed or unavailable (the old
+code couldn't be deployed, e.g. a Durable Object migration that can't be undone): autopilot holds the release back,
+because it doesn't release what it can't take back; a person's accept still goes out, with rollback marked unsafe. And
+when a release that touched stored data doesn't ship (held back, rehearsal failed, any failure after its code ran on the
+candidate), the run rebuilds the release candidate from production's code before it lets go of the release: the
+candidate Worker is deleted with its Durable Objects and production's code deployed fresh, so no later release is
+judged on data in a shape production never had (found live: one held-back migration otherwise held back the next,
+correct, release too).
 
 In the release gate, a fact that fails at 0% counts against the new version only if the old version answers
 differently (both run with the same inputs).
@@ -326,11 +368,11 @@ accepted claim's verdict says what broke where (`heldBack`); its agent claims th
 attempt held back at release never lands as it is. Claims that forked from the reverted canon carry code production
 never ran, so they are behind: the judge re-applies their own change on the restored canon. While a release is in
 progress, accepts wait (one release at a time), and a fact held back twice when it went out alone doesn't land automatically
-again: the owner decides (a held-back train counts against none of its riders; it splits to find the culprit, and a
+again: the owner decides (a held-back train counts against none of its riders; it splits to narrow the failure down, and a
 release that failed without a fact breaking counts separately, four times before the owner decides). A release that
-breaks a fact in production is rolled back only when rollback is known to be safe: if its acceptance record says it
-changed stored data destructively (which only a person can accept), it stays up, marked broken, and the owner decides
-between a fix forward and a rollback with a data repair. The judge checks this invariant on every alarm; `POST /p/:project/reconcile` (owner key) applies it now.
+breaks a fact in production is rolled back only when rollback is known to be safe (no stored data touched, or a
+rehearsal that passed): otherwise, which only a person's accept can lead to, it stays up, marked broken, and the owner
+decides between a fix forward and a rollback with a data repair. The judge checks this invariant on every alarm; `POST /p/:project/reconcile` (owner key) applies it now.
 
 ## MCP
 

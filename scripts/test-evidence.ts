@@ -1,6 +1,6 @@
 // Required evidence as explicit states: a check that didn't run is never a pass, and "nothing to check" is said out loud.
 import assert from "node:assert/strict";
-import { dataChanges, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence } from "../referee/src/evidence.ts";
+import { dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence } from "../referee/src/evidence.ts";
 import type { Mutation } from "../referee/src/protocol.ts";
 import type { Review } from "../referee/src/review.ts";
 
@@ -53,17 +53,39 @@ ok("only passed, not-required and not-applicable let autopilot land; the rest wa
 const d = dataChanges([
   { path: "src/index.ts", lines: ['    this.sql.exec("ALTER TABLE carts DROP COLUMN note");', '    this.sql.exec("CREATE TABLE IF NOT EXISTS reservations (id INTEGER)");', '    this.sql.exec("DELETE FROM carts WHERE id = ?", id);'] },
   { path: "wrangler.jsonc", lines: ['      "deleted_classes": ["Cart"]', '      "new_sqlite_classes": ["Market"]'] },
-  { path: "README.md", lines: ["DROP TABLE is dangerous"] },
 ]);
 assert.equal(d.destructive.length, 2);
 assert.match(d.destructive[0], /^src\/index.ts: .*DROP COLUMN/);
 assert.match(d.destructive[1], /^wrangler.jsonc: .*deleted_classes/);
 assert.equal(d.additive.length, 2);
-ok("schema changes: DROP and deleted Durable Object classes are destructive, CREATE and new classes additive; DELETE rows and docs aren't schema");
+assert.equal(d.writes.length, 1); // the DELETE ... WHERE: a write, not a schema change
+ok("schema changes: DROP and deleted Durable Object classes are destructive, CREATE and new classes additive, writes listed");
+assert.deepEqual(dataFiles(["src/index.ts", "src/view.tsx", "migrations/0002.sql", "wrangler.jsonc", "README.md", "package-lock.json", "logo.png"]), ["src/index.ts", "src/view.tsx", "migrations/0002.sql", "wrangler.jsonc"]);
+ok("every changed code, SQL or config file is read (TSX included); lockfiles, docs and images aren't");
+const dyn = dataChanges([{ path: "src/db.ts", lines: ["  sql.exec(`ALTER TABLE ${table} RENAME COLUMN a TO b`);"] }]);
+assert.equal(dyn.destructive.length, 1);
+ok("a schema change on an interpolated table name is still caught");
+
 assert.equal(recoveryFor(d).rollbackSafe, false);
-assert.equal(recoveryFor({ destructive: [], additive: d.additive }).rollbackSafe, true);
-assert.equal(recoveryFor(undefined).rollbackSafe, true);
-ok("rolling back is safe unless a schema change destroyed data");
+assert.equal(recoveryFor(d).rehearse, false);
+ok("destructive: not rollback-safe, and a person decides (no rehearsal makes data come back)");
+const adds = dataChanges([{ path: "src/index.ts", lines: ['this.sql.exec("CREATE TABLE IF NOT EXISTS reservations (id INTEGER)");'] }]);
+assert.deepEqual([recoveryFor(adds).rollbackSafe, recoveryFor(adds).rehearse], [false, true]);
+const writes = dataChanges([{ path: "src/index.ts", lines: ["this.sql.exec(`INSERT INTO reservations VALUES (?, ?)`, a, b);"] }]);
+assert.deepEqual([recoveryFor(writes).rollbackSafe, recoveryFor(writes).rehearse], [false, true]);
+ok("additive schema or writes: rollback-safe only once rehearsed, not assumed");
+const none = dataChanges([{ path: "src/index.ts", lines: ["if (qty > 99) return { ok: false };"] }]);
+assert.deepEqual([recoveryFor(none).rollbackSafe, recoveryFor(none).rehearse], [true, false]);
+ok("a change that touches no stored data, with every file read: rolling back is safe");
+for (const unknown of [undefined, dataChanges([], false, "couldn't read src/index.ts: timeout")]) {
+  assert.deepEqual([recoveryFor(unknown).rollbackSafe, recoveryFor(unknown).rehearse], [false, true]);
+  assert.equal(dataEvidence(unknown).state, "unavailable");
+}
+ok("an inspection that couldn't read everything is unavailable evidence, never \"no data change\"");
+assert.equal(dataEvidence(d).state, "failed");
+assert.equal(dataEvidence(adds).state, "passed");
+assert.equal(dataEvidence(none).state, "passed");
+ok("autopilot: destructive waits for a person, not knowing waits too, the rest lands (and rehearses at release)");
 
 assert.equal(policyVersion('{"a":1}'), policyVersion('{"a":1}'));
 assert.notEqual(policyVersion('{"a":1}'), policyVersion('{"a":2}'));
