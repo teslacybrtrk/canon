@@ -2,7 +2,7 @@
 // A transient 5xx is retried with a fresh run; a real failure is reported on the first try.
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
-import { progress, runCheck, templateNames } from "../referee/src/probe.ts";
+import { progress, readOnlyCheck, runCheck, templateNames } from "../referee/src/probe.ts";
 
 let hits = 0;
 let failFirst = 0;
@@ -215,3 +215,44 @@ const raceOk = await runCheck({ kind: "probe", steps: [{ method: "POST", path: "
 assert.equal(raceOk.held, true, raceOk.detail);
 wrongBody.close();
 console.log(`ok  every response checked    -> wrong JSON or missing text fails a concurrent or repeated step (${raceJson.detail})`);
+
+// The rehearsal reads a fixture back without rewriting it: a stored profile the new version wrote in a new format, and
+// an old version that can't read it. Replaying the whole probe (its POST first) would overwrite the profile in the old
+// format and pass; the read-only half sees the incompatibility.
+const profiles = new Map<string, string>(); // run -> stored JSON
+const profileApp = (version: "old" | "new") => createServer((req, res) => {
+  const run = String(req.headers["x-canon-run"] ?? "public");
+  let raw = "";
+  req.on("data", (c) => (raw += c));
+  req.on("end", () => {
+    if (req.method === "POST") {
+      const { name } = JSON.parse(raw || "{}");
+      profiles.set(run, JSON.stringify(version === "new" ? { v: 2, display: { name } } : { name }));
+      return res.writeHead(201).end();
+    }
+    const stored = JSON.parse(profiles.get(run) ?? "{}");
+    const name = version === "new" ? stored.display?.name : stored.name; // the old code only knows the old format
+    if (!name) return res.writeHead(500).end("unreadable profile");
+    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ name }));
+  });
+});
+const profileFact = { kind: "probe" as const, steps: [
+  { method: "POST" as const, path: "/profile", body: { name: "Ada" }, expect: { status: 201 } },
+  { path: "/profile", expect: { status: 200, json: { name: "Ada" } } },
+] };
+const serveOn = async (srv: ReturnType<typeof profileApp>) => { await new Promise<void>((r) => srv.listen(0, r)); return `http://127.0.0.1:${(srv.address() as { port: number }).port}`; };
+const newApp = profileApp("new"), oldApp = profileApp("old");
+const [newUrl, oldUrl] = [await serveOn(newApp), await serveOn(oldApp)];
+await runCheck(profileFact, newUrl, "fixture", { "x-canon-run": "reh" }); // the new version writes the fixture
+const replayed = await runCheck(profileFact, oldUrl, "fixture", { "x-canon-run": "reh" });
+assert.equal(replayed.held, true, "replaying the whole probe rewrites the profile in the old format, and passes");
+profiles.clear();
+await runCheck(profileFact, newUrl, "fixture", { "x-canon-run": "reh" });
+const readOnly = readOnlyCheck(profileFact)!;
+assert.deepEqual(readOnly.steps.map((s) => s.method ?? "GET"), ["GET"]);
+const read = await runCheck(readOnly, oldUrl, "fixture", { "x-canon-run": "reh" });
+assert.equal(read.held, false, read.detail);
+assert.equal(JSON.parse(profiles.get("reh")!).v, 2, "the fixture is still the new version's, after the read and its retries");
+assert.equal(readOnlyCheck({ kind: "probe", steps: [{ method: "POST", path: "/x", save: { id: "id" }, expect: { status: 201 } }, { path: "/x/{{id}}", expect: { status: 200 } }] }), null);
+newApp.close(); oldApp.close();
+console.log(`ok  read-only rehearsal       -> the old version can't read the new profile (${read.detail}); replaying the POST would have hidden it`);

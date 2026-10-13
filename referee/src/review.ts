@@ -99,6 +99,7 @@ export function reviewPrompt(
     `It must keep these facts true: ${canon.map((s) => `"${s}"`).join("; ")}.`,
     "Automated checks of every fact already pass on a live preview. Look for what they may miss.",
     "Report at most 3 notes, each about one line of the NEW code, quoted exactly as it appears (copy the text, 8 to 120 characters).",
+    "Removed lines count too: if something that mattered was taken out (a guard, a check, a permission test), quote the new line where it used to be and say what is missing.",
     'Kinds: "risk" (a likely bug, race, security hole or data loss), "untested" (behaviour no fact checks, such as a guard nobody would notice was gone), "intent" (the code does something the fact does not ask for).',
     "If deliberate breaks of this change went uncaught, explain the most important one as an \"untested\" note: what could break unnoticed.",
     "Only report what you believe is actually wrong, or actually unchecked. Never report code you think is correct; fewer notes are better than weak ones.",
@@ -117,17 +118,54 @@ export function reviewPrompt(
 }
 
 /**
- * How one file is shown to the reviewer: every added or changed line, then the whole new file; or, when the whole file
- * won't fit the budget, every added line with 20 lines of context around each ("compact"). Too big even then: null.
+ * The change as hunks: lines added (numbered in the new file) and lines removed (numbered in the old file, with where
+ * in the new file they were). A line diff when the file is small enough, else counted lines, placed proportionally.
+ * A change that only deletes (a guard taken out) has removed lines and no added ones; both are part of the change.
+ */
+export function changedLines(base: string, head: string): { added: Array<{ n: number; text: string }>; removed: Array<{ n: number; text: string; at: number }> } {
+  const a = base.split("\n");
+  const b = head.split("\n");
+  const added: Array<{ n: number; text: string }> = [];
+  const removed: Array<{ n: number; text: string; at: number }> = [];
+  if (a.length * b.length <= 4_000_000) {
+    const dp = Array.from({ length: a.length + 1 }, () => new Int32Array(b.length + 1));
+    for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    let i = 0, j = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) (i++, j++);
+      else if (dp[i + 1][j] >= dp[i][j + 1]) removed.push({ n: i + 1, text: a[i++], at: j + 1 });
+      else added.push({ n: j + 1, text: b[j++] });
+    }
+    while (i < a.length) removed.push({ n: i + 1, text: a[i++], at: b.length });
+    while (j < b.length) added.push({ n: j + 1, text: b[j++] });
+  } else {
+    const count = (xs: string[]) => xs.reduce((m, l) => m.set(l, (m.get(l) ?? 0) + 1), new Map<string, number>());
+    const inA = count(a), inB = count(b);
+    const left = new Map(inA);
+    b.forEach((text, i) => { const k = left.get(text) ?? 0; if (k > 0) left.set(text, k - 1); else added.push({ n: i + 1, text }); });
+    const right = new Map(inB);
+    a.forEach((text, i) => { const k = right.get(text) ?? 0; if (k > 0) right.set(text, k - 1); else removed.push({ n: i + 1, text, at: Math.max(1, Math.round(((i + 1) * b.length) / a.length)) }); });
+  }
+  return { added: added.filter((x) => x.text.trim()), removed: removed.filter((x) => x.text.trim()) };
+}
+
+/**
+ * How one file is shown to the reviewer: every added line, every removed line, then the whole new file; or, when the
+ * whole file won't fit the budget, the same lists with 20 lines of context around each change, added or removed
+ * ("compact"). A deletion-only change is shown too: what was taken out, and where.
  */
 export function fileBlock(f: ReviewFile, budget: number): { text: string; compact: boolean } {
-  const added = addedLines(f.base, f.head);
+  const { added, removed } = changedLines(f.base, f.head);
   const lines = f.head.split("\n");
-  const head = `FILE ${f.path}\nADDED OR CHANGED LINES:\n${added.map((a) => `${a.n}: ${a.text}`).join("\n")}`;
+  const head = [
+    `FILE ${f.path}`,
+    `ADDED OR CHANGED LINES:\n${added.map((a) => `${a.n}: ${a.text}`).join("\n") || "(none)"}`,
+    ...(removed.length ? [`REMOVED LINES (old line number: text, then where it was in the new file):\n${removed.map((r) => `${r.n}: ${r.text}   [was before new line ${r.at}]`).join("\n")}`] : []),
+  ].join("\n");
   const whole = `${head}\nNEW FILE:\n${lines.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join("\n")}`;
   if (whole.length <= budget) return { text: whole, compact: false };
   const keep = new Set<number>();
-  for (const a of added) for (let i = Math.max(1, a.n - 20); i <= Math.min(lines.length, a.n + 20); i++) keep.add(i);
+  for (const n of [...added.map((a) => a.n), ...removed.map((r) => r.at)]) for (let i = Math.max(1, n - 20); i <= Math.min(lines.length, n + 20); i++) keep.add(i);
   const shown: string[] = [];
   let prev = 0;
   for (const i of [...keep].sort((x, y) => x - y)) {
@@ -216,8 +254,16 @@ export function ground(raw: unknown, files: ReviewFile[]): { notes: ReviewNote[]
     const line = hits.reduce((a, b) => (Math.abs(b - want) < Math.abs(a - want) ? b : a));
     notes.push({ file: file.path, line, quote: squash(lines[line - 1]).slice(0, 160), kind, note: String(n.note).slice(0, 400) });
   }
-  const ranked = [...notes.filter((n) => n.kind === "risk"), ...notes.filter((n) => n.kind !== "risk")].slice(0, 3);
+  // Risks and intent findings can govern acceptance (reviewRisk, intentRisk), so none is ever dropped for room; only
+  // "untested" notes are trimmed, to keep at most three notes beside them.
+  const governing = notes.filter((n) => n.kind === "risk" || n.kind === "intent");
+  const ranked = [...notes.filter((n) => n.kind === "risk"), ...notes.filter((n) => n.kind === "intent"), ...notes.filter((n) => n.kind === "untested").slice(0, Math.max(0, 3 - governing.length))];
   return { notes: ranked, dropped, droppedRisk };
+}
+
+/** The notes across passes: every risk and intent finding (they can decide acceptance), then up to five untested. */
+export function rankNotes(notes: ReviewNote[]): ReviewNote[] {
+  return [...notes.filter((n) => n.kind === "risk"), ...notes.filter((n) => n.kind === "intent"), ...notes.filter((n) => n.kind === "untested").slice(0, 5)];
 }
 
 /**

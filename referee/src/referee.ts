@@ -3,7 +3,7 @@ import type { CiParams, CloudflareArtifacts } from "@cloudflare/ci";
 import type { Env } from "./env";
 import type { Novelty } from "./commands";
 import { compareLedger } from "./ledger";
-import { progress, runCheck, templateNames } from "./probe";
+import { progress, readOnlyCheck, runCheck, templateNames } from "./probe";
 import {
   ProtocolError,
   errorStatus,
@@ -37,7 +37,7 @@ import { holdsLease, leaseDecision, RELEASE_LEASE_MS, type Lease } from "./relea
 import { ACCOUNT_SLOTS } from "./slots";
 import { canaryVerdict, versionTraffic } from "./telemetry";
 import { dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence, type DataChanges, type Evidence } from "./evidence";
-import { judgeAnswer, REVIEW_SCHEMA, reviewBatches, reviewPrompt, specialistsFor, type Review, type ReviewFile, type ReviewNote, type Specialist } from "./review";
+import { changedLines, judgeAnswer, rankNotes, REVIEW_SCHEMA, reviewBatches, reviewPrompt, specialistsFor, type Review, type ReviewFile, type ReviewNote, type Specialist } from "./review";
 
 // The advisory reviewer: a different model from the agents' (they are Claude or Grok), on Workers AI.
 const REVIEW_MODELS = ["@cf/moonshotai/kimi-k2.7-code", "@cf/moonshotai/kimi-k2.6"];
@@ -1246,7 +1246,7 @@ export class Referee extends DurableObject<Env> {
     const since = new Date(Date.now() - 5_000).toISOString();
     const start = Date.now();
     const rounds = 10;
-    let newFails = 0, oldFails = 0, routedFails = 0, checks = 0;
+    let newFails = 0, oldFails = 0, routedFails = 0, mixedFails = 0, checks = 0;
     for (let round = 0; round < rounds; round++) {
       for (const f of facts) {
         const seed = `canary:${seq}:${round}:${f.id}`;
@@ -1259,8 +1259,12 @@ export class Referee extends DurableObject<Env> {
         if (!onOld.held) oldFails++;
         else {
           if (!onNew.held) newFails++;
-          // Routed traffic lands on either version: a landing fact can fail on the old one, which says nothing.
-          if (!routed.held && !landing.has(f.id)) routedFails++;
+          // Routed traffic lands on either version: a landing fact can fail on the old one, which says nothing. An
+          // existing fact failing routed while both pinned versions pass it is a mixed-version failure.
+          if (!routed.held && !landing.has(f.id)) {
+            routedFails++;
+            if (onNew.held) mixedFails++;
+          }
         }
       }
       // Spread the rounds over the hold, so the step is watched for its whole length (and real traffic has time to show).
@@ -1295,8 +1299,8 @@ export class Referee extends DurableObject<Env> {
       rates = { newRate: n.requests ? n.errors / n.requests : 0, oldRate: o.requests ? o.errors / o.requests : 0, newRequests: n.requests };
       analytics = `real traffic so far (analytics lag a minute or two): new ${n.errors}/${n.requests} errors, old ${o.errors}/${o.requests}`;
     } else analytics = `real-traffic analytics unavailable (${t.why})`;
-    const v = canaryVerdict({ newFails, oldFails, raw: { newErrors, oldErrors, each }, ...(rates ? { analytics: rates } : {}) });
-    return { newFails, oldFails, routedFails, checks, raw: `${newErrors}/${each} raw errors on the new version, ${oldErrors}/${each} on the old`, analytics, verdict: v.why, bad: v.bad };
+    const v = canaryVerdict({ newFails, oldFails, mixedFails, raw: { newErrors, oldErrors, each }, ...(rates ? { analytics: rates } : {}) });
+    return { newFails, oldFails, routedFails, mixedFails, checks, raw: `${newErrors}/${each} raw errors on the new version, ${oldErrors}/${each} on the old`, analytics, verdict: v.why, bad: v.bad };
   }
 
   private recordExposure(seq: number, exposure: NonNullable<Acceptance["exposure"]>) {
@@ -1332,6 +1336,9 @@ export class Referee extends DurableObject<Env> {
     const cur = this.rows(`SELECT * FROM canon WHERE deployed = 1 AND version_id IS NOT NULL ORDER BY seq DESC LIMIT 1`)[0];
     if (!cur) return;
     const api = `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${project}/deployments`;
+    // Authority is rechecked in the same turn as the write, with no await between: a release that took the lease while
+    // this was waiting on the network owns production now, and this backs off (reconciliation runs again later).
+    if (this.releasing() !== null) return;
     const res = await fetch(api, {
       method: "POST",
       headers: { authorization: `Bearer ${this.env.CF_TOKEN}`, "content-type": "application/json" },
@@ -1358,6 +1365,8 @@ export class Referee extends DurableObject<Env> {
         version = list.result?.deployments?.find((d) => d.versions[0]?.version_id !== live.version_id)?.versions[0]?.version_id ?? null;
       }
       if (!version) throw new Error("no earlier version to roll back to");
+      // Same rule as every other production write: not while a release holds the lease (rechecked in this turn).
+      if (this.releasing() !== null) throw new Error("a release took the lease first; it decides what production runs");
       const res = await fetch(api, {
         method: "POST",
         headers,
@@ -2023,7 +2032,7 @@ export class Referee extends DurableObject<Env> {
       const d = verdict.data;
       const reviewGlobs = this.charter()?.review ?? [];
       const specialists = specialistsFor(
-        files.map((f) => ({ path: f.path, added: addedText(f.base, f.head) })),
+        files.map((f) => { const c = changedLines(f.base, f.head); return { path: f.path, added: [...c.added, ...c.removed].map((x) => x.text) }; }),
         !d || !d.complete || d.destructive.length + d.additive.length + (d.writes?.length ?? 0) > 0,
         (p) => reviewGlobs.length > 0 && inScope(reviewGlobs, [p]),
       );
@@ -2061,7 +2070,8 @@ export class Referee extends DurableObject<Env> {
           dropped += judged.dropped;
         }
       }
-      const ranked = [...notes.filter((n) => n.kind === "risk"), ...notes.filter((n) => n.kind !== "risk")].slice(0, 5);
+      // Every risk and intent finding is kept (they decide acceptance); only "untested" notes are capped for display.
+      const ranked = rankNotes(notes);
       const coverage = { files: files.length, reviewed: files.length, compact, passes: specialists.length * batches.length, specialists };
       put({ status: "done", ...base, model, notes: ranked, dropped, at: Date.now(), coverage });
     } catch (err) {
@@ -2678,19 +2688,25 @@ export class Referee extends DurableObject<Env> {
           let compared = 0;
           let incompatible: { fact: Fact; detail: string } | null = null;
           for (const f of shared) {
-            const read = async (run: string) => runCheck(f.check as ProbeCheck, url, `read:${seq}:${f.id}`, { "x-canon-run": run });
-            let [onNew, onOld] = [await read(`reh-${seq}`), await read(`ctl-${seq}`)];
-            if (onOld.held && !onNew.held) [onNew, onOld] = [await read(`reh-${seq}`), await read(`ctl-${seq}`)];
-            if (!onOld.held) continue; // the fact doesn't hold on its own rerun either: inconclusive, not counted
-            compared++;
-            if (!onNew.held) {
-              incompatible = { fact: f, detail: onNew.detail };
-              break;
+            // Old code inspects what was written (by the new code under reh-, by itself under ctl-), with reads only.
+            const check = this.readOnly(f);
+            if (!check) continue;
+            const read = async (run: string) => runCheck(check, url, `cont:${seq}:${f.id}`, { "x-canon-run": run });
+            for (const suffix of [`:${f.id}`, ""]) {
+              let [onNew, onOld] = [await read(`reh-${seq}${suffix}`), await read(`ctl-${seq}${suffix}`)];
+              if (onOld.held && !onNew.held) [onNew, onOld] = [await read(`reh-${seq}${suffix}`), await read(`ctl-${seq}${suffix}`)];
+              if (!onOld.held) continue; // the old code can't read back even what it wrote itself: inconclusive, not counted
+              compared++;
+              if (!onNew.held) {
+                incompatible = { fact: f, detail: onNew.detail };
+                break;
+              }
             }
+            if (incompatible) break;
           }
           const fresh = before.filter((f) => f.check.kind === "probe").length;
           if (incompatible) this.setRehearsal(seq, "failed", `the previous version broke “${incompatible.fact.sentence}” on state this release wrote (it holds on state the previous version wrote itself): ${incompatible.detail}`);
-          else this.setRehearsal(seq, "passed", `the previous version kept all ${fresh} of its facts, on shared data and on ${compared} fact${compared === 1 ? "'s" : "s'"} state this release wrote`);
+          else this.setRehearsal(seq, "passed", `the previous version kept all ${fresh} of its facts, and read back what this release wrote in ${compared} comparison${compared === 1 ? "" : "s"} (reads only, against what it wrote itself)`);
         }
       }
     } else this.setRehearsal(seq, "unavailable", `the previous version couldn't be deployed onto the release candidate: ${detail.replace(/\s+/g, " ").slice(0, 160)}`);
@@ -2755,10 +2771,29 @@ export class Referee extends DurableObject<Env> {
     };
   }
 
-  /** Runs every continuity fact once, in order, under one shared run identity: the state a version writes. */
+  /**
+   * Creates the fixture: every continuity fact runs once, in full (its writes included), in order, under one shared run
+   * identity, with one sample and a fixed seed per fact, so a later read knows exactly what was written.
+   */
   private async continuityRun(seq: number, url: string, run: string) {
     const { landing, before } = this.continuityFacts(seq);
-    for (const f of [...landing, ...before]) await runCheck(f.check as ProbeCheck, url, `write:${seq}:${f.id}`, { "x-canon-run": run }).catch(() => null);
+    // Twice: under the shared identity (so old facts later read what the new facts wrote, side by side) and under one
+    // of its own per fact (so its read sees exactly its own writes, nothing else's).
+    for (const f of [...landing, ...before]) {
+      const check = { ...(f.check as ProbeCheck), samples: 1 };
+      await runCheck(check, url, `cont:${seq}:${f.id}`, { "x-canon-run": run }).catch(() => null);
+      await runCheck(check, url, `cont:${seq}:${f.id}`, { "x-canon-run": `${run}:${f.id}` }).catch(() => null);
+    }
+  }
+
+  /**
+   * A fact's read-only half: its GET steps, with the same seed (so the same inputs, and the same expected values) as
+   * the run that wrote the fixture. Reading never repairs, replaces or clears what it reads, and a retry reads the same
+   * fixture again. Null when the fact has no read that stands on its own (no GET step, or one that needs a value an
+   * earlier write saved): such a fact can't be compared this way.
+   */
+  private readOnly(f: Fact): ProbeCheck | null {
+    return readOnlyCheck(f.check as ProbeCheck);
   }
 
   private setRehearsal(seq: number, state: "passed" | "failed" | "unavailable", detail: string) {

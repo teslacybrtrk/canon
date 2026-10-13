@@ -1,6 +1,6 @@
 // The reviewer's pure parts: which lines a change added, and that only notes quoting real code survive.
 import assert from "node:assert/strict";
-import { addedLines, fileBlock, ground, judgeAnswer, parseAnswer, reviewBatches, reviewPrompt, specialistsFor } from "../referee/src/review.ts";
+import { addedLines, changedLines, fileBlock, ground, judgeAnswer, parseAnswer, rankNotes, reviewBatches, reviewPrompt, specialistsFor } from "../referee/src/review.ts";
 
 const ok = (name: string) => console.log(`ok   ${name}`);
 const base = "a\nb\nreturn x;\n";
@@ -100,3 +100,30 @@ assert.deepEqual(specialistsFor([{ path: "src/auth/session.ts", added: ["return 
 assert.deepEqual(specialistsFor([{ path: "src/index.ts", added: ['const token = request.headers.get("authorization");'] }], false, () => false), ["general", "security"]);
 assert.deepEqual(specialistsFor([{ path: "src/billing.ts", added: ["x"] }], false, (p) => p.startsWith("src/billing")), ["general", "security"]);
 ok("specialists: data for stored-data changes, security for auth, secrets or charter review paths");
+
+// A deletion-only change: a guard taken out of a big file. It has no added lines; the review still shows what was
+// removed, and the code around where it was.
+const bigBase = Array.from({ length: 1500 }, (_, i) => (i === 700 ? '  if (!isAdmin(user)) return new Response("forbidden", { status: 403 });' : `  const v${i} = ${i}; // ${"x".repeat(30)}`)).join("\n");
+const bigHead = bigBase.split("\n").filter((_, i) => i !== 700).join("\n");
+const del = changedLines(bigBase, bigHead);
+assert.equal(del.added.length, 0);
+assert.equal(del.removed.length, 1);
+const delBlock = fileBlock({ path: "src/admin.ts", base: bigBase, head: bigHead }, 14_000);
+assert.equal(delBlock.compact, true);
+assert.match(delBlock.text, /REMOVED LINES[\s\S]*isAdmin\(user\)/);
+assert.match(delBlock.text, /const v699 = 699/);
+ok("a deleted authorization guard in a big file is shown (the removed line, and the code around where it was)");
+assert.deepEqual(specialistsFor([{ path: "src/admin.ts", added: del.removed.map((r) => r.text) }], false, () => false), ["general", "security"]);
+ok("and a removed auth check gets the security specialist");
+
+// Findings that govern acceptance are never dropped for room: three untested notes and one intent finding keep the intent.
+const many2 = ground({ notes: [1, 2, 3].map(() => ({ file: "src/index.ts", line: 4, quote: "return x;", kind: "untested", note: "n" })).concat([{ file: "src/index.ts", line: 2, quote: "if (!x) return 400;", kind: "intent", note: "does more than asked" }]) }, files);
+assert.ok(many2.notes.some((n) => n.kind === "intent"));
+ok("an intent finding survives three untested notes (intentRisk can depend on it)");
+
+// The reviewer's case: three general untested notes, three data untested notes, one security intent finding.
+const note = (by: "general" | "data" | "security", kind: "untested" | "intent", i: number) => ({ file: "src/index.ts", line: i, quote: "x", kind, note: `${by} ${kind} ${i}`, by });
+const across = [...[1, 2, 3].map((i) => note("general", "untested", i)), ...[4, 5, 6].map((i) => note("data", "untested", i)), note("security", "intent", 7)];
+const kept = rankNotes(across);
+assert.ok(kept.some((n) => n.kind === "intent" && n.by === "security"));
+ok("across passes, the security pass's intent finding is kept ahead of six untested notes (the display cap never drops it)");

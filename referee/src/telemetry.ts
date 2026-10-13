@@ -37,12 +37,16 @@ export async function versionTraffic(accountId: string, token: string, script: s
 
 /** A canary step's verdict from what it saw: bad when the new version fails where the old one, at the same moment and
  * with the same inputs, doesn't (twice), or when its real-traffic error rate is clearly above the old one's. */
-export function canaryVerdict(s: { newFails: number; oldFails: number; raw?: { newErrors: number; oldErrors: number; each: number }; analytics?: { newRate: number; oldRate: number; newRequests: number } }): { bad: boolean; why: string } {
+export function canaryVerdict(s: { newFails: number; oldFails: number; mixedFails?: number; raw?: { newErrors: number; oldErrors: number; each: number }; analytics?: { newRate: number; oldRate: number; newRequests: number } }): { bad: boolean; why: string } {
   if (s.newFails >= 2 && s.newFails > s.oldFails) return { bad: true, why: `the new version failed ${s.newFails} checks the old one passed at the same moment` };
+  // Mixed versions: a protected fact failing on routed traffic while each version, pinned, passes it at the same moment
+  // (requests of one check landing on different versions disagree). Each version alone is fine; together they aren't.
+  if ((s.mixedFails ?? 0) >= 2) return { bad: true, why: `routed traffic failed ${s.mixedFails} checks of existing facts that each version passed on its own: the two versions don't work together` };
   // Raw requests, no retries: an error rate the checks' own retries would hide (a request in three failing).
   const r = s.raw;
   if (r && r.each >= 20 && (r.newErrors - r.oldErrors) / r.each > 0.05) return { bad: true, why: `raw requests: ${r.newErrors} of ${r.each} failed on the new version against ${r.oldErrors} of ${r.each} on the old` };
   const a = s.analytics;
   if (a && a.newRequests >= 20 && a.newRate > a.oldRate + 0.02) return { bad: true, why: `real traffic: ${(a.newRate * 100).toFixed(1)}% errors on the new version against ${(a.oldRate * 100).toFixed(1)}% on the old` };
+  if (s.mixedFails === 1) return { bad: false, why: "one routed failure that each version passed alone, not repeated in the step (recorded)" };
   return { bad: false, why: s.newFails ? `one isolated failure on the new version (${s.oldFails} on the old)` : "no failures" };
 }

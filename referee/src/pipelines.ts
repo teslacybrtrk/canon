@@ -132,17 +132,19 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       if (first.settle) await step.do("refused", () => referee.releaseRefused(seq, first.why));
       return;
     }
-    // Every container command that changes a Worker runs under the lease's deadline: it refuses to start once less than
-    // a minute is left, and `timeout` kills it if it's still running a minute before the lease runs out, so nothing this
-    // run starts can still be writing after the judge could have fenced it out.
+    // Every container command that changes a Worker runs under the lease's absolute deadline: each wrangler call refuses
+    // to start once less than a minute is left, and `timeout` kills it if it's still running a minute before the lease
+    // runs out, so nothing this run starts can still be writing after the judge could have fenced it out.
     let deadline = first.until;
     const fenced = async (label: string) => {
       const f = await fence(`fence: ${label}`);
       if (!f.go) throw new Error(`fenced out before ${label}: ${f.why}`);
       deadline = f.until;
     };
-    const inTime = () => `T=$(( ${Math.floor(deadline / 1000)} - $(date +%s) - 60 )); [ "$T" -gt 0 ] || exit 3; `;
-    const wrangler = `timeout "$T" npx wrangler`;
+    // `w` recomputes the time left right before every wrangler call, so in a script that first clones and installs,
+    // a slow start can't stretch a later call past the lease: each call is bounded by the absolute deadline.
+    const inTime = () => `D=${Math.floor(deadline / 1000)}; w() { T=$(( D - $(date +%s) - 60 )); [ "$T" -gt 0 ] || exit 3; timeout "$T" npx wrangler "$@"; }; [ $(( D - $(date +%s) - 60 )) -gt 0 ] || exit 3; `;
+    const wrangler = "w";
     let ok = true;
     let versionId: string | null = null;
     let candidateRan = false;

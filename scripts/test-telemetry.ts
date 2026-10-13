@@ -16,3 +16,8 @@ ok("real traffic: a clearly higher error rate on enough requests stops it; four 
 assert.equal(canaryVerdict({ newFails: 0, oldFails: 0, raw: { newErrors: 13, oldErrors: 0, each: 40 } }).bad, true);
 assert.equal(canaryVerdict({ newFails: 0, oldFails: 0, raw: { newErrors: 2, oldErrors: 1, each: 40 } }).bad, false);
 ok("raw requests with no retries catch a one-in-three error rate the checks' retries would hide; noise doesn't");
+assert.equal(canaryVerdict({ newFails: 0, oldFails: 0, mixedFails: 10, raw: { newErrors: 0, oldErrors: 0, each: 40 } }).bad, true);
+ok("routed checks failing an existing fact that both pinned versions pass stop the rollout (the versions don't work together)");
+assert.equal(canaryVerdict({ newFails: 0, oldFails: 0, mixedFails: 1 }).bad, false);
+assert.match(canaryVerdict({ newFails: 0, oldFails: 0, mixedFails: 1 }).why, /one routed failure/);
+ok("a single routed failure is recorded, not ignored");

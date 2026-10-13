@@ -267,6 +267,17 @@ function evaluate(expr: string, vars: Record<string, unknown>): unknown {
 }
 
 /** The input names a check's templates use ("{{qa * a.cents}}" uses qa and a), so a check can be validated. */
+/**
+ * A probe's read-only half, for reading back a fixture without touching it: its GET steps with expectations, one
+ * sample. Null when no read stands on its own (no GET step, or one that needs a value an earlier write saved).
+ */
+export function readOnlyCheck(c: ProbeCheck): ProbeCheck | null {
+  const saved = new Set(c.steps.filter((st) => (st.method ?? "GET") !== "GET").flatMap((st) => Object.keys(st.save ?? {})));
+  const reads = c.steps.filter((st) => (st.method ?? "GET") === "GET" && st.expect && !st.repeat && !st.concurrent);
+  if (!reads.length || reads.some((st) => templateNames([st.path, st.expect]).some((n) => saved.has(n)))) return null;
+  return { ...c, samples: 1, steps: reads };
+}
+
 export function templateNames(value: unknown): string[] {
   if (typeof value === "string") {
     return [...value.matchAll(/\{\{([^{}]+)\}\}/g)].flatMap(([, expr]) =>

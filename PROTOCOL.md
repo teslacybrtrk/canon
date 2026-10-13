@@ -312,10 +312,12 @@ Only a complete answer in the notes format counts as a review: an empty list of 
 flag"), but an answer that was cut off, isn't the notes format, has any entry that isn't a whole note (file, line,
 quote, kind, note), or names a risk it can't quote from the code is an error (unavailable), never a clean review. Not
 knowing which files changed is an error too (never "no source files changed"). Nothing is cut to fit: every changed
-source file is shown whole, or around every change when it's too big to show whole, packed into as many passes as that
+source file is shown with its added lines and its removed lines (a guard taken out is part of the change), whole, or
+around every change, added or removed, when it's too big to show whole, packed into as many passes as that
 takes (`coverage` on the review says how many, and which files were shown around their changes); a file too big even
-that way, or more than twelve files, makes the review unavailable and the owner decides. A risk is never dropped to make
-room for other notes. `/stats` keeps the reviewer's track record, overall and per specialist, from what happened to the
+that way, or more than twelve files, makes the review unavailable and the owner decides. Findings that can decide acceptance
+(every risk, and every intent finding) are never dropped to make room, within a pass or across passes; only
+"untested" notes are capped for display. `/stats` keeps the reviewer's track record, overall and per specialist, from what happened to the
 changes it read: risks confirmed (that attempt later broke a fact), overruled (a person accepted it and its release
 stayed healthy), and missed (no risk named, and the accepted change broke a fact at release or in production). With
 `"intentRisk": true`, an `intent` note (the change does something its fact doesn't ask for) waits for the owner too.
@@ -370,8 +372,11 @@ atomically from the run), and the judge puts it in front of traffic. Every deplo
 same turn, right before the request, and a run that has lost it writes nothing at all, not even a rollback or cleanup:
 putting production right is the judge's own reconciliation, which, whenever no release holds the lease, sets
 production's deployment to canon's released version from the deployment as it is now (a 0% version a fenced-out run
-left staged, say). Every container command that changes a Worker runs under `timeout` to the lease's deadline, so it
-can't still be running when the run could have been fenced out. The release Workflow consumes the record, and holds the release as a lease. Its first step asks
+left staged, say). The judge's own writes (reconciliation, an automatic rollback, undoing a fenced-out run's change)
+recheck, in the same turn as the request and with no await between, that no release holds the lease: a release that
+took it while the judge was waiting on the network owns production, and the judge backs off. Every wrangler call that
+changes a Worker recomputes the time left on the lease's absolute deadline right before it runs, refuses to start with
+less than a minute left, and runs under `timeout` to it, even inside a script that first clones and installs. The release Workflow consumes the record, and holds the release as a lease. Its first step asks
 whether this exact commit is what canon #seq authorized and whether #seq is still the latest canon; a stale or
 unauthorized candidate is refused (nothing deploys, and canon goes back). The lease lasts 15 minutes and is renewed
 before every step that changes a Worker (the release candidate, the rollback rehearsal, the version upload, the gate,
@@ -385,11 +390,14 @@ canon says it runs. Authorization is checked at every production-changing step, 
 leaves stored data alone): after the release candidate passes (this release's code, running on
 the candidate's long-lived data), the code production runs now is deployed onto the candidate, over the data the new
 code just wrote, and the facts that were canon before must still hold (the new fact must fail there first: proof the
-old code is the one answering). Then state continuity: the release's code ran every fact once more under one shared run
-identity, writing the state the old code is now asked to read; the old code does the same writes under a second
-identity, then reads each fact back under both. A fact that holds on the state the old code wrote itself but not on the
-state the new code wrote is a rollback that breaks it (a fact that doesn't hold on its own rerun either is inconclusive,
-and not counted). A passed rehearsal covers the state and facts it exercised, not every dataset production may hold.
+old code is the one answering). Then state continuity, with fixture creation kept apart from the compatibility
+check: the release's code ran every fact once more, in full, with a fixed seed, under a shared run identity and under
+one per fact, writing the fixture; the old code does the same writes under control identities; then the old code only
+reads, never writes: each fact's GET steps, with the same seed (so the same expected values), against the new code's
+fixture and against its own. Reading never repairs, replaces or clears the fixture, and a retry reads it again as it
+was. A fact the old code reads back from what it wrote itself, but not from what the new code wrote, is a rollback that
+breaks it (one it can't read back even from its own writes is inconclusive, and not counted; a fact with no GET step
+that stands on its own can't be compared this way). A passed rehearsal covers the state and facts it exercised, not every dataset production may hold.
 Passed: rollback is known safe, and the record says so. Failed or unavailable (the old
 code couldn't be deployed, e.g. a Durable Object migration that can't be undone): autopilot holds the release back,
 because it doesn't release what it can't take back; a person's accept still goes out, with rollback marked unsafe. And
@@ -406,7 +414,8 @@ smoke test the judge rolls the version out in steps of real traffic, by default 
 seconds before the next (`"canary": {"steps": [1, 10, 50], "holdSeconds": 60}` in the policy; `false` for none). At
 each step every canon fact runs three ways at the same moment with the same inputs: pinned to the new version, pinned
 to the old one, and routed as real traffic is. A failure counts against the new version only when the old one passed
-the same check at the same moment. Raw requests with no retries go to both versions too, so an error rate the checks'
+the same check at the same moment, and an existing fact that fails on routed traffic while each version passes it
+pinned is a mixed-version failure (the two don't work together): twice in a step stops the rollout, once is recorded. Raw requests with no retries go to both versions too, so an error rate the checks'
 own retries would hide (a request in eight failing) still shows; and real traffic per version comes from Cloudflare's
 analytics when the account allows it. A step that goes wrong takes the new version back out (production's deployment as
 it is now, the old version at 100%) and holds the release back; each step and what it saw goes into the acceptance

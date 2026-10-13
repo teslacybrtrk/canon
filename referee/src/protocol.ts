@@ -343,7 +343,7 @@ export interface Acceptance {
   recovery: Recovery; // how a failed release recovers, and the rollback rehearsal's result once the release ran it
   // The gradual rollout, step by step: the share of traffic, what was watched (synthetic checks on both versions at the
   // same moment, routed checks, and real traffic per version when analytics allow), and the verdict.
-  exposure?: Array<{ percent: number; newFails: number; oldFails: number; routedFails: number; checks: number; raw: string; analytics: string; verdict: string; at: number }>;
+  exposure?: Array<{ percent: number; newFails: number; oldFails: number; routedFails: number; mixedFails?: number; checks: number; raw: string; analytics: string; verdict: string; at: number }>;
   at: number;
 }
 
