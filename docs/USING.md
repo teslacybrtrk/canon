@@ -179,3 +179,6 @@ routes would move with it: remove them, and attach your domain to that Worker on
 - **Pace:** one release at a time. Each accept sends the attempts in flight to refresh; on autopilot, merge trains let
   what queued behind a release leave together, built and checked while that release is still going out.
 - **Previews:** Workers keep the newest 500 per Worker. Older attempts stay clonable from Artifacts.
+- **Rollback rehearsal needs read-backs:** a fact that writes stored data and has no GET step to read it back makes
+  the rehearsal unavailable, so autopilot holds any release that needs it until you add one (or mark the fact
+  `"fixture": "none"` if it truly leaves nothing behind). See [checks.md](checks.md).

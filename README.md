@@ -172,6 +172,17 @@ rejected. Now a speed fact that fails also runs on canon's own preview at that m
 verdict is a platform error the judge retries, not a rejection. Not measured yet: hundreds of agents, or several busy
 projects sharing one account's container limit.
 
+## Where the time goes
+
+`scripts/timings.mjs` reads every verification, release and deliberate-break Workflow's step times from Cloudflare's
+own records ([docs/timings.md](docs/timings.md)). On the push-to-verdict path an agent waits on, the preview upload
+(median 18 s), the dependency install (17 s) and the command facts (9.5 s) were the three longest steps, and the
+preview and the command facts ran one after the other although they need nothing from each other: they now run side
+by side (before and after in the report). Releases spend most of their time deploying the release candidate (22 s median) and checking it
+(26 s, including a 20-second settle while Durable Objects pick up new code); the canary's holds are policy, not
+overhead. What wasn't changed, and why: the install cache is per attempt, because every attempt is its own repo, and
+sharing a cached workspace between attempts would carry one agent's files into another's checkout.
+
 ## Live tests after the run
 
 The features built after the Oct 12 run were each tested live on throwaway projects on canon.rodeo the same day
@@ -269,7 +280,10 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   went out on the owner's authority with `recovery.override` naming exactly that
   ([record](https://canon.rodeo/p/evid/canon/5/acceptance)).
 
-What broke in those tests, and is fixed: the first line-limit attempt was flagged by the reviewer (two adds of 50 and
+What broke in those tests, and is fixed: the first end-to-end run on a brand-new project (`relay`, Oct 13) passed
+its merge train, release candidate and rehearsal, then couldn't upload its first version, because Cloudflare won't
+upload a version of a Worker that doesn't exist yet; the release was held back and canon stepped back, as it should,
+and a project's first release now deploys directly (there is nothing in production to stage beside). Earlier: the first line-limit attempt was flagged by the reviewer (two adds of 50 and
 60 make a line of 110) and waited, but its re-apply drew a review without that risk and landed, so a risk named on an
 attempt now stands on its re-applies until an agent changes the code (deployed; in the live retest the reviewer named
 the risk again itself, so that rule didn't have to act). Two reviews were cut off by a deploy and sat at "reading"

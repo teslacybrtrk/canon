@@ -421,6 +421,8 @@
   .state.s-mut-gap { color: var(--pending); background: var(--pending-bg, rgb(210 153 34 / 0.12)); border-color: rgb(210 153 34 / 0.45); }
   .state.s-review { color: var(--ink-2); background: transparent; border-color: var(--line, rgb(127 127 127 / 0.35)); }
   .mut .fine { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+  .diag { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .diag b { color: var(--ink-2); font-weight: 600; }
   .mut { margin: 10px 0 0; font-size: 13px; color: var(--ink-2); }
   .mut ul { margin: 6px 0 0; padding-left: 18px; }
   .mut li { margin: 3px 0; }
@@ -976,6 +978,7 @@
     };
 
     // Who acts next, in one line: you, the agent or the judge.
+    const SETTLED_OK = ["accepted", "superseded", "declined", "ready"];
     const nextStep = (cl, v) => {
       const you = (t) => `<p class="next you"><b>Next: you.</b> ${t}</p>`;
       const them = (who, t) => `<p class="next"><b>Next: ${who}.</b> ${t}</p>`;
@@ -1097,7 +1100,7 @@
           <span class="k">Goal ${tip("The fact this agent claimed it will make true: a plain sentence plus a check the judge runs on the attempt’s live preview.")}</span>
           <button class="t" type="button" data-fact="${esc(cl.factId)}" title="See the check and the fact’s history">${esc(cl.sentence)}</button>
         </div>
-        ${nextStep(cl, v)}
+        ${nextStep(cl, v)}${v?.diagnosis && !SETTLED_OK.includes(cl.status) ? `<p class="fine diag" title="${esc(v.diagnosis.next)}"><b>Diagnosis: ${esc(v.diagnosis.kind)}</b>. ${esc(v.diagnosis.why)}</p>` : ""}
         ${cl.status === "ready" ? clashNote(cl) : ""}${headsUpNote(cl)}
         <details class="more" data-card="${esc(cl.id)}"${openCards.has(cl.id) ? " open" : ""}>
           <summary>Details <span>· how the judge decided</span></summary>

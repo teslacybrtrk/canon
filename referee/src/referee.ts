@@ -178,7 +178,8 @@ export class Referee extends DurableObject<Env> {
       const claim = toClaim(r);
       const verdict = this.latestVerdict(claim.attemptId);
       const m = verdict ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, verdict.sha)[0] : null;
-      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict: this.redactVerdict(verdict, hidden), clashes: this.clashesFor(claim.id), headsUp: this.headsUpFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null, reviewer: verdict ? this.reviewOf(claim.attemptId, verdict.sha) : null };
+      const shown = this.redactVerdict(verdict, hidden);
+      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict: shown ? { ...shown, diagnosis: this.diagnosisOf(claim, shown) } : shown, clashes: this.clashesFor(claim.id), headsUp: this.headsUpFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null, reviewer: verdict ? this.reviewOf(claim.attemptId, verdict.sha) : null };
     });
     return {
       project: this.meta("project") ?? "",
@@ -566,9 +567,12 @@ export class Referee extends DurableObject<Env> {
     if (!verdict || !claimId) return this.redactVerdict(verdict, this.heldOutIds());
     const next = this.rows(`SELECT attempt_id FROM claims WHERE refreshed_from = ?`, claimId)[0]?.attempt_id as string | undefined;
     const claim = this.claim(claimId);
+    // The diagnosis quotes failure details, so it's made from the redacted verdict: a held-out check never shows.
+    const hiddenIds = this.heldOutIds();
+    const redacted = this.redactVerdict(verdict, hiddenIds);
     return this.redactVerdict({
       ...verdict,
-      diagnosis: claim ? this.diagnosisOf(claim, verdict) : null,
+      diagnosis: claim && redacted ? this.diagnosisOf(claim, redacted) : null,
       clashes: this.clashesFor(claimId),
       headsUp: this.headsUpFor(claimId),
       reviewer: this.reviewOf(attemptId, verdict.sha),

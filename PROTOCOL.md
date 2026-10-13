@@ -385,8 +385,8 @@ for a gradual rollout, each step and what it saw. `GET
 /p/:project/canon/:seq/acceptance` returns it, the board links it, and the Git note on that canon commit carries it.
 
 **The release fence.** The judge is the only writer of production's deployment: the release run uploads the exact commit
-as a Worker version that serves nobody (Durable Object apps too; only a Durable Object class change has to deploy
-atomically from the run), and the judge puts it in front of traffic. Every deployment write checks the lease in the
+as a Worker version that serves nobody (Durable Object apps too; only a Durable Object class change, and a project's very first
+release, when its production Worker doesn't exist yet and there's nothing to stage beside, deploy directly from the run), and the judge puts it in front of traffic. Every deployment write checks the lease in the
 same turn, right before the request, and a run that has lost it writes nothing at all, not even a rollback or cleanup:
 putting production right is the judge's own reconciliation, which, whenever no release holds the lease, sets
 production's deployment to canon's released version from the deployment as it is now (a 0% version a fenced-out run

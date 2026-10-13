@@ -215,10 +215,12 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       let atomic = false;
       await fenced("production");
       const run = await deps.runner({ name: "upload version", command: `${inTime()}${wrangler} versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
-        // Only a Durable Object class change may skip the judge's write: Cloudflare can't upload it as a version (it's
-        // applied atomically by a deploy). Any other upload failure stops the release.
+        // Only two cases skip the judge's write: a Durable Object class change (Cloudflare can't upload it as a version;
+        // it's applied atomically by a deploy), and the project's first release, when its production Worker doesn't exist
+        // yet (there's nothing to stage beside, and Cloudflare can't upload a version of a Worker that doesn't exist).
+        // Any other upload failure stops the release.
         const why = isCiRunnerFailure(err) ? err.message : String(err);
-        if (!/migration|lifecycle|durable object class/i.test(why)) throw err;
+        if (!/migration|lifecycle|durable object class|does not yet exist/i.test(why)) throw err;
         atomic = true;
         return null;
       });
