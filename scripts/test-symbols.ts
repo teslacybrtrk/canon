@@ -50,3 +50,11 @@ assert.deepEqual(callsInto(addedText(base, caller), ["Market.addToCart", "page"]
 ok("a change that starts calling someone else's changed method is caught");
 assert.deepEqual(callsInto(addedText(base, guard), ["Market.addToCart"]), []);
 ok("changing a method's own body isn't a call of it");
+
+// A file too large for the line diff never reads as "nothing added": a DROP TABLE in a 3,000-line file is found.
+const big = Array.from({ length: 3200 }, (_, i) => `const line${i} = ${i};`).join("\n");
+const bigHead = big.replace("const line1600 = 1600;", 'const line1600 = 1600;\nsql.exec("DROP TABLE carts");');
+const bigAdded = addedText(big, bigHead);
+assert.ok(bigAdded.some((l) => l.includes("DROP TABLE carts")), "the added DROP TABLE is among the added lines");
+assert.ok(bigAdded.length < 5, `only what changed (${bigAdded.length} lines)`);
+ok("a 3,200-line file past the diff's size limit still yields its added lines (counted), not an empty diff");

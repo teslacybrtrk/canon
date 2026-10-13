@@ -132,15 +132,17 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       if (first.settle) await step.do("refused", () => referee.releaseRefused(seq, first.why));
       return;
     }
-    // Every container command that changes a Worker first checks the lease's deadline (less a margin for the command
-    // itself), so a step that starts late, after the judge fenced this run out, refuses itself.
+    // Every container command that changes a Worker runs under the lease's deadline: it refuses to start once less than
+    // a minute is left, and `timeout` kills it if it's still running a minute before the lease runs out, so nothing this
+    // run starts can still be writing after the judge could have fenced it out.
     let deadline = first.until;
     const fenced = async (label: string) => {
       const f = await fence(`fence: ${label}`);
       if (!f.go) throw new Error(`fenced out before ${label}: ${f.why}`);
       deadline = f.until;
     };
-    const inTime = () => `node -e 'process.exit(Date.now() < ${deadline - 3 * 60_000} ? 0 : 3)' && `;
+    const inTime = () => `T=$(( ${Math.floor(deadline / 1000)} - $(date +%s) - 60 )); [ "$T" -gt 0 ] || exit 3; `;
+    const wrangler = `timeout "$T" npx wrangler`;
     let ok = true;
     let versionId: string | null = null;
     let candidateRan = false;
@@ -149,11 +151,24 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     try {
       const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
       // Each project deploys under its own Worker name (project above), so projects never share a production app.
+      // A candidate left dirty (unreleased code ran on it and it couldn't be rebuilt) is never reused as it is: rebuild
+      // it from production's code first, or stop here as a platform failure.
+      const dirty = await step.do("candidate state", () => referee.candidateDirty());
+      if (dirty) {
+        await fenced("candidate rebuild first");
+        const job = await step.do("candidate rebuild first job", async () => {
+          const j = await referee.candidateResetJob(seq, holder, true);
+          return j ? (Object.fromEntries(Object.entries(j)) as Record<string, string>) : null;
+        });
+        if (!job) throw new Error(`the release candidate is dirty (${dirty}) and there is no released code to rebuild it from`);
+        await ci.runner({ name: "rebuild dirty release candidate", command: `${inTime()}${RESET_SCRIPT(project, wrangler)}`, env: job, cloudflareCredentials: creds, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
+        await step.do("candidate clean", () => referee.markCandidate(null));
+      }
       // Step one, the release candidate: the whole commit on its own Worker with production's config, so every fact
       // runs on all of its code (Durable Objects included) before production is touched.
       await fenced("release candidate");
       candidateRan = true;
-      await deps.runner({ name: "deploy release candidate", command: `${inTime()}npx wrangler deploy --name ${project}-candidate`, cloudflareCredentials: creds });
+      await deps.runner({ name: "deploy release candidate", command: `${inTime()}${wrangler} deploy --name ${project}-candidate`, cloudflareCredentials: creds });
       const candidateOk = await step.do("check release candidate", { timeout: "10 minutes" }, async () => await referee.candidateCheck(seq));
       if (!candidateOk) throw new Error("held back: the release candidate broke a fact");
       // The rollback rehearsal, for a change that touches stored data (or couldn't be fully inspected): the code
@@ -168,7 +183,7 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
         let deployedPrev = true;
         let why = "";
         try {
-          await ci.runner({ name: "rehearse rollback", command: `${inTime()}${REHEARSE_SCRIPT(project)}`, env: rehearsal, cloudflareCredentials: creds, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
+          await ci.runner({ name: "rehearse rollback", command: `${inTime()}${REHEARSE_SCRIPT(project, wrangler)}`, env: rehearsal, cloudflareCredentials: creds, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
         } catch (err) {
           deployedPrev = false;
           why = isCiRunnerFailure(err) ? err.message : String(err);
@@ -176,27 +191,27 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
         const goOn = await step.do("check rollback rehearsal", { timeout: "10 minutes" }, async () => await referee.rehearsalCheck(seq, holder, deployedPrev, why));
         if (!goOn) throw new Error("held back: its rollback rehearsal didn't pass");
       }
-      // Step two: upload the exact commit as a new Worker version that serves nobody yet; the judge's gate stages it at
-      // 0%, smoke-tests every fact on the production URL against it, and only then releases it. Not for a Worker with
-      // Durable Objects: an object runs one version at a time, so at 0% the staged Worker talks to the old objects and
-      // the answer means nothing. There the release candidate (a full copy, its own persistent data) is the gate.
+      // Step two: upload the exact commit as a new Worker version that serves nobody yet, and let the judge (the one
+      // writer of production's deployment, which checks this run's lease right before each write) put it in front of
+      // traffic. For a Worker without Durable Objects the judge stages it at 0% and smoke-tests every fact on the
+      // production URL against it first; with Durable Objects an object runs one version at a time, so a 0% test can't
+      // reach that code, and the release candidate (a full copy, its own persistent data) was the gate.
       const objects = await deps.runner({ name: "durable objects?", command: `grep -qs '"durable_objects"' wrangler.jsonc wrangler.json && echo CANON_HAS_DO || true` });
       const hasObjects = typeof objects.logs.stdout === "string" && objects.logs.stdout.includes("CANON_HAS_DO");
-      let atomic = hasObjects;
+      let atomic = false;
       await fenced("production");
-      const run = hasObjects ? null : await deps.runner({ name: "upload version", command: `${inTime()}npx wrangler versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
-        // Only a Durable Object class change may skip the gate: Cloudflare can't upload it as a version (it's atomic).
-        // Any other upload failure stops the release.
+      const run = await deps.runner({ name: "upload version", command: `${inTime()}${wrangler} versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
+        // Only a Durable Object class change may skip the judge's write: Cloudflare can't upload it as a version (it's
+        // applied atomically by a deploy). Any other upload failure stops the release.
         const why = isCiRunnerFailure(err) ? err.message : String(err);
         if (!/migration|lifecycle|durable object class/i.test(why)) throw err;
         atomic = true;
         return null;
       });
       if (atomic || !run) {
-        // The release candidate already ran this code in full; deploy it, and the check right after the release (and
-        // its rollback, when that's known to be safe) is the net.
+        // A class change deploys atomically from here, still under the lease's deadline (refused late, killed at it).
         await fenced("production deploy");
-        const deployed = await deps.runner({ name: "deploy", command: `${inTime()}npx wrangler deploy --name ${project}`, cloudflareCredentials: creds });
+        const deployed = await deps.runner({ name: "deploy", command: `${inTime()}${wrangler} deploy --name ${project}`, cloudflareCredentials: creds });
         const out = typeof deployed.logs.stdout === "string" ? deployed.logs.stdout : "";
         versionId = out.match(/Version ID:\s*([0-9a-f-]{36})/i)?.[1] ?? null;
       } else {
@@ -205,7 +220,7 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
         if (!versionId) throw new Error("no version id in the upload output");
         const id = versionId;
         await fenced("release gate");
-        const released = await step.do("release gate", { timeout: "10 minutes" }, async () => (await referee.gate(seq, id, holder)).released);
+        const released = await step.do("release gate", { timeout: "10 minutes" }, async () => (await referee.gate(seq, id, holder, !hasObjects)).released);
         ok = released;
       }
     } catch {
@@ -221,11 +236,12 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
           const j = await referee.candidateResetJob(seq, holder);
           return j ? (Object.fromEntries(Object.entries(j)) as Record<string, string>) : null;
         });
+        if (!job) await step.do("candidate left dirty", () => referee.markCandidate(`canon #${seq}'s code ran on it and there was no released code to rebuild it from`));
         if (job) {
           let rebuilt = true;
           let why = "rebuilt from production's code (the candidate Worker and its Durable Objects deleted, then redeployed)";
           try {
-            await ci.runner({ name: "rebuild release candidate", command: `${inTime()}${RESET_SCRIPT(project)}`, env: job, cloudflareCredentials: creds, config: { retries: { limit: 0, delay: 1_000 }, timeout: 8 * 60_000 } });
+            await ci.runner({ name: "rebuild release candidate", command: `${inTime()}${RESET_SCRIPT(project, wrangler)}`, env: job, cloudflareCredentials: creds, config: { retries: { limit: 0, delay: 1_000 }, timeout: 8 * 60_000 } });
           } catch (err) {
             rebuilt = false;
             why = `couldn't rebuild: ${isCiRunnerFailure(err) ? err.message : String(err)}`;
@@ -233,7 +249,8 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
           await step.do("candidate rebuilt", () => referee.candidateReset(seq, rebuilt, why));
         }
       } catch {
-        // Fenced out: the judge has settled this release; another run owns the candidate now.
+        // Fenced out before it could rebuild: the candidate stays marked dirty, and the next release rebuilds it first.
+        await step.do("candidate left dirty", () => referee.markCandidate(`canon #${seq}'s code ran on it and its run was fenced out before rebuilding it`));
       }
     }
     await step.do("record promotion", () => referee.promoted(seq, ok, versionId, holder));
@@ -252,21 +269,21 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
 
 // Runs in the CI container: the rollback rehearsal. Checks out the code production runs now (PREV_URL at PREV_SHA, a
 // read-only token) and deploys it onto the release candidate, which this release's code has just run on.
-const REHEARSE_SCRIPT = (project: string) => [
+const REHEARSE_SCRIPT = (project: string, wrangler: string) => [
   `set -e`,
   `rm -rf /tmp/canon-prev && git clone -q "$PREV_URL" /tmp/canon-prev && cd /tmp/canon-prev && git checkout -q "$PREV_SHA"`,
   `npm ci --no-audit --no-fund --ignore-scripts >/dev/null`,
-  `npx wrangler deploy --name ${project}-candidate`,
+  `${wrangler} deploy --name ${project}-candidate`,
 ].join(" && ");
 
 // Runs in the CI container: rebuilds the release candidate from production's code. Deleting the Worker deletes its
 // Durable Objects; the namespace takes a moment to go, so the fresh deploy is retried.
-const RESET_SCRIPT = (project: string) => [
+const RESET_SCRIPT = (project: string, wrangler: string) => [
   `set -e`,
-  `npx wrangler delete --name ${project}-candidate --force >/dev/null 2>&1 || true`,
+  `(${wrangler} delete --name ${project}-candidate --force >/dev/null 2>&1 || true)`,
   `rm -rf /tmp/canon-prev && git clone -q "$PREV_URL" /tmp/canon-prev && cd /tmp/canon-prev && git checkout -q "$PREV_SHA"`,
   `npm ci --no-audit --no-fund --ignore-scripts >/dev/null`,
-  `for i in 1 2 3 4 5; do npx wrangler deploy --name ${project}-candidate && exit 0; sleep 15; done; exit 1`,
+  `for i in 1 2 3 4 5; do ${wrangler} deploy --name ${project}-candidate && exit 0; sleep 15; done; exit 1`,
 ].join(" && ");
 
 // Runs in the CI container: writes refs/notes/canon (one note per canon commit) and pushes it to the canon attempt.
@@ -399,7 +416,7 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       const ran = await deps.runner({
         name: "build mutants",
         command: MUTANT_SCRIPT,
-        env: { FILES: btoa(files), PREFIX: prefix, MAX: "6", MUTATOR: btoa(MUTATOR_JS) },
+        env: { FILES: btoa(files), PREFIX: prefix, MAX: "8", MUTATOR: btoa(MUTATOR_JS) },
         cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
         config: { retries: { limit: 0, delay: 1_000 }, timeout: 12 * 60_000 },
       });
@@ -445,20 +462,39 @@ if (cmd === "gen") {
       if (n) left.set(text, n - 1); else added.push({ file: f.path, line: i + 1, text });
     });
   }
+  // Breaks that matter most go first (MAX keeps the first few): stored data, retries and failure paths, then guards,
+  // error statuses and comparisons. One break per line.
   const out = [], used = new Set();
-  const add = (a, op, after) => { const k = a.file + ":" + a.line; if (used.has(k)) return; used.add(k); out.push({ file: a.file, line: a.line, op, before: a.text.trim(), after: after.trim() }); };
+  const add = (a, op, after, prio) => { const k = a.file + ":" + a.line; if (used.has(k)) return; used.add(k); out.push({ file: a.file, line: a.line, op, before: a.text.trim(), after: after.trim(), prio }); };
   for (const a of added) {
     const t = a.text, s = t.trim();
     if (!s || s.startsWith("//") || s.startsWith("*")) continue;
-    if (/^if\s*\(.*\)\s*return\b.*;$/.test(s)) { add(a, "removed the guard", ""); continue; }
+    // Retries and duplicates: what happens when the same write arrives twice.
+    const acc = /(\w+)\s*=\s*\1\s*\+\s*excluded\.\1/.exec(t);
+    if (acc) { add(a, "a repeated write overwrites instead of adding", t.replace(acc[0], acc[1] + " = excluded." + acc[1]), 0); continue; }
+    if (/INSERT OR IGNORE/i.test(t)) { add(a, "a duplicate replaces the original", t.replace(/INSERT OR IGNORE/i, "INSERT OR REPLACE"), 0); continue; }
+    if (/INSERT OR REPLACE/i.test(t)) { add(a, "a duplicate is silently dropped", t.replace(/INSERT OR REPLACE/i, "INSERT OR IGNORE"), 0); continue; }
+    // Concurrency and integrity: the constraint that stops two writers both winning.
+    const pk = /,\s*(PRIMARY KEY|UNIQUE)\s*\([^)]*\)/i.exec(t);
+    if (pk) { add(a, "dropped the uniqueness constraint", t.replace(pk[0], ""), 0); continue; }
+    if (/\bUNIQUE\b/i.test(t) && /CREATE|ALTER/i.test(t)) { add(a, "dropped the uniqueness constraint", t.replace(/\s*\bUNIQUE\b/i, ""), 0); continue; }
+    // Migrations: re-runnable, and safe for the rows already there.
+    if (/CREATE TABLE IF NOT EXISTS/i.test(t)) { add(a, "the migration isn't safe to re-run", t.replace(/CREATE TABLE IF NOT EXISTS/i, "CREATE TABLE"), 0); continue; }
+    const def = /\s+DEFAULT\s+('[^']*'|"[^"]*"|[\w.-]+)/i.exec(t);
+    if (def && /ADD COLUMN|CREATE TABLE/i.test(t)) { add(a, "existing rows get no default", t.replace(def[0], ""), 0); continue; }
+    // Failure paths: an error that should stop the request, swallowed.
+    if (/^throw\b/.test(s)) { add(a, "swallowed the failure", "", 1); continue; }
+    if (/^if\s*\(.*\)\s*throw\b.*;$/.test(s)) { add(a, "removed the check that fails the request", "", 1); continue; }
+    if (/^if\s*\(.*\)\s*return\b.*;$/.test(s)) { add(a, "removed the guard", "", 1); continue; }
     const st = /\b(409|400|403|404|422)\b/.exec(t);
-    if (st && /status|Response/.test(t)) { add(a, st[1] + " \u2192 200", t.replace(st[1], "200")); continue; }
+    if (st && /status|Response/.test(t)) { add(a, st[1] + " \u2192 200", t.replace(st[1], "200"), 1); continue; }
     for (const [f, r] of [["!==", "==="], ["===", "!=="], [">=", ">"], ["<=", "<"], [" > ", " >= "], [" < ", " <= "], ["&&", "||"]]) {
-      if (t.includes(f)) { add(a, f.trim() + " \u2192 " + r.trim(), t.replace(f, r)); break; }
+      if (t.includes(f)) { add(a, f.trim() + " \u2192 " + r.trim(), t.replace(f, r), 2); break; }
     }
   }
-  fs.writeFileSync("/tmp/canon-mutants.json", JSON.stringify(out.slice(0, MAX)));
-  console.log(out.slice(0, MAX).length);
+  const picked = out.map((m, i) => [m, i]).sort((x, y) => x[0].prio - y[0].prio || x[1] - y[1]).slice(0, MAX).map(([m]) => { const { prio, ...rest } = m; return rest; });
+  fs.writeFileSync("/tmp/canon-mutants.json", JSON.stringify(picked));
+  console.log(picked.length);
 } else if (cmd === "apply") {
   const m = JSON.parse(fs.readFileSync("/tmp/canon-mutants.json", "utf8"))[+arg];
   fs.copyFileSync(m.file, "/tmp/canon-mut-backup");

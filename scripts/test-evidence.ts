@@ -75,8 +75,8 @@ const writes = dataChanges([{ path: "src/index.ts", lines: ["this.sql.exec(`INSE
 assert.deepEqual([recoveryFor(writes).rollbackSafe, recoveryFor(writes).rehearse], [false, true]);
 ok("additive schema or writes: rollback-safe only once rehearsed, not assumed");
 const none = dataChanges([{ path: "src/index.ts", lines: ["if (qty > 99) return { ok: false };"] }]);
-assert.deepEqual([recoveryFor(none).rollbackSafe, recoveryFor(none).rehearse], [true, false]);
-ok("a change that touches no stored data, with every file read: rolling back is safe");
+assert.deepEqual([recoveryFor(none).rollbackSafe, recoveryFor(none).rehearse], [false, true]);
+ok("nothing recognised as touching data still isn't called safe: patterns can't prove absence, the rehearsal decides");
 for (const unknown of [undefined, dataChanges([], false, "couldn't read src/index.ts: timeout")]) {
   assert.deepEqual([recoveryFor(unknown).rollbackSafe, recoveryFor(unknown).rehearse], [false, true]);
   assert.equal(dataEvidence(unknown).state, "unavailable");

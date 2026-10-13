@@ -54,7 +54,7 @@ async function read() {
   const forPath = typeof args.for === "string" ? args.for.replace(/^\.\//, "") : null;
   const applies = (f) => !forPath || !f.scope || f.scope.some((g) => globToRegExp(g).test(forPath));
   const facts = s.facts.filter(applies);
-  const label = (f) => `${f.id.padEnd(28)} ${f.sentence}${f.scope ? `  [${f.scope.join(", ")}]` : ""}${f.check.kind === "command" ? `  (runs: ${f.check.run})` : ""}`;
+  const label = (f) => `${f.id.padEnd(28)} ${f.sentence}${f.scope ? `  [${f.scope.join(", ")}]` : ""}${f.heldOut ? "  (held out: its check is hidden)" : f.check.kind === "command" ? `  (runs: ${f.check.run})` : ""}`;
   console.log(`CANON  attempt ${s.canon.attemptId} @ ${s.canon.sha.slice(0, 8)}  (seq ${s.canon.seq})${s.policy?.autoAccept === "backlog" ? "  · autopilot: backlog facts land on their own" : ""}`);
   if (forPath) console.log(`(facts that govern ${forPath})`);
   for (const f of facts.filter((f) => f.status === "canon")) console.log(`  ✓ ${label(f)}`);
@@ -78,6 +78,8 @@ async function claim() {
   if (!args.why) fail('--why "<reason>" is required: it becomes part of the fact chain');
   const body = { agent: AGENT, why: args.why };
   // --touches "src/index.ts,src/cart/**": the files this attempt will change; a change outside them waits for the owner.
+  // --after "fact-a,fact-b": facts this attempt builds on; it won't land before they are canon.
+  if (args.after) body.after = String(args.after).split(",").map((g) => g.trim()).filter(Boolean);
   if (args.touches) body.touches = String(args.touches).split(",").map((g) => g.trim()).filter(Boolean);
   if (args.join && args.fact) fail("use either --fact <file.json> (a new fact or a revision) or --join <fact-id>, not both");
   if (args.join) body.join = args.join;

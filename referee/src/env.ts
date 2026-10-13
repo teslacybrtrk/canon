@@ -1,11 +1,13 @@
 import type { CiParams, CloudflareArtifacts } from "@cloudflare/ci";
 import type { CiBindings } from "@cloudflare/ci/worker";
 import type { Referee } from "./referee";
+import type { Capacity } from "./capacity";
 
 // The CI package owns ARTIFACTS, SANDBOX, BACKUP_BUCKET, CI_WORKFLOW, CF_TOKEN,
 // CLOUDFLARE_ACCOUNT_ID and the R2 keys. Canon adds the referee, promotion and refresh.
 export type Env = CiBindings & {
   REFEREE: DurableObjectNamespace<Referee>;
+  CAPACITY?: DurableObjectNamespace<Capacity>; // account-wide verification slots, shared by every project
   PROMOTE_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   REFRESH_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   TRAIN_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;

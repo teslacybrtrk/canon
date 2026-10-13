@@ -14,7 +14,8 @@ import type { DataChanges, Evidence, Recovery } from "./evidence";
 
 export type FactStatus = "canon" | "proposed" | "retired" | "declined";
 // seed: from genesis canon.json · agent: proposed in a claim · backlog: written by people in canon.json for agents to build
-export type FactOrigin = "seed" | "agent" | "backlog";
+// "heldout": written by the owner straight into the judge, never in canon.json: agents see its sentence, never its check.
+export type FactOrigin = "seed" | "agent" | "backlog" | "heldout";
 
 export type ClaimStatus =
   | "open" //        declared, nothing pushed yet
@@ -43,6 +44,7 @@ export interface Fact {
   retiredBy: string | null; // attempt that retired it (by accepting a revision)
   acceptedHow: string | null; // who decided it: "the owner" (a person or an owner agent), or the rule that landed it on its own
   declinedAt: number | null; // a person declined the claim that proposed it, and nobody else was working on it
+  heldOut?: boolean; // its check is hidden from agents (and from the public board); only the owner sees it
   declineReason: string | null;
   retiredAt: number | null;
 }
@@ -80,6 +82,11 @@ export interface Charter {
   // true: a change the advisory reviewer flags with a "risk" note waits for the owner instead of landing on its own
   // (the reviewer still decides nothing: it can only make autopilot wait). Autopilot waits for the review to finish.
   reviewRisk?: boolean;
+  // true: a reviewer "intent" note (the change does something its fact doesn't ask for) waits for the owner too, the
+  // same as a risk: accountability between what a change claims to do and what it does.
+  intentRisk?: boolean;
+  // true: every claim must declare the files it will change (touches); a change outside them waits for the owner.
+  requireScope?: boolean;
 }
 export interface Policy {
   autoAccept?: AutoAccept;
@@ -161,6 +168,7 @@ export interface Claim {
   declineReason: string | null; // why a person declined it
   autoWait: string | null; // under autopilot: why this Ready claim isn't landing on its own
   touches?: string[]; // the files it said it would change (DeclareRequest.touches)
+  after?: string[]; // facts it builds on (DeclareRequest.after)
 }
 
 // Two Ready claims that can't both land. `factId` failed on the other attempt's preview at a later step than on the
@@ -232,6 +240,9 @@ export type DeclareRequest = {
   // The files this attempt will change, as globs ("src/index.ts", "src/cart/**"). Declared, the claim is held to it:
   // a change outside it is an unclaimed edit, and autopilot leaves it to the owner. Passing a fact doesn't excuse it.
   touches?: string[];
+  // Facts this attempt builds on ("after": ["no-double-booking"]): it isn't landed until they are canon, and it is
+  // scheduled after them, instead of the dependency surfacing later as a clash or a failed verdict.
+  after?: string[];
 } & (
   | { fact: FactDef } // propose a new fact (with `replaces`: a revision of a canon fact)
   | { join: string } // race for a fact someone else already proposed
@@ -319,6 +330,7 @@ export interface Acceptance {
   verdict: { kept: number; skipped: number; seed?: string; previewUrl: string; judgedAt: number };
   environment: string; // where the checks ran
   authorizedBy: string; // "the owner", or the autopilot/charter reasons
+  chosenBecause?: string; // the reason given for choosing this attempt (a person's own words, or the rule that chose it)
   exceptions: string[]; // required evidence that failed or was unavailable, which a person accepted anyway
   // The other attempts at the same facts, and what became of them (declined with a reason, broke a fact, superseded):
   // the alternatives this decision passed over.

@@ -41,9 +41,11 @@ const mutants = JSON.parse(readFileSync("/tmp/canon-mutants.json", "utf8"));
 ok(n === 3 && mutants.length === 3, `three mutants from three added lines (got ${n})`);
 ok(mutants.every((m) => m.file === "src/app.ts"), "every mutant names its file");
 ok(!mutants.some((m) => m.line === 2 || m.line === 7), "lines the attempt didn't add are never broken");
-ok(mutants[0].op === "removed the guard" && mutants[0].line === 3 && mutants[0].after === "", "a one-line guard is removed");
-ok(mutants[1].op.startsWith(">=") && mutants[1].after === "const big = qty > 100;", "a comparison is flipped");
-ok(mutants[2].op === "removed the guard" && mutants[2].line === 5, "a guard with an error status is removed");
+const at = (line) => mutants.find((m) => m.line === line);
+ok(at(3)?.op === "removed the guard" && at(3)?.after === "", "a one-line guard is removed");
+ok(at(4)?.op.startsWith(">=") && at(4)?.after === "const big = qty > 100;", "a comparison is flipped");
+ok(at(5)?.op === "removed the guard", "a guard with an error status is removed");
+ok(mutants.map((m) => m.line).join() === "3,5,4", "guards come before comparisons (the breaks that matter most first)");
 
 copyFileSync(join(dir, "src/app.ts"), join(dir, "orig.ts"));
 for (let i = 0; i < mutants.length; i++) {
@@ -58,4 +60,31 @@ writeFileSync("/tmp/canon-mutants.out", "0 ok\n1 no\n2 ok\n");
 const report = JSON.parse(run("report").replace(/^CANON_MUTANTS /, ""));
 ok(report[0].preview === "p-0" && report[1].preview === null && report[2].preview === "p-2", "the report names each built mutant's preview, and none for one that didn't build");
 
-process.exit(failed ? 1 : 0);
+
+// Stored data, retries and failure paths: the breaks a sequential happy-path check misses.
+const dataBase = ["export class M {", "  constructor() {", "  }", "}", ""].join("\n");
+const dataHead = [
+  "export class M {",
+  "  constructor() {",
+  "    this.sql.exec(`CREATE TABLE IF NOT EXISTS bookings (stall INTEGER, day TEXT, name TEXT, PRIMARY KEY (stall, day))`);",
+  "    this.sql.exec(`ALTER TABLE stalls ADD COLUMN hours TEXT NOT NULL DEFAULT '8am'`);",
+  "    this.sql.exec(`INSERT INTO cart (id, qty) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET qty = qty + excluded.qty`, id, n);",
+  "    this.sql.exec(`INSERT OR IGNORE INTO seen VALUES (?)`, key);",
+  '    if (!stall) throw new Error("no such stall");',
+  '    throw new Error("unreachable");',
+  "  }",
+  "}",
+  "",
+].join("\n");
+writeFileSync(join(dir, "src/app.ts"), dataHead);
+writeFileSync("/tmp/canon-mut-files.json", JSON.stringify([{ path: "src/app.ts", b64: Buffer.from(dataBase).toString("base64") }]));
+const m2 = (Number(execFileSync("node", [mutator, "gen"], { cwd: dir, env: { ...process.env, MAX: "8" } }).toString().trim()), JSON.parse(readFileSync("/tmp/canon-mutants.json", "utf8")));
+const op = (line) => m2.find((m) => m.line === line);
+ok(op(3)?.op === "dropped the uniqueness constraint" && !op(3).after.includes("PRIMARY KEY"), "a composite primary key is dropped (two writers could both win)");
+ok(op(4)?.op === "existing rows get no default" && !op(4).after.includes("DEFAULT"), "an added column loses its default (old rows)");
+ok(op(5)?.op === "a repeated write overwrites instead of adding" && op(5).after.includes("qty = excluded.qty"), "a retried add overwrites instead of accumulating");
+ok(op(6)?.op === "a duplicate replaces the original" && op(6).after.includes("INSERT OR REPLACE"), "a duplicate replaces instead of being ignored");
+ok(op(7)?.op === "removed the check that fails the request" && op(7).after === "", "a failing check is removed");
+ok(op(8)?.op === "swallowed the failure" && op(8).after === "", "a throw is swallowed");
+ok(m2.slice(0, 4).every((m) => [3, 4, 5, 6].includes(m.line)), "data and retry breaks come first");
+if (failed) process.exit(1);

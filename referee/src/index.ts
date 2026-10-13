@@ -1,12 +1,13 @@
 import { CiSandbox } from "@cloudflare/ci/worker";
 import type { Env } from "./env";
-import { errorStatus, type DeclareRequest } from "./protocol";
+import { errorStatus, type DeclareRequest, type FactDef } from "./protocol";
 import { serveMcp } from "./mcp";
 import { serveGit, serveSource } from "./source";
 import { refereeForProject } from "./stub";
 
 export { CiSandbox };
 export { Referee } from "./referee";
+export { Capacity } from "./capacity";
 export { VerifyAttempt, PromoteAttempt, RefreshAttempt, TrainAttempt, MutateAttempt } from "./pipelines";
 
 // The Canon HTTP surface. Reads are public. Writes need a bearer key: the owner's key (CANON_KEY)
@@ -17,6 +18,8 @@ export { VerifyAttempt, PromoteAttempt, RefreshAttempt, TrainAttempt, MutateAtte
 //   POST /p/:project/claims                   move 2: declare  (fork + token)        agent or owner key
 //        git push <remote> main               move 3: push     (plain Git)
 //   GET  /p/:project/attempts/:id/verdict       move 4: verdict
+//   POST /p/:project/heldout                  {id, sentence, check}: a fact agents can't see the check of    owner key
+//   GET  /p/:project/heldout                  the held-out facts in full                                 owner key
 //   GET  /p/:project/canon/:seq/acceptance      what canon #seq authorized, on what evidence, under which policy
 //   POST /p/:project/claims/:id/accept        review: a human accepts a fact          owner key
 //   POST /p/:project/claims/:id/decline       review: a human says no ({"reason"})    owner key
@@ -59,6 +62,13 @@ export default {
       if (route === "GET /canon") return json(await referee.read());
       if (route === "GET /previews") return json(await referee.previews());
       if (route === "GET /stats") return json(await referee.stats());
+      // Held-out facts: the owner writes them into the judge and reads them back; agents see only their sentences.
+      if (route === "POST /heldout") return json(await referee.addHeldOut(await request.json<FactDef>()), 201);
+      if (route === "GET /heldout") {
+        const denied = await deny(request, env, "owner");
+        if (denied) return denied;
+        return json(await referee.heldOut());
+      }
       if ((match = route.match(/^GET \/canon\/(\d+)\/acceptance$/))) {
         const record = await referee.acceptance(Number(match[1]));
         return record ? json(record) : json({ error: "no acceptance record (genesis, a revert, or accepted before records existed)" }, 404);
@@ -80,7 +90,11 @@ export default {
         return verdict ? json(verdict) : json({ outcome: "pending" }, 202);
       }
       if ((match = route.match(/^POST \/attempts\/([\w-]+)\/review$/))) return json(await referee.reReview(match[1]));
-      if ((match = route.match(/^POST \/claims\/([\w-]+)\/accept$/))) return json(await referee.accept(match[1]));
+      if ((match = route.match(/^POST \/claims\/([\w-]+)\/accept$/))) {
+        // Optional {"reason": "..."}: why this attempt, in the owner's words; the acceptance record keeps it.
+        const body = await request.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
+        return json(await referee.accept(match[1], "the owner", typeof body.reason === "string" ? body.reason : undefined));
+      }
       if ((match = route.match(/^POST \/claims\/([\w-]+)\/decline$/))) {
         const body = await request.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
         return json(await referee.decline(match[1], body.reason));

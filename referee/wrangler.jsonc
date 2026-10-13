@@ -23,11 +23,13 @@
   "durable_objects": {
     "bindings": [
       { "name": "REFEREE", "class_name": "Referee" },
+      { "name": "CAPACITY", "class_name": "Capacity" },
       { "name": "SANDBOX", "class_name": "CiSandbox" }
     ]
   },
   "exports": {
     "Referee": { "type": "durable-object", "storage": "sqlite" },
+    "Capacity": { "type": "durable-object", "storage": "sqlite" },
     "CiSandbox": { "type": "durable-object", "storage": "sqlite" }
   },
   // Workers AI: the advisory reviewer (a model that didn't write the change reads it after the checks pass).

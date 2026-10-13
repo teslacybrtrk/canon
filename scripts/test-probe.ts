@@ -196,7 +196,7 @@ for (const [atomic, want] of [[true, true], [false, false]] as const) {
   await new Promise<void>((r) => fresh.listen(0, r));
   const raced = await runCheck(race, `http://127.0.0.1:${(fresh.address() as { port: number }).port}`);
   fresh.close();
-  assert.equal(seq.held, true);
+  assert.equal(seq.held, true, seq.detail);
   assert.equal(raced.held, want, raced.detail);
   console.log(`ok  race, ${atomic ? "atomic booking" : "check-then-await-then-insert"} -> sequential probe holds; concurrent step ${want ? "holds" : `fails (${raced.detail})`}`);
 }

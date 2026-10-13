@@ -66,11 +66,25 @@ export function changedSymbols(base: string, head: string): string[] {
   return [...out].sort();
 }
 
-/** The lines a change adds (by the same diff), for spotting calls: did this change start calling something? */
+/**
+ * The lines a change adds (by the same diff). A file too large for the line diff is never "nothing added": it falls
+ * back to counting lines, so any line that appears more often in `head` than in `base` counts as added (every truly new
+ * line is among them). Data inspection relies on this, so a big file can't hide a DROP TABLE.
+ */
 export function addedText(base: string, head: string): string[] {
+  const a = base.split("\n");
   const b = head.split("\n");
-  const d = diffLines(base.split("\n"), b);
-  return d ? d.added.map((i) => b[i]).filter((l) => l.trim()) : [];
+  const d = diffLines(a, b);
+  if (d) return d.added.map((i) => b[i]).filter((l) => l.trim());
+  const left = new Map<string, number>();
+  for (const l of a) left.set(l, (left.get(l) ?? 0) + 1);
+  const out: string[] = [];
+  for (const l of b) {
+    const k = left.get(l) ?? 0;
+    if (k > 0) left.set(l, k - 1);
+    else if (l.trim()) out.push(l);
+  }
+  return out;
 }
 
 /**

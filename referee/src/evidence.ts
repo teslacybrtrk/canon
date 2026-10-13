@@ -36,7 +36,7 @@ export function mutationEvidence(min: number | undefined, factKind: string | und
 }
 
 /** Review evidence: a reviewer that didn't write the change read it and named no risk, as the charter asks. */
-export function reviewEvidence(required: boolean | undefined, hasModel: boolean, r: Review | null, now: number): Evidence {
+export function reviewEvidence(required: boolean | undefined, hasModel: boolean, r: Review | null, now: number, intentCounts = false): Evidence {
   if (!required) return { state: "not-required", detail: "the charter doesn't route the reviewer's risks to the owner" };
   if (!hasModel) return { state: "unavailable", detail: "no reviewer model is bound to this judge" };
   if (!r) return { state: "pending", detail: "the reviewer is reading the change first (the charter routes its risks to the owner)" };
@@ -47,9 +47,10 @@ export function reviewEvidence(required: boolean | undefined, hasModel: boolean,
   }
   if (r.status === "error") return { state: "unavailable", detail: `the review failed: ${(r.detail ?? "no detail").slice(0, 120)}` };
   if (r.status === "none") return { state: "not-applicable", detail: r.detail ?? "no source files changed" };
-  const risk = r.notes.find((n) => n.kind === "risk");
+  if (r.coverage && r.coverage.reviewed < r.coverage.files) return { state: "unavailable", detail: `the review covered ${r.coverage.reviewed} of ${r.coverage.files} changed source files` };
+  const risk = r.notes.find((n) => n.kind === "risk") ?? (intentCounts ? r.notes.find((n) => n.kind === "intent") : undefined);
   return risk
-    ? { state: "failed", detail: `the reviewer flagged a risk at ${risk.file}:${risk.line} (${risk.note.slice(0, 120)})` }
+    ? { state: "failed", detail: `the reviewer flagged ${risk.kind === "intent" ? "something its fact doesn't ask for" : "a risk"} at ${risk.file}:${risk.line} (${risk.note.slice(0, 120)})` }
     : { state: "passed", detail: `the reviewer (${r.model.split("/").pop()}) named no risk${r.notes.length ? ` (${r.notes.length} other note${r.notes.length > 1 ? "s" : ""})` : ""}` };
 }
 
@@ -143,7 +144,9 @@ export function recoveryFor(d: DataChanges | undefined): Recovery {
   if (d.destructive.length) return { rollbackSafe: false, rehearse: false, how: `destructive data change (${d.destructive[0]}): an earlier Worker version restores the code, not the data, so a failed release is not rolled back automatically` };
   const touch = d.additive[0] ?? d.writes[0];
   if (touch) return { rollbackSafe: false, rehearse: true, how: `it touches stored data (${touch}): rollback is safe only once rehearsed, the previous version run on data this one wrote` };
-  return { rollbackSafe: true, rehearse: false, how: `no added line changes schema or writes stored data (${d.files ?? 0} changed file${d.files === 1 ? "" : "s"} read): rolling back the Worker restores the behaviour` };
+  // Patterns can't prove a change leaves stored data alone (a new value passed to an old helper changes what's stored):
+  // classification only decides what evidence is needed, and rollback safety always comes from the rehearsal.
+  return { rollbackSafe: false, rehearse: true, how: `no added line was recognised as touching stored data (${d.files ?? 0} changed file${d.files === 1 ? "" : "s"} read), but recognition can't prove that: rollback is safe once rehearsed` };
 }
 
 /** The data evidence autopilot needs: destructive waits for a person; not knowing waits too; the rest lands. */

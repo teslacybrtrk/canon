@@ -37,6 +37,7 @@ const TOOLS = [
         why: { type: "string", description: "One sentence: why this fact matters. It is kept in the fact's history." },
         fact: { type: "object", description: 'A new fact: {"id": "slug", "sentence": "...", "check": {...}}. Add "replaces": "<fact id>" to revise a canon fact on purpose.' },
         join: { type: "string", description: "The id of a proposed or backlog fact to make true instead of proposing your own" },
+        after: { type: "array", items: { type: "string" }, description: "Optional: fact ids your change builds on. It won't land before they are canon, and is scheduled after them." },
         touches: { type: "array", items: { type: "string" }, description: 'Optional: the files you will change, as globs (["src/index.ts"]). Declared, you are held to it: a change outside it waits for the owner.' },
       },
     },
@@ -132,6 +133,7 @@ async function call(name: string, args: Args, referee: Referee, project: string)
   if (name === "canon_verdict") return verdict(referee, need("attempt"), str("sha"), args.wait === true);
   if (name === "canon_claim") {
     const req = { agent: need("agent"), why: need("why") } as DeclareRequest;
+    if (Array.isArray(args.after)) Object.assign(req, { after: (args.after as unknown[]).filter((g): g is string => typeof g === "string") });
     if (Array.isArray(args.touches)) Object.assign(req, { touches: (args.touches as unknown[]).filter((g): g is string => typeof g === "string") });
     if (str("join")) Object.assign(req, { join: str("join") });
     else if (args.fact && typeof args.fact === "object") Object.assign(req, { fact: args.fact as FactDef });

@@ -34,8 +34,9 @@ import { addedText, callsInto, changedSymbols } from "./symbols";
 import { fileFromAnswer, repairPrompt, validResolution } from "./repair";
 import { SCHEMA, UPGRADES } from "./schema";
 import { holdsLease, leaseDecision, RELEASE_LEASE_MS, type Lease } from "./release";
+import { ACCOUNT_SLOTS } from "./slots";
 import { dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence, type DataChanges, type Evidence } from "./evidence";
-import { judgeAnswer, REVIEW_SCHEMA, reviewPrompt, type Review, type ReviewFile } from "./review";
+import { judgeAnswer, REVIEW_SCHEMA, reviewBatches, reviewPrompt, specialistsFor, type Review, type ReviewFile, type ReviewNote, type Specialist } from "./review";
 
 // The advisory reviewer: a different model from the agents' (they are Claude or Grok), on Workers AI.
 const REVIEW_MODELS = ["@cf/moonshotai/kimi-k2.7-code", "@cf/moonshotai/kimi-k2.6"];
@@ -52,9 +53,10 @@ const LIVE_CHECK_TTL_MS = 30_000;
 const BOARDING_MS = 60_000;
 // Canon accepted before this moment has no acceptance record (they were added then); anything later must have one.
 const ACCEPTANCE_RECORDS_SINCE = Date.parse("2026-10-13T00:00:00Z");
+const HELD_OUT_DETAIL = "a held-out fact broke (the owner keeps its check out of the repo; it can't be shown)";
 const VERIFY_SLOTS = 6;
 const DATA_MAX_FILES = 60; // changed files the data inspection reads; more makes it incomplete (unavailable)
-const REVIEW_MAX_FILES = 6; // a change touching more source files than this is too big for one review: unavailable
+const REVIEW_MAX_FILES = 12; // a change touching more source files than this is too big to review (split into passes up to here): unavailable
 const REVIEW_STUCK_MS = 10 * 60_000; // a review still running after this never finished (evidence.ts agrees) // commits a project verifies at once; the rest queue (see admit)
 const SPECULATIVE_BOARDING_MS = 3_000; // boarding while a release runs: the riders leave as a speculative train
 const PRODUCTION_CHECK_EVERY_MS = 60 * 60_000;
@@ -111,17 +113,70 @@ export class Referee extends DurableObject<Env> {
     return { attemptId: id, remote: created.remote, token: created.token };
   }
 
+  // ---- Held-out facts ---------------------------------------------------------------
+  //
+  // Facts the owner keeps out of the repo: written straight into the judge, enforced on every verdict, release and
+  // mutation run like any canon fact, but agents (and the public board) see only the sentence: never the check, never
+  // the details of a failure. An agent can't tune its code to a check it can't read, and can't edit one it can't see.
+
+  private heldOutIds(): Set<string> {
+    return new Set(this.rows(`SELECT id FROM facts WHERE origin = 'heldout'`).map((r) => r.id as string));
+  }
+
+  private redactFact(f: Fact): Fact {
+    return f.origin === "heldout" ? { ...f, check: { kind: "probe", steps: [] }, heldOut: true } : f;
+  }
+
+  private redactVerdict<V extends Verdict | null>(v: V, hidden: Set<string>): V {
+    if (!v || !hidden.size) return v;
+    const hide = (id: string, detail: string) => (hidden.has(id) ? HELD_OUT_DETAIL : detail);
+    return { ...v, lost: v.lost.map((l) => ({ ...l, detail: hide(l.factId, l.detail) })), stale: v.stale.map((x) => ({ ...x, detail: hide(x.factId, x.detail) })) };
+  }
+
+  private redactProduction(p: { at: number; url: string; results: Record<string, CheckResult> } | null, hidden: Set<string>) {
+    if (!p?.results || !hidden.size) return p;
+    return { ...p, results: Object.fromEntries(Object.entries(p.results).map(([id, r]) => [id, hidden.has(id) ? { ...r, detail: r.held ? "ok" : HELD_OUT_DETAIL } : r])) };
+  }
+
+  /**
+   * The owner adds a held-out fact. Like a seed fact it must already hold: a probe is checked on canon's own preview
+   * before it's stored (a command fact is checked on the next verdict, in CI). Owner only; never written to canon.json.
+   */
+  async addHeldOut(def: FactDef) {
+    if (!def?.id || !/^[a-z0-9][a-z0-9-]{1,60}$/.test(def.id) || typeof def.sentence !== "string" || !def.sentence.trim()) throw new ProtocolError(400, 'a held-out fact needs {"id": "slug", "sentence": "...", "check": {...}}');
+    validateCheck(def.check);
+    if (this.fact(def.id)) throw new ProtocolError(409, `fact "${def.id}" exists`);
+    const canon = this.currentCanon();
+    const preview = canon ? this.attempt(canon.attempt_id as string)?.previewUrl : null;
+    if (def.check.kind === "probe") {
+      if (!preview) throw new ProtocolError(409, "canon has no preview to check it on yet");
+      const r = await runCheck(def.check as ProbeCheck, preview, `heldout:${def.id}`);
+      if (!r.held) throw new ProtocolError(409, `it doesn't hold on canon now: ${r.detail}`);
+    }
+    const now = Date.now();
+    this.insertFact(def, "canon", "heldout", now, now);
+    this.sql.exec(`UPDATE facts SET accepted_how = 'the owner, held out' WHERE id = ?`, def.id);
+    this.broadcast();
+    return { id: def.id, heldOut: true };
+  }
+
+  /** The held-out facts in full: owner only. */
+  heldOut(): Fact[] {
+    return this.rows(`SELECT * FROM facts WHERE origin = 'heldout' ORDER BY created_at`).map(toFact);
+  }
+
   // ---- Move 1: read ----------------------------------------------------------------
 
   read(): CanonState {
     const canon = this.currentCanon();
-    const facts = this.rows(`SELECT * FROM facts ORDER BY status, created_at`).map(toFact);
+    const hidden = this.heldOutIds();
+    const facts = this.rows(`SELECT * FROM facts ORDER BY status, created_at`).map(toFact).map((f) => this.redactFact(f));
     const sentences = new Map(facts.map((f) => [f.id, f.sentence]));
     const claims = this.rows(`SELECT * FROM claims ORDER BY created_at DESC LIMIT 200`).map((r) => {
       const claim = toClaim(r);
       const verdict = this.latestVerdict(claim.attemptId);
       const m = verdict ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, verdict.sha)[0] : null;
-      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict, clashes: this.clashesFor(claim.id), headsUp: this.headsUpFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null, reviewer: verdict ? this.reviewOf(claim.attemptId, verdict.sha) : null };
+      return { ...claim, sentence: sentences.get(claim.factId) ?? claim.factId, verdict: this.redactVerdict(verdict, hidden), clashes: this.clashesFor(claim.id), headsUp: this.headsUpFor(claim.id), mutation: m ? (JSON.parse(m.json as string) as Mutation) : null, reviewer: verdict ? this.reviewOf(claim.attemptId, verdict.sha) : null };
     });
     return {
       project: this.meta("project") ?? "",
@@ -129,7 +184,7 @@ export class Referee extends DurableObject<Env> {
       facts,
       claims,
       policy: { autoAccept: this.autoAccept(), charter: this.charter() },
-      production: JSON.parse(this.meta("production") ?? "null"),
+      production: this.redactProduction(JSON.parse(this.meta("production") ?? "null"), hidden),
       trains: this.rows(`SELECT * FROM trains ORDER BY created_at DESC LIMIT 5`).map((t) => ({
         id: t.id as string,
         status: t.status as "building" | "judging" | "waiting" | "landed" | "failed",
@@ -164,6 +219,10 @@ export class Referee extends DurableObject<Env> {
     if (!canon) throw new ProtocolError(409, "no canon yet: genesis attempt has not passed its seed facts");
     if (typeof req.agent !== "string" || !/^[\w.:@-]{1,40}$/.test(req.agent)) throw new ProtocolError(400, 'agent must be a name of 1-40 letters, digits or ". _ : @ -", e.g. "agent-3"');
     if (typeof req.why !== "string" || !req.why.trim()) throw new ProtocolError(400, "why is required: the reason for this change, in plain words");
+    if (req.after !== undefined && (!Array.isArray(req.after) || req.after.length > 20 || req.after.some((id) => typeof id !== "string" || !this.fact(id)))) {
+      throw new ProtocolError(400, 'after must list existing fact ids this attempt builds on, e.g. ["no-double-booking"]');
+    }
+    if (req.touches === undefined && this.charter()?.requireScope) throw new ProtocolError(400, 'the charter requires every claim to declare the files it will change: add touches, e.g. ["src/index.ts"] (CLI: --touches)');
     if (req.touches !== undefined && (!Array.isArray(req.touches) || !req.touches.length || req.touches.length > 50 || req.touches.some((g) => typeof g !== "string" || !g.trim()))) {
       throw new ProtocolError(400, 'touches must be a list of the file globs this attempt will change, e.g. ["src/index.ts"]');
     }
@@ -211,8 +270,8 @@ export class Referee extends DurableObject<Env> {
       attemptId, claimId, remote, canon.attempt_id, canon.sha, now,
     );
     this.sql.exec(
-      `INSERT INTO claims (id, agent, fact_id, why, attempt_id, status, created_at, touches_json) VALUES (?, ?, ?, ?, ?, 'open', ?, ?)`,
-      claimId, req.agent, factId, req.why, attemptId, now, req.touches ? JSON.stringify(req.touches) : null,
+      `INSERT INTO claims (id, agent, fact_id, why, attempt_id, status, created_at, touches_json, after_json) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
+      claimId, req.agent, factId, req.why, attemptId, now, req.touches ? JSON.stringify(req.touches) : null, req.after?.length ? JSON.stringify(req.after) : null,
     );
     if (!("join" in req)) this.sql.exec(`UPDATE facts SET proposed_by = ? WHERE id = ?`, claimId, factId);
     const replaced = req.replaces ? this.claim(req.replaces) : null;
@@ -243,7 +302,7 @@ export class Referee extends DurableObject<Env> {
    * the rest wait in the Workflow and come in as slots free. A slot is freed when the judge gets the result (or the
    * platform error), and expires after 15 minutes if its Workflow died.
    */
-  admit(repo: string, sha: string): "go" | "wait" | "stale" {
+  async admit(repo: string, sha: string): Promise<"go" | "wait" | "stale"> {
     // A newer push of the same attempt makes this one pointless: its verdict would be replaced at once.
     const attempt = this.attempt(repo);
     if (attempt?.headSha && attempt.headSha !== sha && attempt.claimId) return "stale";
@@ -251,7 +310,8 @@ export class Referee extends DurableObject<Env> {
     const agent = claimed?.agent ?? (attempt?.claimId ? repo : "the judge");
     // What it's worth: a fact the charter ranks first, then one people wrote (backlog), then the rest.
     const fact = claimed ? this.fact(claimed.factId) : null;
-    const value = !fact ? 1 : this.charter()?.priority?.includes(fact.id) ? 3 : fact.origin === "backlog" ? 2 : 1;
+    // An attempt whose prerequisites aren't canon can't land yet: it goes last.
+    const value = !fact ? 1 : claimed && this.pendingPrerequisites(claimed).length ? 0 : this.charter()?.priority?.includes(fact.id) ? 3 : fact.origin === "backlog" ? 2 : 1;
     const now = Date.now();
     const slots = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, number | { at: number; agent: string }>;
     for (const [k, v] of Object.entries(slots)) if (now - (typeof v === "number" ? v : v.at) > 15 * 60_000) delete slots[k];
@@ -270,11 +330,34 @@ export class Referee extends DurableObject<Env> {
       this.setMeta("verifying", JSON.stringify(slots));
       return "wait";
     }
-    delete waiting[key];
-    slots[key] = { at: now, agent };
     this.setMeta("waiting", JSON.stringify(waiting));
     this.setMeta("verifying", JSON.stringify(slots));
+    // The account's capacity, shared by every project: this project's turn also needs an account slot. If the
+    // account object can't be reached, it waits (admission never fails open).
+    if (this.env.CAPACITY) {
+      const cap = await this.account().acquire(this.accountKey(key), this.requireProject(), ACCOUNT_SLOTS).catch(() => "wait" as const);
+      if (cap !== "go") return "wait";
+    }
+    // Re-read: the await above let other admissions run.
+    const fresh = JSON.parse(this.meta("verifying") ?? "{}") as Record<string, number | { at: number; agent: string }>;
+    const queued = JSON.parse(this.meta("waiting") ?? "{}") as Record<string, unknown>;
+    if (!fresh[key] && Object.keys(fresh).length >= VERIFY_SLOTS) {
+      if (this.env.CAPACITY) this.ctx.waitUntil(this.account().release(this.accountKey(key)).catch(() => {}));
+      return "wait";
+    }
+    delete queued[key];
+    fresh[key] = { at: Date.now(), agent };
+    this.setMeta("waiting", JSON.stringify(queued));
+    this.setMeta("verifying", JSON.stringify(fresh));
     return "go";
+  }
+
+  private account() {
+    return this.env.CAPACITY!.get(this.env.CAPACITY!.idFromName(`account#${this.env.REFEREE_EPOCH}`));
+  }
+
+  private accountKey(key: string) {
+    return `${this.requireProject()}/${key}`;
   }
 
 
@@ -292,6 +375,7 @@ export class Referee extends DurableObject<Env> {
       delete slots[`${repo}:${sha}`];
       this.setMeta("verifying", JSON.stringify(slots));
     }
+    if (this.env.CAPACITY) this.ctx.waitUntil(this.account().release(this.accountKey(`${repo}:${sha}`)).catch(() => {}));
   }
 
   /**
@@ -475,17 +559,17 @@ export class Referee extends DurableObject<Env> {
       ? { attemptId, sha: "", previewUrl: "", canonSeq: this.canonSeq(), outcome: "pending", kept: [], lost: [], retires: [], skipped: [], stale: [], offers: [],
           claimed: { factId: claim0.factId, held: false, detail: "declined" }, ledger: { status: "ok", detail: "not read" }, judgedAt: Date.now() } satisfies Verdict
       : null);
-    if (!verdict || !claimId) return verdict;
+    if (!verdict || !claimId) return this.redactVerdict(verdict, this.heldOutIds());
     const next = this.rows(`SELECT attempt_id FROM claims WHERE refreshed_from = ?`, claimId)[0]?.attempt_id as string | undefined;
     const claim = this.claim(claimId);
-    return {
+    return this.redactVerdict({
       ...verdict,
       clashes: this.clashesFor(claimId),
       headsUp: this.headsUpFor(claimId),
       reviewer: this.reviewOf(attemptId, verdict.sha),
       ...(next ? { refreshedAs: next } : {}),
       ...(claim?.status === "declined" ? { declined: claim.declineReason || "no reason given" } : {}),
-    };
+    }, this.heldOutIds());
   }
 
   /**
@@ -513,7 +597,7 @@ export class Referee extends DurableObject<Env> {
   // ---- Review and promotion ---------------------------------------------------------
 
   /** A person (or the autopilot policy) accepts a change in the facts. The attempt comes along as evidence and becomes canon. */
-  async accept(claimId: string, how = "the owner") {
+  async accept(claimId: string, how = "the owner", reason?: string) {
     const claim = this.claim(claimId);
     if (!claim) throw new ProtocolError(404, "no such claim");
     if (claim.status !== "ready") throw new ProtocolError(409, `claim is ${claim.status}, not ready`);
@@ -544,7 +628,7 @@ export class Referee extends DurableObject<Env> {
     if (how === "the owner" && lockedRule && this.charter()?.locked?.includes(lockedRule)) how = "the owner, overriding the charter’s lock";
     // Required evidence that failed or never arrived: only a person can accept over it, and the record names it.
     const evidence = this.evidenceFor(claim);
-    const exceptions = this.exceptionsIn(evidence);
+    const exceptions = [...this.exceptionsIn(evidence), ...this.pendingPrerequisites(claim).map((id) => `prerequisite “${this.fact(id)?.sentence ?? id}” isn't canon yet`)];
     const byOwner = how.startsWith("the owner");
     if (exceptions.length && !byOwner) throw new ProtocolError(409, `autopilot can't accept without the evidence the charter requires: ${exceptions.join("; ")}`);
     if (exceptions.length) how = `${how}, accepting despite: ${exceptions.join("; ")}`;
@@ -559,7 +643,7 @@ export class Referee extends DurableObject<Env> {
       this.sql.exec(`UPDATE facts SET status = 'retired', retired_by = ?, retired_at = ? WHERE id = ? AND status = 'canon'`, attempt.id, now, fact.replaces);
     }
     this.sql.exec(`INSERT INTO canon (attempt_id, sha, accepted_fact, at) VALUES (?, ?, ?, ?)`, attempt.id, verdict.sha, fact.id, now);
-    this.recordAcceptance(attempt.id, verdict, [{ claim, verdict, evidence }], how, exceptions, now);
+    this.recordAcceptance(attempt.id, verdict, [{ claim, verdict, evidence }], how, exceptions, now, reason?.trim() ? reason.trim().slice(0, 400) : byOwner ? undefined : how.replace(/^(the charter|autopilot): /, ""));
     this.setClaimStatus(claim.id, "accepted");
     this.sql.exec(
       `UPDATE claims SET status = 'superseded' WHERE fact_id = ? AND id != ? AND status NOT IN ('accepted', 'superseded')`,
@@ -642,6 +726,7 @@ export class Referee extends DurableObject<Env> {
       acceptedByPolicy: accepted.filter((f) => !String(f.accepted_how ?? "the owner").startsWith("the owner")).length,
       canonFacts: facts.filter((f) => f.status === "canon").length,
       verifyMinutes: Math.round(verifySeconds / 6) / 10,
+      reviewer: this.reviewerRecord(),
       mutationRuns: runs.length,
       mutationMinutesMeasured: Math.round(mutationSeconds / 6) / 10,
       computeUsdEstimate: Math.round((verifySeconds + mutationSeconds) * PER_SECOND * 100) / 100,
@@ -676,6 +761,7 @@ export class Referee extends DurableObject<Env> {
       return;
     }
     if (holder) this.endLease(seq, ok ? "released" : "not released");
+    if (ok) this.markCandidate(null); // the candidate ran the code production now runs
     this.sql.exec(`UPDATE canon SET deployed = ?, version_id = COALESCE(?, version_id) WHERE seq = ?`, ok ? 1 : -1, versionId, seq);
     // Canon is what production runs. A canon that wasn't released goes back to the last one that was.
     if (!ok) {
@@ -717,6 +803,7 @@ export class Referee extends DurableObject<Env> {
         return;
       }
       await this.keepCanonReleased().catch(() => {});
+      await this.reconcileProduction().catch(() => {});
       await this.depart().catch(() => {});
       await this.retryPlatformErrors().catch(() => {});
       for (const t of this.rows(`SELECT * FROM trains WHERE status IN ('building', 'judging', 'waiting') AND created_at < ?`, Date.now() - 20 * 60_000)) {
@@ -728,7 +815,7 @@ export class Referee extends DurableObject<Env> {
         await this.startMutation(c.id, v).catch(() => {});
         // A review that never finished (a deploy or an eviction cut it off) gets one more try; after that it stays
         // unavailable. Either way autopilot looks again, so a wait that timed out says so instead of "reading".
-        const r = this.charter()?.reviewRisk ? this.reviewOf(c.attemptId, v.sha) : null;
+        const r = this.charter()?.reviewRisk || this.charter()?.intentRisk ? this.reviewOf(c.attemptId, v.sha) : null;
         if (r?.status === "running" && Date.now() - r.at > REVIEW_STUCK_MS && !r.detail) {
           this.sql.exec(`DELETE FROM reviews WHERE attempt_id = ? AND sha = ?`, c.attemptId, v.sha);
           this.ctx.waitUntil(this.startReview(c.id, v, true).catch(() => {}));
@@ -1001,7 +1088,12 @@ export class Referee extends DurableObject<Env> {
     // The candidate was deployed seconds ago: let its rollout settle (Durable Objects pick up new code eventually).
     await new Promise((ok) => setTimeout(ok, 20_000));
     const broke = await this.factsOn(seq, url, {}, undefined, true);
-    if (!broke.length) return true;
+    if (!broke.length) {
+      // The rehearsal's state continuity: every fact runs once more on this release's code under one shared run
+      // identity, writing the state the previous version will be asked to read (see rehearsalCheck).
+      if (this.acceptance(seq)?.recovery.rehearse) await this.continuityRun(seq, url, `reh-${seq}`);
+      return true;
+    }
     const what = `broke “${broke[0].fact.sentence}” on its release candidate (a full copy with production’s config): ${broke[0].detail}`;
     this.sql.exec(`UPDATE canon SET health = 'held', health_detail = ? WHERE seq = ?`, `${what}. Held back: production never served it.`, seq);
     this.broadcast();
@@ -1046,59 +1138,86 @@ export class Referee extends DurableObject<Env> {
   }
 
   /**
-   * Release step two, the gate. The accepted commit was uploaded as a new Worker version that serves nobody. Stage it at 0% next
-   * to the version production runs, run every canon fact on the production URL pinned to the new version (the Workers
-   * version-override header), and only then give it 100%. A version that breaks a fact is dropped: no visitor ever
-   * reached it. The accepted fact itself fails on the old version (that's what made it a new fact), so it holding here
-   * also proves the override reached the new version; until it does, the gate waits for the deployment to propagate.
-   * Code inside a Durable Object runs on the version its object was assigned, so a 0% test can't reach it: the release
-   * candidate (step one) already ran it, and the check right after the release is the last net, with its rollback.
+   * Release step two: the judge is the one writer of production's deployment. The release run uploaded the exact
+   * commit as a Worker version that serves nobody; this puts it in front of traffic. Every deployment write checks,
+   * in the same turn and right before the request, that the run still holds the release: a run that lost it makes no
+   * write at all, not even a rollback (the judge's own reconciliation then puts production on canon's version, read
+   * from the current state). With `smoke` (a Worker without Durable Objects), it first stages the version at 0% next to
+   * the one production runs, runs every canon fact on the production URL pinned to it (the version-override header),
+   * and only then gives it 100%; a version that breaks a fact is taken back out and never serves anyone. The accepted
+   * fact fails on the old version (that's what made it new), so it holding there also proves the override reached the
+   * new version. Code inside a Durable Object runs on its object's version, so a 0% test can't reach it: there the
+   * release candidate already ran it in full, and the version goes straight to 100%.
    */
-  async gate(seq: number, versionId: string, holder?: string): Promise<{ released: boolean; detail: string }> {
+  async gate(seq: number, versionId: string, holder?: string, smoke = true): Promise<{ released: boolean; detail: string }> {
     const project = this.requireProject();
-    const fenced = () => holder !== undefined && !this.holds(seq, holder);
-    if (fenced()) return { released: false, detail: "fenced out: this run no longer holds the release" };
     const api = `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${project}/deployments`;
     const headers = { authorization: `Bearer ${this.env.CF_TOKEN}`, "content-type": "application/json" };
-    const deploy = async (versions: Array<{ version_id: string; percentage: number }>, message: string) => {
+    const FENCED = "fenced out: this run no longer holds the release, so it makes no deployment write (the judge reconciles production)";
+    class Fenced extends Error {}
+    const write = async (versions: Array<{ version_id: string; percentage: number }>, message: string) => {
+      if (holder !== undefined && !this.holds(seq, holder)) throw new Fenced();
       const res = await fetch(api, { method: "POST", headers, body: JSON.stringify({ strategy: "percentage", versions, annotations: { "workers/message": message.slice(0, 100) } }) });
       if (!res.ok) throw new Error(`deployments API returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
     };
-    const list = await (await fetch(api, { headers })).json<{ result?: { deployments?: Array<{ versions: Array<{ version_id: string; percentage: number }> }> } }>();
-    const live = list.result?.deployments?.[0]?.versions ?? [];
-    const current = (live.find((v) => v.percentage === 100) ?? live[0])?.version_id;
-    if (!current || current === versionId) {
-      if (fenced()) return { released: false, detail: "fenced out" };
-      await deploy([{ version_id: versionId, percentage: 100 }], `Canon #${seq}: released (nothing to stage beside)`);
-      return { released: true, detail: "released with nothing to stage beside" };
+    const liveNow = async () =>
+      (await (await fetch(api, { headers })).json<{ result?: { deployments?: Array<{ versions: Array<{ version_id: string; percentage: number }> }> } }>()).result?.deployments?.[0]?.versions ?? [];
+    try {
+      const live = await liveNow();
+      const current = (live.find((v) => v.percentage === 100) ?? live[0])?.version_id;
+      if (!smoke || !current || current === versionId) {
+        await write([{ version_id: versionId, percentage: 100 }], `Canon #${seq}: released${smoke ? " (nothing to stage beside)" : " (its release candidate ran it in full)"}`);
+        return { released: true, detail: smoke ? "released with nothing to stage beside" : "released after its release candidate" };
+      }
+      await write([{ version_id: versionId, percentage: 0 }, { version_id: current, percentage: 100 }], `Canon #${seq}: staged at 0% for its smoke test`);
+      const url = this.env.PRODUCTION_URL.replace("{project}", project);
+      const pin = { "cloudflare-workers-version-overrides": `${project}="${versionId}"` };
+      // A fact that fails at 0% is only evidence against the new version if the old version behaves differently.
+      const pinnedFails = await this.factsOn(seq, url, pin, "gate");
+      const broke: typeof pinnedFails = [];
+      for (const b of pinnedFails) {
+        const old = await runCheck(b.fact.check as ProbeCheck, url, `gate:${b.fact.id}`);
+        if (old.held || old.detail !== b.detail) broke.push(b);
+      }
+      const facts = this.rows(`SELECT id FROM facts WHERE status = 'canon'`);
+      if (broke.length) {
+        const what = `broke “${broke[0].fact.sentence}” on production in its smoke test: ${broke[0].detail}`;
+        this.sql.exec(`UPDATE canon SET health = 'held', health_detail = ? WHERE seq = ?`, `${what}. Held back: production never served it.`, seq);
+        this.broadcast();
+        // Take the staged version back out of production's deployment as it is now, not as it was before the test.
+        const now = await liveNow();
+        const keep = now.filter((v) => v.version_id !== versionId).sort((a, b) => b.percentage - a.percentage)[0]?.version_id;
+        if (keep) await write([{ version_id: keep, percentage: 100 }], `Canon #${seq} held back: broke ${broke[0].fact.id} at 0%`);
+        return { released: false, detail: what };
+      }
+      await write([{ version_id: versionId, percentage: 100 }], `Canon #${seq}: released, ${facts.length} facts held at 0%`);
+      return { released: true, detail: `${facts.length} facts held on the staged version` };
+    } catch (err) {
+      if (err instanceof Fenced) return { released: false, detail: FENCED };
+      throw err;
     }
-    await deploy([{ version_id: versionId, percentage: 0 }, { version_id: current, percentage: 100 }], `Canon #${seq}: staged at 0% for its smoke test`);
-    const url = this.env.PRODUCTION_URL.replace("{project}", project);
-    const pin = { "cloudflare-workers-version-overrides": `${project}="${versionId}"` };
-    // A fact that fails at 0% is only evidence against the new version if the old version behaves differently. Code
-    // inside a Durable Object runs on the version its object was assigned (the old one, at 0%), so for that code the
-    // pinned request still gets the old answer: the same failure, with the same inputs, as the old version. That's
-    // inconclusive, and the release candidate (step one) already ran the new code there in full.
-    const pinnedFails = await this.factsOn(seq, url, pin, "gate");
-    const broke: typeof pinnedFails = [];
-    for (const b of pinnedFails) {
-      const old = await runCheck(b.fact.check as ProbeCheck, url, `gate:${b.fact.id}`);
-      if (old.held || old.detail !== b.detail) broke.push(b);
-    }
-    const facts = this.rows(`SELECT id FROM facts WHERE status = 'canon'`);
-    if (broke.length) {
-      const what = `broke “${broke[0].fact.sentence}” on production in its smoke test: ${broke[0].detail}`;
-      await deploy([{ version_id: current, percentage: 100 }], `Canon #${seq} held back: broke ${broke[0].fact.id} at 0%`);
-      this.sql.exec(`UPDATE canon SET health = 'held', health_detail = ? WHERE seq = ?`, `${what}. Held back: production never served it.`, seq);
-      this.broadcast();
-      return { released: false, detail: what };
-    }
-    if (fenced()) {
-      await deploy([{ version_id: current, percentage: 100 }], `Canon #${seq}: fenced out before release`);
-      return { released: false, detail: "fenced out: this run lost the release while smoke-testing" };
-    }
-    await deploy([{ version_id: versionId, percentage: 100 }], `Canon #${seq}: released, ${facts.length} facts held at 0%`);
-    return { released: true, detail: `${facts.length} facts held on the staged version` };
+  }
+
+  /**
+   * The judge's reconciliation of production, the one place a deployment is corrected outside a release: when no
+   * release holds the lease, production's deployment must be canon's released version at 100%. Anything else (a 0%
+   * version a fenced-out run left staged, a deploy that slipped in from a stale run) is put back, from the deployment as
+   * it is now. At most once every five minutes.
+   */
+  private async reconcileProduction() {
+    if (this.releasing() !== null) return;
+    const last = Number(this.meta("reconciledAt") ?? 0);
+    if (Date.now() - last < 5 * 60_000) return;
+    this.setMeta("reconciledAt", String(Date.now()));
+    // Only when canon is released and its version is known (genesis deploys outside Canon have none).
+    const released = this.currentCanon();
+    if (!released || Number(released.deployed) !== 1 || !released.version_id) return;
+    const project = this.requireProject();
+    const api = `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${project}/deployments`;
+    const live = (await (await fetch(api, { headers: { authorization: `Bearer ${this.env.CF_TOKEN}` } })).json<{ result?: { deployments?: Array<{ versions: Array<{ version_id: string; percentage: number }> }> } }>()).result?.deployments?.[0]?.versions;
+    if (!live?.length) return;
+    if (live.length === 1 && live[0].version_id === released.version_id && live[0].percentage === 100) return;
+    await this.restoreProduction(`production's deployment wasn't canon #${released.seq}'s version alone (${live.map((v) => `${v.version_id.slice(0, 8)} ${v.percentage}%`).join(", ")})`);
   }
 
   /** Puts production on the version the current canon was released as (after a fenced-out run changed it). */
@@ -1165,8 +1284,9 @@ export class Referee extends DurableObject<Env> {
   // ---- Why: the fact chain -----------------------------------------------------------
 
   why(factId: string) {
-    const fact = this.fact(factId);
-    if (!fact) throw new ProtocolError(404, "no such fact");
+    const raw = this.fact(factId);
+    if (!raw) throw new ProtocolError(404, "no such fact");
+    const fact = this.redactFact(raw);
     // A fact's history is the attempts that tried to make it true, plus the attempts that broke it
     // while it was canon. Each trial links the Preview of the exact commit judged, not the
     // attempt's latest one, so a rejected attempt stays viewable as it was.
@@ -1205,7 +1325,7 @@ export class Referee extends DurableObject<Env> {
       madeTrueBy,
       retiredBy,
       replaces: fact.replaces ? this.fact(fact.replaces) : null,
-      rejected: trials.filter((t) => !t.held).map((t) => ({ ...t, kind: kindOf(t) })),
+      rejected: trials.filter((t) => !t.held).map((t) => ({ ...t, kind: kindOf(t), ...(raw.origin === "heldout" ? { detail: HELD_OUT_DETAIL } : {}) })),
       held: trials.filter((t) => t.held),
     };
   }
@@ -1437,7 +1557,7 @@ export class Referee extends DurableObject<Env> {
     try {
       const canon = this.currentCanon()!;
       const why = `${claim.why.replace(/ \(refreshed onto canon \d+\)$/, "")} (refreshed onto canon ${canon.seq})`;
-      fresh = await this.declare({ agent: claim.agent, why, join: claim.factId, replaces: claim.id, ...(claim.touches ? { touches: claim.touches } : {}) });
+      fresh = await this.declare({ agent: claim.agent, why, join: claim.factId, replaces: claim.id, ...(claim.touches ? { touches: claim.touches } : {}), ...(claim.after ? { after: claim.after } : {}) });
       this.sql.exec(`UPDATE claims SET refreshed_from = ? WHERE id = ?`, claim.id, fresh.claim.id);
       // Re-applied, it is still the same rider: it keeps its place in a failed train's halves (and out of other trains).
       const failed = JSON.parse(this.meta("trainFailed") ?? "[]") as string[];
@@ -1771,38 +1891,59 @@ export class Referee extends DurableObject<Env> {
       const m = this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, attempt.id, verdict.sha)[0];
       const missed = m ? (JSON.parse(m.json as string) as Mutation).mutants.filter((x) => x.caught === false).map((x) => `${x.op} at ${x.file}:${x.line}: ${x.before.trim().slice(0, 100)}`) : [];
       const canon = this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).map((f) => f.sentence);
+      // Coverage first: every changed file is shown whole or around every change, in as many passes as that takes. A
+      // file too big even that way can't be reviewed, and a review of part of a change is not a review of it.
+      const { batches, compact, tooBig } = reviewBatches(files);
+      if (tooBig.length) throw new Error(`${tooBig.join(", ")} changed too much to review in one pass, even around each change`);
+      const d = verdict.data;
+      const reviewGlobs = this.charter()?.review ?? [];
+      const specialists = specialistsFor(
+        files.map((f) => ({ path: f.path, added: addedText(f.base, f.head) })),
+        !d || !d.complete || d.destructive.length + d.additive.length + (d.writes?.length ?? 0) > 0,
+        (p) => reviewGlobs.length > 0 && inScope(reviewGlobs, [p]),
+      );
       type Answer = { response?: unknown; choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
-      const ask = (model: string) =>
+      const ask = (model: string, batch: ReviewFile[], who: Specialist) =>
         this.env.AI!.run(model as Parameters<Ai["run"]>[0], {
-          messages: reviewPrompt(own.sentence, canon, missed, files),
+          messages: reviewPrompt(own.sentence, canon, missed, batch, undefined, who),
           response_format: { type: "json_schema", json_schema: { name: "review", schema: REVIEW_SCHEMA } },
           // Reasoning makes the notes right far more often; it needs room, or the answer comes back empty (finish_reason: length).
           max_completion_tokens: 24000,
           temperature: 0.2,
         } as never) as Promise<Answer>;
-      // Frontier models on Workers AI can be briefly out of capacity: try again, then the next model down.
-      let out: Answer | null = null;
+      const notes: ReviewNote[] = [];
+      let dropped = 0;
       let model = REVIEW_MODELS[0];
-      for (const m of [REVIEW_MODELS[0], REVIEW_MODELS[0], ...REVIEW_MODELS.slice(1)]) {
-        try {
-          out = await ask(m);
-          model = m;
-          break;
-        } catch (err) {
-          if (!/capacity|3040|overloaded|timeout/i.test(String(err))) throw err;
-          await new Promise((r) => setTimeout(r, 3_000));
+      for (const who of specialists) {
+        for (const batch of batches) {
+          // Frontier models on Workers AI can be briefly out of capacity: try again, then the next model down.
+          let out: Answer | null = null;
+          for (const m of [REVIEW_MODELS[0], REVIEW_MODELS[0], ...REVIEW_MODELS.slice(1)]) {
+            try {
+              out = await ask(m, batch, who);
+              model = m;
+              break;
+            } catch (err) {
+              if (!/capacity|3040|overloaded|timeout/i.test(String(err))) throw err;
+              await new Promise((r) => setTimeout(r, 3_000));
+            }
+          }
+          if (!out) throw new Error("every reviewer model was out of capacity");
+          const answer = out.response ?? out.choices?.[0]?.message?.content;
+          const judged = judgeAnswer(answer, out.choices?.[0]?.finish_reason, batch);
+          if (!judged.ok) throw new Error(`${model.split("/").pop()} (${who} pass, ${batch.map((f) => f.path).join(", ")}): ${judged.detail}`);
+          notes.push(...judged.notes.map((n) => ({ ...n, by: who })));
+          dropped += judged.dropped;
         }
       }
-      if (!out) throw new Error("every reviewer model was out of capacity");
-      const answer = out.response ?? out.choices?.[0]?.message?.content;
-      const judged = judgeAnswer(answer, out.choices?.[0]?.finish_reason, files);
-      if (!judged.ok) throw new Error(`${model.split("/").pop()}: ${judged.detail}`);
-      put({ status: "done", ...base, model, notes: judged.notes, dropped: judged.dropped, at: Date.now() });
+      const ranked = [...notes.filter((n) => n.kind === "risk"), ...notes.filter((n) => n.kind !== "risk")].slice(0, 5);
+      const coverage = { files: files.length, reviewed: files.length, compact, passes: specialists.length * batches.length, specialists };
+      put({ status: "done", ...base, model, notes: ranked, dropped, at: Date.now(), coverage });
     } catch (err) {
       put({ status: "error", ...base, detail: String(err instanceof Error ? err.message : err).slice(0, 200), at: Date.now() });
     }
     // A charter that routes the reviewer's risks to the owner had autopilot waiting for this review.
-    if (this.charter()?.reviewRisk) {
+    if (this.charter()?.reviewRisk || this.charter()?.intentRisk) {
       const latest = this.latestVerdict(attempt.id);
       if (latest && latest.sha === verdict.sha) await this.autopilot(claimId, latest).catch(() => {});
     }
@@ -2173,6 +2314,57 @@ export class Referee extends DurableObject<Env> {
     return null;
   }
 
+  /**
+   * The reviewer's track record, from what happened to the changes it read (no model grades itself). A risk it named
+   * is "confirmed" when that attempt later broke a fact (rejected, held back at release, rolled back), and "overruled"
+   * when a person accepted it anyway and its release stayed healthy (likely a false alarm). A change it passed with no
+   * risk that later broke a fact at release or in production is "missed". Per specialist, and in total, so owners can
+   * tell how much weight a risk note deserves before letting it gate more.
+   */
+  private reviewerRecord() {
+    type Tally = { reviews: number; risks: number; confirmed: number; overruled: number; missed: number; unavailable: number };
+    const blank = (): Tally => ({ reviews: 0, risks: 0, confirmed: 0, overruled: 0, missed: 0, unavailable: 0 });
+    const total = blank();
+    const by: Record<string, Tally> = {};
+    const broke = (attemptId: string) => {
+      const v = this.latestVerdict(attemptId);
+      const heldOrRolled = this.rows(`SELECT 1 FROM canon WHERE attempt_id = ? AND (health IN ('held', 'rolled-back', 'broken') OR deployed = -1)`, attemptId).length > 0;
+      return v?.outcome === "contradicts" || !!v?.heldBack || heldOrRolled;
+    };
+    for (const row of this.rows(`SELECT attempt_id, json FROM reviews`)) {
+      const r = JSON.parse(row.json as string) as Review;
+      const attemptId = row.attempt_id as string;
+      const passes = r.coverage?.specialists ?? ["general"];
+      const tallies = [total, ...passes.map((p) => (by[p] ??= blank()))];
+      if (r.status === "error") {
+        for (const t of tallies) t.unavailable++;
+        continue;
+      }
+      if (r.status !== "done") continue;
+      const claim = this.rows(`SELECT * FROM claims WHERE attempt_id = ?`, attemptId).map(toClaim)[0];
+      const accepted = claim?.status === "accepted";
+      const byOwner = accepted && String(this.fact(claim.factId)?.acceptedHow ?? "").startsWith("the owner");
+      const healthy = this.rows(`SELECT 1 FROM canon WHERE attempt_id = ? AND deployed = 1 AND COALESCE(health, 'healthy') = 'healthy'`, attemptId).length > 0;
+      const didBreak = broke(attemptId);
+      for (const t of tallies) t.reviews++;
+      const risky = new Set(r.notes.filter((n) => n.kind === "risk").map((n) => n.by ?? "general"));
+      for (const [i, t] of tallies.entries()) {
+        const named = i === 0 ? risky.size > 0 : risky.has(passes[i - 1]);
+        if (named) {
+          t.risks++;
+          if (didBreak) t.confirmed++;
+          else if (byOwner && healthy) t.overruled++;
+        } else if (didBreak && accepted) t.missed++;
+      }
+    }
+    return { ...total, bySpecialist: by, basis: "confirmed: the attempt it flagged later broke a fact (rejected, held back, rolled back); overruled: a person accepted it and its release stayed healthy; missed: no risk named, and the accepted change broke a fact at release or in production" };
+  }
+
+  /** The facts a claim said it builds on (after) that aren't canon yet. */
+  private pendingPrerequisites(claim: Claim): string[] {
+    return (claim.after ?? []).filter((id) => this.fact(id)?.status !== "canon");
+  }
+
   /** Required evidence that isn't a pass: what a person accepts over, and what autopilot never does. */
   private exceptionsIn(ev: { mutation: Evidence; review: Evidence; data: Evidence; scope: Evidence }): string[] {
     return (["mutation", "review", "data", "scope"] as const).filter((k) => ["failed", "unavailable", "pending"].includes(ev[k].state)).map((k) => `${k} ${ev[k].state} (${ev[k].detail})`);
@@ -2190,6 +2382,7 @@ export class Referee extends DurableObject<Env> {
     authorizedBy: string,
     exceptions: string[],
     at: number,
+    chosenBecause?: string,
   ) {
     const seq = this.currentCanon()!.seq as number;
     const charter = this.charter() ?? {};
@@ -2225,6 +2418,7 @@ export class Referee extends DurableObject<Env> {
       verdict: { kept: verdict.kept.length, skipped: verdict.skipped.length, ...(verdict.seed ? { seed: verdict.seed } : {}), previewUrl: verdict.previewUrl, judgedAt: verdict.judgedAt },
       environment: "a Workers Preview of the exact commit, built by Cloudflare CI (container standard-4); probes from the judge's Durable Object",
       authorizedBy,
+      ...(chosenBecause ? { chosenBecause } : {}),
       exceptions,
       alternatives: riders.flatMap(({ claim }) =>
         this.rows(`SELECT * FROM claims WHERE fact_id = ? AND id != ? ORDER BY created_at`, claim.factId, claim.id).map(toClaim).slice(0, 12).map((c) => {
@@ -2350,7 +2544,29 @@ export class Referee extends DurableObject<Env> {
       else {
         const broke = await this.factsOn(seq, url, {}, undefined, true, before);
         if (broke.length) this.setRehearsal(seq, "failed", `the previous version broke “${broke[0].fact.sentence}” on data this release wrote: ${broke[0].detail}`);
-        else this.setRehearsal(seq, "passed", `the previous version kept all ${before.filter((f) => f.check.kind === "probe").length} of its facts on data this release wrote`);
+        else {
+          // State continuity: the release's code wrote state under reh-<seq> (candidateCheck). The previous code now
+          // does the same writes under ctl-<seq>, then reads each fact back under both. A fact that holds on the state
+          // it wrote itself but not on the state the new version wrote is a rollback that breaks it.
+          await this.continuityRun(seq, url, `ctl-${seq}`);
+          const shared = this.continuityFacts(seq).before;
+          let compared = 0;
+          let incompatible: { fact: Fact; detail: string } | null = null;
+          for (const f of shared) {
+            const read = async (run: string) => runCheck(f.check as ProbeCheck, url, `read:${seq}:${f.id}`, { "x-canon-run": run });
+            let [onNew, onOld] = [await read(`reh-${seq}`), await read(`ctl-${seq}`)];
+            if (onOld.held && !onNew.held) [onNew, onOld] = [await read(`reh-${seq}`), await read(`ctl-${seq}`)];
+            if (!onOld.held) continue; // the fact doesn't hold on its own rerun either: inconclusive, not counted
+            compared++;
+            if (!onNew.held) {
+              incompatible = { fact: f, detail: onNew.detail };
+              break;
+            }
+          }
+          const fresh = before.filter((f) => f.check.kind === "probe").length;
+          if (incompatible) this.setRehearsal(seq, "failed", `the previous version broke “${incompatible.fact.sentence}” on state this release wrote (it holds on state the previous version wrote itself): ${incompatible.detail}`);
+          else this.setRehearsal(seq, "passed", `the previous version kept all ${fresh} of its facts, on shared data and on ${compared} fact${compared === 1 ? "'s" : "s'"} state this release wrote`);
+        }
       }
     } else this.setRehearsal(seq, "unavailable", `the previous version couldn't be deployed onto the release candidate: ${detail.replace(/\s+/g, " ").slice(0, 160)}`);
     const after = this.acceptance(seq)!;
@@ -2368,20 +2584,56 @@ export class Referee extends DurableObject<Env> {
    * candidate Worker is deleted (its Durable Objects with it) and production's code deployed fresh. Returns where
    * that code is, or null when the release didn't touch stored data.
    */
-  async candidateResetJob(seq: number, holder: string): Promise<Record<string, string> | null> {
+  async candidateResetJob(seq: number, holder: string, always = false): Promise<Record<string, string> | null> {
     const record = this.acceptance(seq);
-    if (!record || !this.holds(seq, holder) || (record.recovery.rollbackSafe && !record.recovery.rehearse)) return null;
+    if (!this.holds(seq, holder) || (!always && (!record || (record.recovery.rollbackSafe && !record.recovery.rehearse)))) return null;
     const prev = this.rows(`SELECT * FROM canon WHERE seq < ? AND deployed = 1 ORDER BY seq DESC LIMIT 1`, seq)[0];
     const a = prev ? this.attempt(prev.attempt_id as string) : null;
     return prev && a ? { PREV_URL: await this.tokenUrl(a, "read"), PREV_SHA: prev.sha as string } : null;
   }
 
+  /**
+   * The candidate's disposition: "dirty" when unreleased code ran on it and it couldn't be rebuilt (the rebuild
+   * failed, or the run was fenced out first). A dirty candidate is never reused as it is: the next release rebuilds it
+   * from production's code before deploying its own (and stops, as a platform failure, if that fails too).
+   */
+  candidateDirty(): string | null {
+    return this.meta("candidateDirty");
+  }
+
+  markCandidate(dirty: string | null) {
+    if (dirty) this.setMeta("candidateDirty", dirty.slice(0, 200));
+    else this.sql.exec(`DELETE FROM meta WHERE key = 'candidateDirty'`);
+  }
+
   /** Notes the candidate rebuild in the acceptance record (and the board's release detail). */
   candidateReset(seq: number, ok: boolean, detail: string) {
+    this.markCandidate(ok ? null : `canon #${seq}'s release couldn't rebuild it: ${detail}`);
     const record = this.acceptance(seq);
     if (!record) return;
     const recovery = { ...record.recovery, candidateReset: { ok, detail: detail.replace(/\s+/g, " ").slice(0, 200), at: Date.now() } };
     this.sql.exec(`UPDATE acceptances SET json = ? WHERE seq = ?`, JSON.stringify({ ...record, recovery }), seq);
+  }
+
+  /** The facts a rehearsal carries across versions: the ones it lands first, then canon's, probes with their own state. */
+  private continuityFacts(seq: number): { landing: Fact[]; before: Fact[] } {
+    const record = this.acceptance(seq);
+    const landing = new Set(record?.facts.map((f) => f.id) ?? []);
+    const makers = record?.facts.map((f) => f.madeTrueBy.attemptId) ?? [];
+    const own = (f: Fact) => f.check.kind === "probe" && (f.check as ProbeCheck).isolate !== false;
+    return {
+      landing: [...landing].map((id) => this.fact(id)).filter((f): f is Fact => !!f && own(f)),
+      before: [
+        ...this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).filter((f) => !landing.has(f.id)),
+        ...this.rows(`SELECT * FROM facts WHERE status = 'retired' AND retired_by IN (${makers.map(() => "?").join(",") || "''"})`, ...makers).map(toFact),
+      ].filter(own),
+    };
+  }
+
+  /** Runs every continuity fact once, in order, under one shared run identity: the state a version writes. */
+  private async continuityRun(seq: number, url: string, run: string) {
+    const { landing, before } = this.continuityFacts(seq);
+    for (const f of [...landing, ...before]) await runCheck(f.check as ProbeCheck, url, `write:${seq}:${f.id}`, { "x-canon-run": run }).catch(() => null);
   }
 
   private setRehearsal(seq: number, state: "passed" | "failed" | "unavailable", detail: string) {
@@ -2409,7 +2661,7 @@ export class Referee extends DurableObject<Env> {
     const now = Date.now();
     const row = v ? this.rows(`SELECT json FROM mutations WHERE attempt_id = ? AND sha = ?`, claim.attemptId, v.sha)[0] : null;
     const mutation = mutationEvidence(charter.mutation, this.fact(claim.factId)?.check.kind, row ? (JSON.parse(row.json as string) as Mutation) : null, now);
-    let review = reviewEvidence(charter.reviewRisk, !!this.env.AI, v ? this.reviewOf(claim.attemptId, v.sha) : null, now);
+    let review = reviewEvidence(charter.reviewRisk || charter.intentRisk, !!this.env.AI, v ? this.reviewOf(claim.attemptId, v.sha) : null, now, !!charter.intentRisk);
     // A risk named on the attempt this one re-applies stands until someone changes the code: re-running the same
     // change mustn't clear it by drawing a kinder review (a model's reviews vary from run to run).
     const inherited = review.state === "passed" || review.state === "not-applicable" ? this.inheritedRisk(claim) : null;
@@ -2452,6 +2704,8 @@ export class Referee extends DurableObject<Env> {
     if (failedTimes >= 4) return { wait: `its release failed ${failedTimes} times without a fact breaking (the platform may be down), so autopilot leaves it to the owner` };
     if (fact.origin !== "backlog" && policy !== "charter") return { wait: "an agent proposed this fact, and autopilot only lands facts people wrote" };
     if (fact.replaces && charter.locked?.includes(fact.replaces)) return { wait: `it changes “${this.fact(fact.replaces)?.sentence ?? fact.replaces}”, which the charter locks` };
+    const pending = this.pendingPrerequisites(claim);
+    if (pending.length) return { wait: `it builds on “${this.fact(pending[0])?.sentence ?? pending[0]}”${pending.length > 1 ? ` and ${pending.length - 1} more` : ""}, which isn't canon yet` };
     const touched = this.latestVerdict(claim.attemptId)?.review ?? [];
     if (touched.length) return { wait: `it changes ${touched.slice(0, 3).join(", ")}${touched.length > 3 ? " and more" : ""}, which the charter routes to review` };
     // Required evidence is non-compensatory: each piece must pass on its own, and one that couldn't be produced
@@ -2562,7 +2816,7 @@ export class Referee extends DurableObject<Env> {
     const lost = failed.filter((x) => !newer(x)).map((x) => ({ factId: x.fact.id, detail: x.detail }));
     const stale = failed.filter(newer).map((x) => (opposed.has(x.fact.id) ? { factId: x.fact.id, detail: opposed.get(x.fact.id)!, clash: true } : { factId: x.fact.id, detail: x.detail }));
     const riders = attempt.claimId ? [] : this.trainFacts(attempt.id);
-    const ledger: Ledger = forced ? { status: "ok", detail: "not read: build failed" } : await this.checkLedger(attempt, sha, claimedFact, [...canonFacts, ...riders], retiring);
+    const ledger: Ledger = forced ? { status: "ok", detail: "not read: build failed" } : await this.checkLedger(attempt, sha, claimedFact, [...canonFacts, ...riders].filter((f) => f.origin !== "heldout"), retiring);
     // The charter's review paths this attempt touched: autopilot won't land it; the owner decides.
     const reviewGlobs = this.charter()?.review ?? [];
     const reviewed = reviewGlobs.length && changed ? changed.filter((p) => inScope(reviewGlobs, [p])) : [];
@@ -2628,7 +2882,9 @@ export class Referee extends DurableObject<Env> {
     const added: Array<{ path: string; lines: string[] }> = [];
     try {
       for (const path of paths) {
-        const key = `add:${attempt.id}:${sha}:${path}`;
+        // Its own cache, filled only by strict reads: the advisory overlap cache turns a failed read into "nothing
+        // added", which must never stand in for evidence.
+        const key = `data:${attempt.id}:${sha}:${path}`;
         if (!this.changedCache.has(key)) {
           const head = await this.fileAtStrict(attempt.id, sha, path);
           const base = await this.fileAtStrict(attempt.id, attempt.baseSha, path);
@@ -2862,6 +3118,7 @@ function toClaim(r: Row): Claim {
     declineReason: (r.decline_reason as string | null) ?? null,
     autoWait: (r.auto_wait as string | null) ?? null,
     ...(r.touches_json ? { touches: JSON.parse(r.touches_json as string) as string[] } : {}),
+    ...(r.after_json ? { after: JSON.parse(r.after_json as string) as string[] } : {}),
   };
 }
 
