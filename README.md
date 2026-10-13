@@ -58,7 +58,7 @@ change yourself, then 40 the Canon way.
 
 ## Evidence map
 
-**Submission revision: [`51f62c5`](https://github.com/teslacybrtrk/canon/tree/51f62c5)** (moved from `79ddce9` after the per-write ordering fix) (tag `submission`). Every claim in this README, with where to check it.
+**Submission revision: SUBMISSION_PIN** (moved from `79ddce9`, then `51f62c5`, after the production-write ordering fixes) (tag `submission`). Every claim in this README, with where to check it.
 Three kinds of execution are kept apart: **autonomous agents** (the Oct 12 run: Claude Code agents writing their own
 changes), **deployed scripted execution** (the real system on canon.rodeo driven by predefined patches under
 agent names: the convoy run and most live tests; the ones with a real Claude Code session say so), and the **browser simulation** (the demo). **Recorded** links are real
@@ -88,7 +88,8 @@ version (Cloudflare Worker version) that produced it and the commit it was deplo
 | [rehearse #13](https://canon.rodeo/p/rehearse/canon/13/acceptance) (held: no read-back), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) (owner override) | `22e54713`, deployed Oct 13 18:02 UTC | `b9f3a2c` |
 | [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance), [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance) (the deployed scripted run, [docs/e2e.md](docs/e2e.md)) | `a83d0b92`, Oct 13 18:41 UTC | `4c84499` |
 | Oct 13 20:19–23:07 UTC | `118c6f12` | `79de603` |
-| everything after Oct 13 23:07 UTC (per-write ordering of production writes) | `8dcb7761` | `b013736` |
+| Oct 13 23:07–23:31 UTC (per-write ordering of production writes) | `8dcb7761` | `b013736` |
+| everything after Oct 13 23:31 UTC (the fence rechecks the barrier after every wait) | `77361154` | `700daca` |
 | earlier records (Oct 12–13: farmstand, rodeo, evid #2–3, rehearse #2–12, canary) | earlier versions | before `b9f3a2c` |
 
 Two rules changed after the convoy run, so a stateless release judged today would differ: a zero-comparison
