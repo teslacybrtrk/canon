@@ -58,7 +58,7 @@ change yourself, then 40 the Canon way.
 
 ## Evidence map
 
-**Submission revision: SUBMISSION_PIN** (tag `submission`). Every claim in this README, with where to check it.
+**Submission revision: [`51f62c5`](https://github.com/teslacybrtrk/canon/tree/51f62c5)** (moved from `79ddce9` after the per-write ordering fix) (tag `submission`). Every claim in this README, with where to check it.
 Three kinds of execution are kept apart: **autonomous agents** (the Oct 12 run: Claude Code agents writing their own
 changes), **deployed scripted execution** (the real system on canon.rodeo driven by predefined patches under
 agent names: the convoy run and most live tests; the ones with a real Claude Code session say so), and the **browser simulation** (the demo). **Recorded** links are real
