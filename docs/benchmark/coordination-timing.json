@@ -1,0 +1,564 @@
+{
+ "revision": "aed2d4e076d4",
+ "orders": 3,
+ "repeats": 2,
+ "conditions": "sequential: one benchmark process, nothing else running",
+ "node": "v26.7.0",
+ "results": {
+  "coordination": {
+   "queue": [
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 84,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 13,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 226
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 84,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 13,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 2,
+     "seconds": 122
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 87,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 16,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 146
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "item-link (item-link): a text conflict nobody could repair"
+     ],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 66,
+     "releases": 4,
+     "repairs": 3,
+     "repairFailures": 1,
+     "redundant": {
+      "attempts": 1,
+      "checks": 16,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 2,
+     "seconds": 182
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 91,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 19,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 126
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 91,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 19,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 2,
+     "seconds": 155
+    }
+   ],
+   "queue-safe": [
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 160,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 27,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 185
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 160,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 27,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 2,
+     "seconds": 157
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 166,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 33,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 148
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 166,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 33,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 2,
+     "seconds": 210
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 173,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 39,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 137
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 173,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 39,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 2,
+     "seconds": 291
+    }
+   ],
+   "canon": [
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 123
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 1,
+     "repeat": 2,
+     "seconds": 130
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 102
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 2,
+     "repeat": 2,
+     "seconds": 89
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 83
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 3,
+     "repeat": 2,
+     "seconds": 83
+    }
+   ]
+  }
+ }
+}

@@ -333,22 +333,31 @@ and run canaries too, and the benchmark below includes one that does. What's Can
 them (claims, supersession, prerequisites, clashes judged on the combined code), facts as protected requirements that
 agents can't edit, and the provenance of every decision.
 
-## Benchmark: against a strong merge queue
+## Benchmark: against merge queues, simulated
 
-`scripts/benchmark.mjs` replays the same attempts, in the same order, through a strong merge queue and through Canon
-with each mechanism switched off in turn. Both get every protected check (all canon facts plus the attempt's own, and
-CI), the same conflict repair (the judge's own model, as a service) and the same compute; production is a local Worker
-whose data persists across releases, with users. Full results and limits: [docs/benchmark.md](docs/benchmark.md).
+`scripts/benchmark.mjs` replays the same attempts, in several seeded orders, through a strong merge queue, **a merge
+queue with the same release safeguards as Canon**, and Canon with each mechanism switched off. All get every protected
+check, the same repair service and the same modelled agent behaviour; production is a local Worker whose data persists
+across releases, with users. It is a **simulation** of the pipelines on local Workers (the deployed run is
+[docs/e2e.md](docs/e2e.md)). The objectives and metric definitions were committed before the final runs
+([docs/benchmark-objectives.md](docs/benchmark-objectives.md)); full tables, conditions and limits are in
+[docs/benchmark.md](docs/benchmark.md), raw results in [docs/benchmark/](docs/benchmark/).
 
-| Workload | Strong merge queue | Canon |
-|---|---|---|
-| Stateful app (7 attempts) | 4 landed safely; **2 wrong accepts** (a schema change broke the market page on existing data; a release lost a shopper's basket, unrecoverable) and 1 release unsafe to roll back | 4 landed safely; 0 wrong accepts; 1 decision for an owner (the destructive change) |
-| Stateless Worker (3 attempts) | 2 landed; **shipped a change failing 1 request in 8 to every user** | 2 landed; the canary took it back out at 10% |
-| Integration (16 attempts) | 8 features | the same 8 features, with about twice the checks |
+| Workload (runs) | Strong merge queue | Queue with the same release safeguards | Canon |
+|---|---|---|---|
+| Stateful app (2 orders) | 4 features; **2 wrong accepts per run** (one unrecoverable: a lost basket), 1 release unsafe to roll back | 4 features; none | 4 features; none |
+| Stateless Worker (3 orders) | 2 features; **shipped a change failing 1 request in 8**, every run | 2; the canary held it | 2; the canary held it |
+| Integration, 16 attempts at 8 features (2 orders) | 8 features; 557 checks, 15 releases, a person 0.5 times | 8 features; 924 checks, 13 releases, a person 2.5 times | 8 features; 576 checks, 8 releases, no person |
+| Coordination: a duplicate, a prerequisite, overlapping edits (3 orders) | 3.7 features | 4 features; 166 checks, 5 releases, 3 repairs, 1 rejection | 4 features; 133 checks, 4 releases, 1.7 repairs, none |
 
-Switching off one Canon mechanism lets exactly its own failure through (release candidate: the schema break; rehearsal:
-the unsafe migration; data gate: the lost basket; canary: the flaky release; repair: 3 features and 6 people). Where
-Canon has no edge is getting code into main: with the same checks and repair, a careful queue lands the same features.
+**Safety is parity, not an advantage:** the queue with the same release safeguards had no wrong accepts either. The
+plain queue's failures are what the release safeguards prevent, whoever runs them; switching one off in Canon lets
+exactly its own failure through. **Canon's own edge is work:** it supersedes a claim whose fact is already canon
+instead of integrating and releasing it again, and holds a claim until the facts it builds on are in instead of
+testing and rejecting it. On the coordination workload that's 20% fewer checks, fewer releases and repairs, and no
+rejection, for the same features; on integration, where every feature is built twice, 38% fewer checks than the
+safeguarded queue. Elapsed time is compared only from a sequential run: there Canon's slowest of six runs (130 s) was faster than the safeguarded queue's fastest (137 s), a narrow margin; against the plain queue there was no reliable difference. Small workloads written by Canon's author, merge trains not modelled for either
+system, and people's time not measured.
 
 ## How it works
 
