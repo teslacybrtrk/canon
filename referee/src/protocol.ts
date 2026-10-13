@@ -1,3 +1,4 @@
+import type { Diagnosis } from "./diagnosis";
 import type { Review } from "./review";
 import type { DataChanges, Evidence, Recovery } from "./evidence";
 // The Canon protocol: four moves, one referee per project.
@@ -315,6 +316,7 @@ export interface Verdict {
   // either is Ready, so they can talk it over (or one can change course) instead of finding out at accept time.
   headsUp?: Clash[];
   reviewer?: Review | null; // the advisory reviewer's grounded notes (a model that didn't write the change), never a verdict
+  diagnosis?: Diagnosis | null; // what kind of failure this is, and what would resolve it (see diagnosis.ts)
 }
 
 /**

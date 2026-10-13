@@ -310,12 +310,18 @@ every re-apply of it until an agent changes the code: the judge re-applying the 
 a kinder review. A review that never finishes (a deploy can cut one off) is retried once; after that it is unavailable.
 Only a complete answer in the notes format counts as a review: an empty list of notes is a finding ("nothing to
 flag"), but an answer that was cut off, isn't the notes format, has any entry that isn't a whole note (file, line,
-quote, kind, note), or names a risk it can't quote from the code is an error (unavailable), never a clean review. Not
+quote, kind, note) is an error (unavailable), never a clean review. A risk or intent finding the reviewer can't quote
+from the change isn't a confirmed violation, but it isn't resolved either: it's kept as `unresolved` on the review, and
+required review evidence over it is unavailable (the owner decides), while an advisory review just shows it. Not
 knowing which files changed is an error too (never "no source files changed"). Nothing is cut to fit: every changed
 source file is shown with its added lines and its removed lines (a guard taken out is part of the change), whole, or
 around every change, added or removed, when it's too big to show whole, packed into as many passes as that
-takes (`coverage` on the review says how many, and which files were shown around their changes); a file too big even
-that way, or more than twelve files, makes the review unavailable and the owner decides. Findings that can decide acceptance
+takes (`coverage` on the review says how many, and which files were shown around their changes). The diff is
+order-sensitive: lines the two versions share at the start and end are set aside, and the rest is a line diff, so a
+validation moved from before a storage write to after it shows up as a removal and an addition, even in a 4,000-line
+file. A file whose changed region is too large to diff, or too big to show even around each change, is left out and
+named (`coverage.omitted`): the other files are still reviewed as advice, but required review evidence is unavailable.
+More than twelve files makes the review unavailable and the owner decides. Findings that can decide acceptance
 (every risk, and every intent finding) are never dropped to make room, within a pass or across passes; only
 "untested" notes are capped for display. `/stats` keeps the reviewer's track record, overall and per specialist, from what happened to the
 changes it read: risks confirmed (that attempt later broke a fact), overruled (a person accepted it and its release
@@ -372,9 +378,13 @@ atomically from the run), and the judge puts it in front of traffic. Every deplo
 same turn, right before the request, and a run that has lost it writes nothing at all, not even a rollback or cleanup:
 putting production right is the judge's own reconciliation, which, whenever no release holds the lease, sets
 production's deployment to canon's released version from the deployment as it is now (a 0% version a fenced-out run
-left staged, say). The judge's own writes (reconciliation, an automatic rollback, undoing a fenced-out run's change)
-recheck, in the same turn as the request and with no await between, that no release holds the lease: a release that
-took it while the judge was waiting on the network owns production, and the judge backs off. Every wrangler call that
+left staged, say). Ownership comes from the lease itself, whoever holds it: a release, or a republish of a canon that
+is already released (whose canon row says "deployed", so a pending row alone would miss it), and for a while a release
+that was accepted but hasn't started its run. The judge's own writes (reconciliation, an automatic rollback, undoing a
+fenced-out run's change) recheck that nobody owns production, in the same turn as the request and with no await
+between: a release or republish that took the lease while the judge was waiting on the network owns production, and
+the judge backs off. A judge write already on the wire lands before a release run's next deployment write (and before
+the gate reads the deployment it stages beside). Every wrangler call that
 changes a Worker recomputes the time left on the lease's absolute deadline right before it runs, refuses to start with
 less than a minute left, and runs under `timeout` to it, even inside a script that first clones and installs. The release Workflow consumes the record, and holds the release as a lease. Its first step asks
 whether this exact commit is what canon #seq authorized and whether #seq is still the latest canon; a stale or
@@ -391,16 +401,25 @@ leaves stored data alone): after the release candidate passes (this release's co
 the candidate's long-lived data), the code production runs now is deployed onto the candidate, over the data the new
 code just wrote, and the facts that were canon before must still hold (the new fact must fail there first: proof the
 old code is the one answering). Then state continuity, with fixture creation kept apart from the compatibility
-check: the release's code ran every fact once more, in full, with a fixed seed, under a shared run identity and under
-one per fact, writing the fixture; the old code does the same writes under control identities; then the old code only
-reads, never writes: each fact's GET steps, with the same seed (so the same expected values), against the new code's
-fixture and against its own. Reading never repairs, replaces or clears the fixture, and a retry reads it again as it
-was. A fact the old code reads back from what it wrote itself, but not from what the new code wrote, is a rollback that
-breaks it (one it can't read back even from its own writes is inconclusive, and not counted; a fact with no GET step
-that stands on its own can't be compared this way). A passed rehearsal covers the state and facts it exercised, not every dataset production may hold.
+check (the **fixture contract**). The release's code ran every stateful fact once more, in full, with a fixed seed,
+under an identity of its own and under one shared identity, writing the fixture, and Canon kept what each run needs to
+find its state again: the drawn inputs and every value a step saved (a generated id, say). The old code writes its own
+control fixtures the same way. Then the old code only reads: each fact's GET steps, on top of the values the fixture's
+writer saved, against its own control first and then against the new code's fixture. Reading never repairs, replaces
+or clears a fixture, and a retry reads the same one again. Every fact gets an outcome, recorded as `coverage` in the
+acceptance record: **compared** (the old code reads both), **incompatible** (it reads its own control but not what the
+new code wrote: the rehearsal fails), **inconclusive** (a fixture couldn't be written, or the old code can't read even
+its own: unavailable), **unsupported** (it writes state and has no GET step to read it back with: unavailable, and the
+record says what to add), or **not applicable** (every write it makes is expected to be refused, or its owner declared
+`"fixture": "none"` on the check). Missing evidence is never a pass, and zero comparisons isn't evidence either: a
+rehearsal that compared nothing is unavailable, unless the release's Wrangler config has no storage bindings at all
+(no Durable Objects, D1, KV, R2, Hyperdrive, Vectorize, Queues or Workflows), which establishes from the config, not
+from the empty result, that there is no stored data to be incompatible with. A passed rehearsal covers the state and
+facts it exercised, not every dataset production may hold.
 Passed: rollback is known safe, and the record says so. Failed or unavailable (the old
 code couldn't be deployed, e.g. a Durable Object migration that can't be undone): autopilot holds the release back,
-because it doesn't release what it can't take back; a person's accept still goes out, with rollback marked unsafe. And
+because it doesn't release what it can't take back; a person's accept still goes out, with rollback marked unsafe and
+`recovery.override` in the record naming who released it over which rehearsal result. And
 when a release that touched stored data doesn't ship (held back, rehearsal failed, any failure after its code ran on the
 candidate), the run rebuilds the release candidate from production's code before it lets go of the release: the
 candidate Worker is deleted with its Durable Objects and production's code deployed fresh, so no later release is

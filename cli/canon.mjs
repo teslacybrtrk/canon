@@ -242,6 +242,8 @@ async function verdict() {
     for (const n of v.reviewer.notes) console.log(`    ${n.kind.toUpperCase().padEnd(8)} ${n.file}:${n.line}  ${n.quote}\n             ${n.note}`);
   }
 
+  if (v.diagnosis) console.log(`  DIAGNOSIS ${v.diagnosis.kind}: ${v.diagnosis.why}\n            next: ${v.diagnosis.next}`);
+
   if (v.outcome === "ready") console.log(`\nReady. A human decides whether "${v.claimed.factId}" becomes canon.${v.clashes?.length ? " Your attempt and the one it clashes with likely can't both land: once one is accepted, the other is re-applied on top of it and rejected if the combined code still breaks the accepted fact." : ""}`);
   if (v.heldBack) console.log(`\nHELD BACK at release: it ${v.heldBack.replace(/^broke/, "broke")}\nProduction never ran it, so canon went back to the last released canon and your fact is proposed again.\nFix it and claim the fact again for a fresh attempt: canon claim --join ${v.claimed.factId} --why "<what you fixed>"`);
   if (v.outcome === "contradicts" && !v.heldBack) {

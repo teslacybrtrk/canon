@@ -3,6 +3,7 @@ import type { CiParams, CloudflareArtifacts } from "@cloudflare/ci";
 import type { Env } from "./env";
 import type { Novelty } from "./commands";
 import { compareLedger } from "./ledger";
+import { assertionOf, diagnose } from "./diagnosis";
 import { compareFixtures, fixtureContract, progress, runCheck, templateNames, writeFixture, type Fixture } from "./probe";
 import {
   ProtocolError,
@@ -567,12 +568,24 @@ export class Referee extends DurableObject<Env> {
     const claim = this.claim(claimId);
     return this.redactVerdict({
       ...verdict,
+      diagnosis: claim ? this.diagnosisOf(claim, verdict) : null,
       clashes: this.clashesFor(claimId),
       headsUp: this.headsUpFor(claimId),
       reviewer: this.reviewOf(attemptId, verdict.sha),
       ...(next ? { refreshedAs: next } : {}),
       ...(claim?.status === "declined" ? { declined: claim.declineReason || "no reason given" } : {}),
     }, this.heldOutIds());
+  }
+
+  /** The verdict's diagnosis (see diagnosis.ts), from what the judge knows about the claim and its alternatives. */
+  private diagnosisOf(claim: Claim, verdict: Verdict) {
+    const prev = claim.refreshedFrom ? this.claim(claim.refreshedFrom) : null;
+    const prevVerdict = prev ? this.latestVerdict(prev.attemptId) : null;
+    const mine = assertionOf(verdict.claimed.detail);
+    const sameFailureElsewhere = verdict.outcome !== "unproven" ? 0 : this.rows(`SELECT attempt_id FROM claims WHERE fact_id = ? AND id != ?`, claim.factId, claim.id)
+      .map((r) => this.latestVerdict(r.attempt_id as string))
+      .filter((v) => v?.outcome === "unproven" && assertionOf(v.claimed.detail) === mine).length;
+    return diagnose(verdict, { reapplied: !!prev, passedBefore: prevVerdict?.outcome === "ready", sameFailureElsewhere });
   }
 
   /**

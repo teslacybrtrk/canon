@@ -253,6 +253,7 @@ async function verdict(referee: Referee, attempt: string, sha: string | null, wa
   }
   if (v.headsUp?.length) out.push("  Not a clash yet: one side is still being written. If yours can make room for theirs, change course now; if not, say why in your claim (once both are Ready, a person picks one).");
   if (v.outside?.length) out.push(`  OUTSIDE YOUR SCOPE: you changed ${v.outside.join(", ")}, which your claim didn't say it would touch. Undo it, or the owner decides.`);
+  if (v.diagnosis) out.push(`  DIAGNOSIS ${v.diagnosis.kind}: ${v.diagnosis.why}\n            next: ${v.diagnosis.next}`);
   if (v.reviewer?.status === "done" && v.reviewer.notes.length) {
     out.push(`  REVIEWER advisory notes from ${v.reviewer.model.split("/").pop()}, a model that didn't write this (never a verdict):`);
     for (const n of v.reviewer.notes) out.push(`    ${n.kind.toUpperCase()} ${n.file}:${n.line}  ${n.quote}  ${n.note}`);

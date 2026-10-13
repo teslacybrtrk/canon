@@ -195,6 +195,23 @@
   .intro-slim { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-top: 20px; padding: 8px 12px; border: 1px solid rgb(253 111 22 / 0.4); border-radius: 8px; background: linear-gradient(90deg, rgb(253 111 22 / 0.1), transparent); font-size: 13px; color: var(--ink-2); }
   .intro-slim .ev-k { color: var(--brand); }
   .intro-slim .btn { margin-left: auto; height: 28px; font-size: 12px; }
+  /* The demo's guided tour: three outcomes, in order, each with what to do and what happened. */
+  .tour { margin-top: 20px; padding: 14px 16px; border: 1px solid rgb(253 111 22 / 0.45); border-radius: 8px; background: linear-gradient(160deg, rgb(253 111 22 / 0.1), rgb(253 200 109 / 0.02)); }
+  .tour-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 12.5px; color: var(--ink-2); }
+  .tour-head .ev-k { color: var(--brand); }
+  .tour-head .linkish { margin-left: auto; font-size: 12px; }
+  .tour-steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .tour-steps li { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+  .tour-steps li.now { border-color: rgb(253 111 22 / 0.7); box-shadow: 0 0 0 3px rgb(253 111 22 / 0.12); }
+  .tour-steps li.later { opacity: 0.55; }
+  .tour-steps li.done { border-color: color-mix(in srgb, var(--held) 55%, var(--border)); }
+  .tour-steps b { display: block; color: var(--ink); font-size: 13.5px; margin: 2px 0 4px; }
+  .tour-steps .n { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .tour-steps li.done .n { color: var(--held); }
+  .tour-steps .btn { margin-top: 8px; height: 28px; font-size: 12px; }
+  .tour-steps .wait { margin-top: 8px; color: var(--muted); font-style: italic; }
+  .tour-end { margin: 10px 0 0; font-size: 13px; color: var(--ink); }
+  .tour-end a, .tour-steps a { color: var(--link); }
   .linkish { background: none; border: 0; padding: 0; color: var(--link); font: inherit; cursor: pointer; }
   .linkish:hover { text-decoration: underline; }
   .flash b { color: var(--ink); }
@@ -624,6 +641,12 @@
     <div><span class="ev-k">Safe</span><b>Nothing deploys</b><p>It all runs in your browser on sample data. Refresh to start over.</p><button class="btn" type="button" onclick="location.reload()">Start over</button></div>
   </div>
 
+  <section class="tour" id="tour" hidden aria-label="Guided tour">
+    <div class="tour-head"><span class="ev-k">Guided tour · three outcomes, about two minutes</span><span><b>Browser simulation</b>: the judge’s rules played on sample data in your browser; nothing deploys. Links marked <b>recorded</b> open real records from canon.rodeo.</span><button class="linkish" id="tourskip" type="button">Explore on my own</button></div>
+    <ol class="tour-steps" id="toursteps" aria-live="polite"></ol>
+    <p class="tour-end" id="tourend" hidden></p>
+  </section>
+
   <div class="layout" style="margin-top:20px">
     <div class="stack">
       <section id="tab-canon" class="stack">
@@ -764,6 +787,7 @@
 
   // Smooth moves: remember where each card and fact was, render, then glide each one from there (FLIP).
   function render() {
+    if (MOCK) drawTour();
     const before = new Map();
     for (const el of document.querySelectorAll("#claims .pr, #facts .fact")) before.set(el.id || `f-${el.dataset.fact}`, el.getBoundingClientRect().top);
     draw();
@@ -1280,7 +1304,8 @@
   try { dismissed = localStorage.getItem("canon-board-welcome") === "off"; } catch {}
   $("flash").hidden = dismissed || MOCK;
   if (MOCK) {
-    $("intro").hidden = false;
+    $("tour").hidden = false;
+    $("tourskip").addEventListener("click", () => { tour.off = true; $("tour").hidden = true; tips(true); });
     $("activity").hidden = false;
     setInterval(() => drawLog(), 15_000);
     for (const b of document.querySelectorAll("[data-auto]")) b.addEventListener("click", () => setAutopilot(b.dataset.auto));
@@ -1784,8 +1809,61 @@
     if (!demo.boardingTimer) demo.boardingTimer = setTimeout(() => { demo.boardingTimer = null; departQueue(); }, 4200);
   }
 
+  // The guided tour: three outcomes in order. Each step says what to do (or does it), then what happened and why,
+  // with links to real records from canon.rodeo where the same thing happened live.
+  const tour = { off: false };
+  const latest = (factId) => state.claims.filter((c) => c.factId === factId).pop();
+  const TOUR = [
+    {
+      title: "Overlapping changes, settled on the combined code",
+      ask: "agent-2 refuses a second booking of a stall; agent-3 lets two vendors share one. Each passes alone, and the judge flagged the clash before anyone accepted either. Pick a side: accept “A stall cannot be double-booked”.",
+      button: "Accept it",
+      act: () => demoAccept("c-2"),
+      done: () => state.facts.find((f) => f.id === "no-double-booking")?.status === "canon" && !["ready", "behind", "checking", "open"].includes(latest("stalls-can-be-shared")?.status),
+      result: () => `You clicked once. The judge re-applied agent-3’s attempt on the new canon by itself; on the combined code its fact broke, so it went back to agent-3 with the reason, and every other attempt was re-checked too. Nobody read a diff.`,
+    },
+    {
+      title: "Passes its preview, fails on real data: held before release",
+      ask: "Switch on Autopilot. Queued facts land by the charter. One, stall opening hours, passes its fresh preview but breaks the market page on the release candidate, which keeps long-lived data like production.",
+      button: "Switch on Autopilot",
+      act: () => setAutopilot("charter"),
+      done: () => !!demo.heldOnce,
+      result: () => `Held back on the release candidate: no visitor ever got it, and canon stepped back to what production runs. Live, the same release path held back a data migration the previous version couldn’t read (<a href="https://canon.rodeo/p/rehearse/canon/7/acceptance" target="_blank" rel="noopener">recorded</a>) and a release whose rollback couldn’t be compared (<a href="https://canon.rodeo/p/rehearse/canon/13/acceptance" target="_blank" rel="noopener">recorded</a>).`,
+    },
+    {
+      title: "Compatible changes land together, with a record",
+      ask: "Autopilot keeps going: Ready claims queued behind a release leave as one merge train: one combined candidate, checked once, released once.",
+      wait: "Watching for a merge train…",
+      done: () => (state.deploys ?? []).some((d) => d.deployed === "deployed" && (d.facts?.length ?? 0) > 1),
+      result: () => {
+        const d = (state.deploys ?? []).find((x) => x.deployed === "deployed" && (x.facts?.length ?? 0) > 1);
+        return `${d ? d.facts.length : "Several"} facts landed in one release. Every canon gets an acceptance record: the exact commit, each fact’s evidence, who or what authorized it, and how a failed release recovers. Real ones: an autopilot landing (<a href="https://canon.rodeo/p/evid/canon/3/acceptance" target="_blank" rel="noopener">recorded</a>), an owner’s release over an unavailable rehearsal, named as an exception (<a href="https://canon.rodeo/p/evid/canon/5/acceptance" target="_blank" rel="noopener">recorded</a>).`;
+      },
+    },
+  ];
+  function drawTour() {
+    if (!MOCK || tour.off) return;
+    let current = TOUR.findIndex((t) => !t.done());
+    if (current < 0) current = TOUR.length;
+    const html = TOUR.map((t, i) => {
+      const state = i < current ? "done" : i === current ? "now" : "later";
+      const body = state === "done" ? `<p>${t.result()}</p>` : `<p>${t.ask}</p>${state === "now" ? (t.button ? `<button class="btn" type="button" data-tour="${i}">${t.button}</button>` : `<p class="wait">${t.wait}</p>`) : ""}`;
+      return `<li class="${state}"><span class="n">${state === "done" ? "Done · " : ""}Step ${i + 1} of ${TOUR.length}</span><b>${t.title}</b>${body}</li>`;
+    }).join("");
+    // Redrawn only when it changes: the board re-renders often, and replacing a button mid-click would lose the click.
+    if (html !== tour.html) $("toursteps").innerHTML = tour.html = html;
+    const end = $("tourend");
+    end.hidden = current < TOUR.length;
+    if (!end.hidden && !end.innerHTML) end.innerHTML = `<b>That’s Canon:</b> agents propose changes, protected facts govern integration on the combined code, and release evidence decides what reaches production. <a href="https://github.com/teslacybrtrk/canon#evidence-map" target="_blank" rel="noopener">Check the claims against the evidence</a> · <button class="linkish" type="button" onclick="location.reload()">Start over</button>`;
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest?.("[data-tour]");
+    if (b) TOUR[Number(b.dataset.tour)]?.act?.();
+  });
+
   // The how-to cards fold to one line after the first move (once); Show tips and Hide tips switch them any time.
   function tips(show) {
+    if (MOCK && !tour.off) return; // the guided tour stands in for the tips until it's dismissed
     $("intro").hidden = !show;
     $("introslim").hidden = show;
   }

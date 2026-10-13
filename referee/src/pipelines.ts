@@ -58,15 +58,6 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       deps = await withRetries("install", (a) =>
         ci.runner({ name: named("install", a), command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] }, config: once }),
       );
-      const preview = await withRetries("preview", (a) =>
-        deps.runner({
-          name: named("preview", a),
-          command: `npx wrangler preview --name ${previewName} --json`,
-          cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
-          config: once,
-        }),
-      );
-      previewUrl = previewUrlFrom(preview.logs, previewName) ?? this.env.PREVIEW_URL_TEMPLATE.replace("{name}", previewName);
     } catch (err) {
       const detail = isCiRunnerFailure(err) ? err.message : String(err);
       if (exitedNonZero(err)) await step.do("build failed", () => referee.buildFailed(repo, sha, detail));
@@ -74,33 +65,54 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       return;
     }
 
-    // A newer push of the same attempt arrived while this one built: its verdict would be replaced at once, so stop
-    // here and give the slot back instead of running every check for nothing.
-    if (await step.do("still current", () => referee.superseded(repo, sha))) return;
-
-    // Command facts (lint, types, tests, budgets) run on this commit's checkout in ONE container,
-    // from the installed snapshot. The commands come from canon, never from the attempt.
-    const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
-    // A claimed command fact also runs on the commit the attempt forked from: if it passes there, it isn't new.
-    const base: Novelty | null = await step.do("forked-from commit", async () => {
-      const n = await referee.noveltyFor(repo, sha);
-      return n ? { factId: n.factId, run: n.run, files: n.files.map((f) => ({ path: f.path, b64: f.b64 })) } : null;
-    });
-    let results: Record<string, CheckResult> = {};
-    let notNew: string | undefined;
-    if (commands.length) {
+    // The Preview upload and the command facts both start from the installed snapshot and don't need each other, so
+    // they run side by side (measured: they were the two longest steps on the push-to-verdict path, one after the other;
+    // see docs/timings.md). Command facts (lint, types, tests, budgets) run on this commit's checkout in ONE container;
+    // the commands come from canon, never from the attempt. A claimed command fact also runs on the commit the attempt
+    // forked from: if it passes there, it isn't new.
+    const previewRun = withRetries("preview", (a) =>
+      deps.runner({
+        name: named("preview", a),
+        command: `npx wrangler preview --name ${previewName} --json`,
+        cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+        config: once,
+      }),
+    ).then((preview) => ({ ok: true as const, preview }), (err: unknown) => ({ ok: false as const, err }));
+    const commandRun = (async () => {
+      const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
+      const base: Novelty | null = await step.do("forked-from commit", async () => {
+        const n = await referee.noveltyFor(repo, sha);
+        return n ? { factId: n.factId, run: n.run, files: n.files.map((f) => ({ path: f.path, b64: f.b64 })) } : null;
+      });
+      if (!commands.length) return { ok: true as const, results: {} as Record<string, CheckResult>, notNew: undefined as string | undefined };
       try {
         const ran = await withRetries("facts", (a) =>
           deps.runner({ name: named("command facts", a), command: commandScript(commands, base), config: once }),
         );
         const stdout = typeof ran.logs.stdout === "string" ? ran.logs.stdout : "";
-        results = parseCommandResults(commands, stdout);
-        if (base && heldOnBase(base, stdout)) notNew = base.factId;
+        return { ok: true as const, results: parseCommandResults(commands, stdout), notNew: base && heldOnBase(base, stdout) ? base.factId : undefined };
       } catch (err) {
-        await step.do("could not judge", () => referee.couldNotJudge(repo, sha, isCiRunnerFailure(err) ? err.message : String(err)));
-        return;
+        return { ok: false as const, err };
       }
+    })();
+    const [built, checked] = await Promise.all([previewRun, commandRun]);
+    if (!built.ok) {
+      const detail = isCiRunnerFailure(built.err) ? built.err.message : String(built.err);
+      if (exitedNonZero(built.err)) await step.do("build failed", () => referee.buildFailed(repo, sha, detail));
+      else await step.do("could not judge", () => referee.couldNotJudge(repo, sha, detail));
+      return;
     }
+    previewUrl = previewUrlFrom(built.preview.logs, previewName) ?? this.env.PREVIEW_URL_TEMPLATE.replace("{name}", previewName);
+    if (!checked.ok) {
+      await step.do("could not judge", () => referee.couldNotJudge(repo, sha, isCiRunnerFailure(checked.err) ? checked.err.message : String(checked.err)));
+      return;
+    }
+
+    // A newer push of the same attempt arrived while this one built: its verdict would be replaced at once, so stop
+    // here and give the slot back instead of running every check for nothing.
+    if (await step.do("still current", () => referee.superseded(repo, sha))) return;
+    const results = checked.results;
+    const notNew = checked.notNew;
 
     try {
       await step.do("judge", { retries: { limit: 4, delay: 10_000, backoff: "linear" }, timeout: 5 * 60_000 }, async () => {
