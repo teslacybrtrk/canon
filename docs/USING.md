@@ -47,7 +47,8 @@ Canon has no accounts or sign-up. Anyone can read the board; writes need a key.
 
 ## 2. Write the facts
 
-In your app's repo:
+Copyable facts for races, retries, authorization, data compatibility, latency and generated inputs, each with what it
+can't catch and how the rollback rehearsal reads it back, are in [checks.md](checks.md). In your app's repo:
 
 ```sh
 node /path/to/canon/cli/canon.mjs init

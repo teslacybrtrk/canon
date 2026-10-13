@@ -35,7 +35,7 @@ import { addedText, callsInto, changedSymbols } from "./symbols";
 import { fileFromAnswer, parseConflicts, repairPrompt, validResolution } from "./repair";
 import { SCHEMA, UPGRADES } from "./schema";
 import { deploymentOwner, holdsLease, leaseDecision, RELEASE_LEASE_MS, RELEASE_START_MS, type Lease } from "./release";
-import { ACCOUNT_SLOTS } from "./slots";
+import { ACCOUNT_SLOTS, BACKGROUND_SLOTS } from "./slots";
 import { canaryVerdict, versionTraffic } from "./telemetry";
 import { compatibilityVerdict, dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence, storageBindings, type CompatibilityCoverage, type DataChanges, type Evidence } from "./evidence";
 import { changedLines, judgeAnswer, rankNotes, REVIEW_SCHEMA, reviewBatches, reviewPrompt, specialistsFor, type Review, type ReviewFile, type ReviewNote, type Specialist, type UnresolvedNote } from "./review";
@@ -2138,12 +2138,21 @@ export class Referee extends DurableObject<Env> {
     // At most two at a time (each builds several previews); the alarm starts the next ones.
     const busy = this.rows(`SELECT json, at FROM mutations`).filter((r) => (JSON.parse(r.json as string) as Mutation).status === "running" && Date.now() - Number(r.at) < 20 * 60_000).length;
     if (busy >= 2) return;
+    // Account-wide, deliberate breaks are background work: they take spare capacity only, never ahead of a verification
+    // waiting for a slot (the alarm asks again). Re-checked after the await, which let other alarms run.
+    const slotKey = `mutate:${attempt.id}:${verdict.sha.slice(0, 12)}`;
+    if (this.env.CAPACITY) {
+      const cap = await this.account().acquireBackground(this.accountKey(slotKey), this.requireProject(), BACKGROUND_SLOTS).catch(() => "wait" as const);
+      if (cap !== "go") return;
+      if (this.rows(`SELECT 1 FROM mutations WHERE attempt_id = ? AND sha = ?`, attempt.id, verdict.sha).length) return void this.ctx.waitUntil(this.account().release(this.accountKey(slotKey)).catch(() => {}));
+    }
     const running: Mutation = { status: "running", total: 0, caught: 0, mutants: [], at: Date.now() };
     this.sql.exec(`INSERT INTO mutations (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, attempt.id, verdict.sha, JSON.stringify(running), Date.now());
     try {
       await this.env.MUTATE_WORKFLOW.create({ id: `mutate-${attempt.id}-${verdict.sha.slice(0, 12)}`, params: this.ciParams(attempt.id, verdict.sha) });
     } catch {
       this.sql.exec(`UPDATE mutations SET json = ? WHERE attempt_id = ? AND sha = ?`, JSON.stringify({ ...running, status: "none", reason: "start-failed" }), attempt.id, verdict.sha);
+      if (this.env.CAPACITY) this.ctx.waitUntil(this.account().release(this.accountKey(slotKey)).catch(() => {}));
     }
   }
 
@@ -2214,6 +2223,7 @@ export class Referee extends DurableObject<Env> {
       ...(!mutants.length ? { reason: reason ?? "build-failed" } : {}),
     };
     this.sql.exec(`INSERT OR REPLACE INTO mutations (attempt_id, sha, json, at) VALUES (?, ?, ?, ?)`, repo, sha, JSON.stringify(result), Date.now());
+    if (this.env.CAPACITY) this.ctx.waitUntil(this.account().release(this.accountKey(`mutate:${repo}:${sha.slice(0, 12)}`)).catch(() => {}));
     this.broadcast();
     const pending = await this.ctx.storage.getAlarm();
     if (pending === null || pending > Date.now() + 2_000) await this.ctx.storage.setAlarm(Date.now() + 1_000);

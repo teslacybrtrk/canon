@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./env";
-import { grantSlot, type SlotState } from "./slots";
+import { grantBackground, grantSlot, type SlotState } from "./slots";
 
 /**
  * Account-wide verification capacity. Each project's judge admits at most six verifications at once; this one object
@@ -16,6 +16,13 @@ export class Capacity extends DurableObject<Env> {
   acquire(key: string, project: string, limit: number): "go" | "wait" {
     const state = this.state();
     const { granted, next } = grantSlot(state, key, project, limit, Date.now());
+    this.ctx.storage.kv.put("state", next);
+    return granted ? "go" : "wait";
+  }
+
+  /** Background work: only spare capacity, never ahead of a waiting verification (see grantBackground). */
+  acquireBackground(key: string, project: string, limit: number): "go" | "wait" {
+    const { granted, next } = grantBackground(this.state(), key, project, limit, Date.now());
     this.ctx.storage.kv.put("state", next);
     return granted ? "go" : "wait";
   }

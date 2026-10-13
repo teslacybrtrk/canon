@@ -13,6 +13,11 @@ person (or a charter written once) accepts a change in the facts, and the accept
 plus the commit that keeps them, in the role of main. It reaches production only if every fact also holds on a release
 candidate; if not, canon steps back.
 
+**The idea, in one line: agents propose changes, protected facts govern integration, and release evidence decides
+what reaches production.** Coordination, review and conflicts are all judged the same way, against the declared facts on
+the combined code; every decision, and the evidence it stood on, is recorded where anyone can check it
+([evidence map](#evidence-map)).
+
 - **Coordination**: agents read claims ("agent-4 is trying to make *sold-out items can't be bought* true"), not file locks.
 - **Conflicts**: caught on behaviour, not text. Overlapping edits that keep the facts are fine (the judge replays an
   attempt onto the new canon itself, and repairs a text conflict with a model when it can; the facts still decide). A clean merge that breaks a fact is
@@ -50,6 +55,38 @@ that clashed is settled on the combined code), or switch on autopilot and watch 
 browser on sample data). To feel the difference, play
 [Canon Stampede](https://canon.rodeo/game): ride a stampede of agents' changes for 40 seconds reviewing every
 change yourself, then 40 the Canon way.
+
+## Evidence map
+
+Every claim in this README, with where to check it. **Recorded** links are real records from canon.rodeo (projects
+left up for inspection); **simulated** results come from a local harness; **unit-tested** behaviour is in `npm test`.
+
+| Claim | Evidence | Reproduce |
+|---|---|---|
+| Conflicts are judged on the combined code, not the text | the Oct 12 run ([farmstand stats](https://canon.rodeo/p/farmstand/stats)): a clash flagged before either side was accepted, the loser re-applied and judged; the [demo](https://canon.rodeo/demo)'s tour, step 1 (simulated in the browser) | `node scripts/baseline.mjs` ([docs/baseline.md](docs/baseline.md)) |
+| A check that didn't run is never a pass | recorded: [evid #2](https://canon.rodeo/p/evid/canon/2/acceptance) (review unavailable, owner exception named), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) | `node scripts/test-evidence.ts` |
+| Every canon has an acceptance record, also in Git notes | recorded: any `/p/<project>/canon/<n>/acceptance`; `git fetch https://canon.rodeo/p/rehearse.git refs/notes/canon` | |
+| A change that passes its preview but breaks on existing data never reaches production | recorded: [rehearse #7](https://canon.rodeo/p/rehearse/canon/7/acceptance) (data migration the previous version can't read); simulated: [docs/benchmark.md](docs/benchmark.md), data workload | `node scripts/benchmark.mjs --workloads data` |
+| Rollback compatibility is compared on the exact state each version wrote, and missing evidence holds the release | recorded: [rehearse #13](https://canon.rodeo/p/rehearse/canon/13/acceptance) (two facts with no read-back: unavailable, held), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) (an owner released over it; `recovery.override` names it) | `node scripts/test-probe.ts`, `node scripts/test-evidence.ts` |
+| A flaky release is taken back out at 10% | recorded: [canary #3](https://canon.rodeo/p/canary/canon/3/acceptance) | `node scripts/benchmark.mjs --workloads stateless` |
+| One writer of production, behind a lease (republishes included) | unit-tested: `scripts/test-release.ts`; the `fence:` step every release takes before each Worker-changing step ([docs/timings.md](docs/timings.md)) | `node scripts/test-release.ts` |
+| Duplicates are superseded, prerequisites wait, merge trains release once | deployed run: [docs/e2e.md](docs/e2e.md); simulated: [docs/benchmark.md](docs/benchmark.md), coordination workload | `node scripts/e2e.mjs`, `node scripts/benchmark.mjs --workloads coordination` |
+| Where the time goes, and what was changed because of it | [docs/timings.md](docs/timings.md), from Cloudflare's own Workflows records | `node scripts/timings.mjs` |
+| Held-out checks stay private | recorded: `rehearse` (the board shows the sentence, never the check); the API redacts details | |
+
+Nothing here needs a secret to read. Held-out checks and keys are never in a public record.
+
+## How Cloudflare is used
+
+| Piece | Role in Canon |
+|---|---|
+| **Artifacts** | every attempt is a Git fork with a scoped token; canon is a repo; Canon serves its own source and the fact chain (Git notes) from it |
+| **Workers** | the judge's HTTP API, MCP endpoint, board and site (canon.rodeo); the apps it judges are Workers too |
+| **Durable Objects** | one judge per project: claims, verdicts, canon, leases and acceptance records in its SQLite; synchronous storage makes accept and release decisions atomic; a second Durable Object shares verification capacity across projects |
+| **Workflows** (+ `@cloudflare/ci` Containers) | verify, mutate, re-apply, merge train and release pipelines; every step's timing is in the platform's records ([docs/timings.md](docs/timings.md)) |
+| **Workers Previews** | one live preview per pushed commit, where every fact is checked |
+| **Workers deployments API** | versions uploaded at 0%, smoke-tested with version overrides, rolled out by percentage; only the judge writes it |
+| **Workers AI** | the reviewer (Kimi K2.7 Code) and the conflict repair model; never the judge |
 
 ## One real run
 
@@ -222,6 +259,16 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   its claim said it would touch"); one that stayed in scope landed, its record saying so
   ([record](https://canon.rodeo/p/rehearse/canon/9/acceptance), which also lists the alternatives it passed over).
 
+- **The fixture contract, live** (Oct 13): on `rehearse`, an agent's stall-products change landed on autopilot as
+  canon #13 and was rehearsed: 6 facts compared (the previous version read back, by the ids it saved, what the new
+  version wrote, beside what it wrote itself), 1 not applicable (its only write is refused), and 2 unsupported: the
+  booking and line-limit facts write state and have no GET step to read it back. Unsupported is missing evidence, not
+  a pass, so the rehearsal was unavailable and autopilot held the release; production never served it, and the record
+  says which facts need a read step ([record](https://canon.rodeo/p/rehearse/canon/13/acceptance)). On `evid`, the
+  owner accepted search-by-name over an unavailable review; its rehearsal was unavailable for the same reason, and it
+  went out on the owner's authority with `recovery.override` naming exactly that
+  ([record](https://canon.rodeo/p/evid/canon/5/acceptance)).
+
 What broke in those tests, and is fixed: the first line-limit attempt was flagged by the reviewer (two adds of 50 and
 60 make a line of 110) and waited, but its re-apply drew a review without that risk and landed, so a risk named on an
 attempt now stands on its re-applies until an agent changes the code (deployed; in the live retest the reviewer named
@@ -249,6 +296,11 @@ rejected a correct change (platform failures are retried, never rejections).
 | Memory | PR threads | not part of the method | not part of the method | the fact chain, in Git notes; every failed attempt stays clonable |
 | A check that didn't run | often skipped, and the merge goes ahead | no review, no opinion | not part of the method | `unavailable`, never a pass: autopilot waits, only a person accepts over it, and the acceptance record names it |
 | Release | whatever merged | whatever merged | whatever passed | every fact on a full release candidate with long-lived data, a rehearsed rollback, then (for Workers without Durable Objects) 0% and a gradual rollout watched step by step; one that breaks in production anyway is rolled back when that's known to be safe |
+
+Release safeguards like these aren't unique to Canon: a merge queue can stage on long-lived data, rehearse rollbacks
+and run canaries too, and the benchmark below includes one that does. What's Canon's own is the coordination around
+them (claims, supersession, prerequisites, clashes judged on the combined code), facts as protected requirements that
+agents can't edit, and the provenance of every decision.
 
 ## Benchmark: against a strong merge queue
 
@@ -337,7 +389,8 @@ Producing evidence, approving it and releasing code are separate steps, and each
 - **Specialist review with a track record**: data and security passes by what a change touches, whole-change coverage
   (never truncated), every note validated, and confirmed/overruled/missed counts in `/stats`.
 - **Prerequisites and shared capacity**: a claim can say which facts it builds on; projects share the account's
-  verification capacity fairly.
+  verification capacity fairly, and background work (deliberate-break runs) only takes spare capacity, never ahead of
+  a verification that's waiting.
 - **Races are facts too**: a probe step can send several copies at once and say how the answers must add up (one
   booking wins, the rest get 409), which a sequential check can't tell apart from a check-then-await-then-insert. Every
   response is held to the step's other assertions; an assertion a step can't apply is refused, never skipped.
@@ -413,9 +466,11 @@ held-out facts, specialist review with a track record, prerequisites, account-wi
   silently), and let a charter give a specialist with a good record more weight.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
-- **A wider benchmark**: `scripts/benchmark.mjs` replays three workloads through a strong merge queue and through
-  Canon with mechanisms switched off ([docs/benchmark.md](docs/benchmark.md)); next, more orders and seeds per workload,
-  a larger repository, permission changes, and wall-clock with real parallelism.
+- **A wider benchmark**: `scripts/benchmark.mjs` replays four workloads, in several seeded orders, through a strong
+  merge queue, a merge queue with the same release safeguards, and Canon with mechanisms switched off
+  ([docs/benchmark.md](docs/benchmark.md)), and `scripts/e2e.mjs` runs a workload on deployed Canon
+  ([docs/e2e.md](docs/e2e.md)); next, workloads written by people who didn't build Canon, a larger repository,
+  merge trains modelled for both systems, and wall-clock with real parallelism.
 
 ## Where the code lives
 

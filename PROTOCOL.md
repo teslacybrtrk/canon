@@ -66,7 +66,8 @@ The token can write to this fork only. Agents cannot push to canon.
 ### 3. Push
 
 Plain Git: `git push origin main` inside the attempt. The Artifacts `pushed` event starts a Workflow that
-builds the attempt as a Workers Preview (`wrangler preview --name <attempt>`) and asks the judge for a verdict.
+builds the attempt as a Workers Preview (`wrangler preview --name <attempt>`), runs the command facts beside it (both
+start from the same installed snapshot and don't need each other), and asks the judge for a verdict.
 
 ### 4. Verdict
 
@@ -91,6 +92,14 @@ builds the attempt as a Workers Preview (`wrangler preview --name <attempt>`) an
 | `pending` | no verdict yet (HTTP 202): the preview is still building. |
 
 When the judge has re-applied a behind attempt on the current canon, its verdict carries `refreshedAs`, the new attempt's id.
+
+A verdict that isn't Ready carries a `diagnosis`: what kind of failure it is and what would resolve it.
+`implementation` (the change breaks a canon fact, or its own fact doesn't hold yet), `combination` (it held on its own
+base and breaks only together with what became canon since; or it's behind and being re-applied), `requirement` (its
+fact already held before the change, or at least two other attempts fail it with the same assertion: the fact may be
+wrong, and only a person changes it), `unsupported-check` (held back at release because the evidence it needs couldn't
+be produced, such as a fact that writes with no read-back), or `infrastructure` (the platform failed; the judge
+retries). It is guidance for whoever acts next; the facts still decide.
 
 ## canon.json
 
@@ -277,7 +286,10 @@ admitted in about three and a half hours isn't verified at all; it gets a platfo
 verification that a newer push of the same attempt has made pointless stops as soon as its preview is built, before
 any check runs, and gives its slot back. Projects share the account's capacity too: a verification needs a slot in its
 project (six) and an account-wide slot (twelve, in one Durable Object), and a free account slot goes to the project with
-the fewest verifications running, then the longest wait, so one busy project can't starve the rest.
+the fewest verifications running, then the longest wait, so one busy project can't starve the rest. Deliberate-break
+runs are background work: besides their per-project cap (two at a time), they take an account slot only while no
+verification is waiting for one and the account is under half its capacity, and they never join the queue, so they
+can't delay a verification; the judge asks again on its next alarm.
 
 **Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release
 runs board for 3 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is

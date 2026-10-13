@@ -20,3 +20,21 @@ export function grantSlot(state: SlotState, key: string, project: string, limit:
   slots[key] = { project, at: now };
   return { granted: true, next: { slots, waiting } };
 }
+
+/** Background work (deliberate-break runs) may hold at most this many of the account's slots. */
+export const BACKGROUND_SLOTS = ACCOUNT_SLOTS / 2;
+
+/**
+ * A slot for background work: granted only while no verification is waiting for one and the account is under `limit`.
+ * It never joins the queue, so it can't get ahead of a verification; the judge asks again on its next alarm.
+ */
+export function grantBackground(state: SlotState, key: string, project: string, limit: number, now: number): { granted: boolean; next: SlotState } {
+  const slots = { ...state.slots };
+  const waiting = { ...state.waiting };
+  for (const [k, v] of Object.entries(slots)) if (now - v.at > 15 * 60_000) delete slots[k];
+  for (const [k, w] of Object.entries(waiting)) if (now - w.seen > 60_000) delete waiting[k];
+  if (slots[key]) return { granted: true, next: { slots, waiting } };
+  if (Object.keys(waiting).length || Object.keys(slots).length >= limit) return { granted: false, next: { slots, waiting } };
+  slots[key] = { project, at: now };
+  return { granted: true, next: { slots, waiting } };
+}
