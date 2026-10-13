@@ -861,7 +861,7 @@
       <div class="fact ${f.status} ${fade}${f.acceptedAt && Date.now() - f.acceptedAt < 2500 ? " landed" : ""}" data-fact="${esc(f.id)}" title="Why is this true?" role="button" tabindex="0">
         <span class="glyph"></span>
         <span class="text">${esc(f.sentence)}</span>
-        <small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : ""}${f.replaces ? `<span>revises ${esc(f.replaces)}</span>` : ""}${f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs in CI</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small>
+        <small><span>${esc(f.id)}</span>${offProd(f) ? `<span class="off" title="${esc(prod.results[f.id].detail)}">✗ failed on production</span>` : ""}${f.replaces ? `<span>revises ${esc(f.replaces)}</span>` : ""}${f.heldOut ? `<span class="tag" title="The owner keeps this check out of the repo: agents see only the sentence">held out</span>` : f.check?.kind === "command" ? `<span class="tag" title="${esc(f.check.run)}">runs in CI</span>` : ""}${f.scope ? `<span class="tag" title="${esc(f.scope.join(", "))}">scoped</span>` : ""}</small>
         <span class="st ${f.status === "canon" && !offProd(f) ? "holds" : ""}">${f.status === "canon" ? (offProd(f) ? "failing" : "✓ holds") : f.status === "retired" ? "retired" : f.status === "declined" ? "declined" : "proposed"}</span>
       </div>`;
     // Each section shows its newest few, the last two fading; "Show more" doubles it, then everything.
@@ -1029,6 +1029,7 @@
       error: "<b>Couldn’t judge.</b> The platform failed, not the code.",
     };
     const howChecked = (f) => !f?.check ? ""
+      : f.heldOut ? "a held-out check (hidden from agents)"
       : f.check.kind === "command" ? `ran <code>${esc(f.check.run.length > 48 ? `${f.check.run.slice(0, 48)}…` : f.check.run)}</code> on the commit, in CI`
       : `${f.check.steps.length} request${f.check.steps.length === 1 ? "" : "s"} to the preview${(f.check.samples ?? 1) > 1 ? `, ${f.check.samples} random samples` : ""}${f.check.vars ? ", inputs drawn by the judge after the push" : ""}`;
     const trail = (cl, v) => {
@@ -1400,7 +1401,9 @@
       inputs.length ? `Random inputs, drawn again for each of ${c.samples ?? 1} run${(c.samples ?? 1) === 1 ? "" : "s"} from the commit's hash (the same commit always gets the same ones): ${inputs.join(" · ")}.` : "",
       c.kind === "probe" && c.isolate === false ? "Sent exactly as a visitor's requests, with no Canon header, so the app can't tell it's being checked." : "",
     ].filter(Boolean).map((t) => `<p class="inputs">${esc(t)}</p>`).join("");
-    const steps = c.kind === "command"
+    const steps = f.heldOut
+      ? `<p class="inputs">Held out: the owner keeps this check out of the repo, so agents (and this board) see the sentence, never the requests. It runs on every verdict and release like any canon fact.</p>`
+      : c.kind === "command"
       ? `<ol class="steps"><li><span class="n">$</span><span><span class="req">${esc(c.run)}</span><span class="exp">→ must exit 0</span></span></li></ol>`
       : `<ol class="steps">${c.steps.map((st, i) => { const d = describeStep(st); return `<li><span class="n">${i + 1}</span><span><span class="req">${esc(d.req)}</span><span class="exp">→ ${esc(d.want)}</span></span></li>`; }).join("")}</ol>`;
     const story = [
@@ -1426,7 +1429,7 @@
       <div class="why-head">
         <p class="kicker">${status === "proposed" ? "What would make this true?" : status === "retired" ? "Why was this true?" : "Why is this true?"}</p>
         <h3 id="whytitle">${esc(f.sentence)}</h3>
-        <div class="why-meta"><span class="why-chip ${status}">${{ canon: "Canon", retired: "Retired", declined: "Declined", proposed: "Proposed" }[status]}</span><span>${esc(f.id)}</span><span>${c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview${(c.samples ?? 1) > 1 ? ` × ${c.samples} runs` : ""}`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
+        <div class="why-meta"><span class="why-chip ${status}">${{ canon: "Canon", retired: "Retired", declined: "Declined", proposed: "Proposed" }[status]}</span><span>${esc(f.id)}</span><span>${f.heldOut ? "held out" : c.kind === "command" ? "runs in CI" : `${c.steps.length} request${c.steps.length === 1 ? "" : "s"} to a live preview${(c.samples ?? 1) > 1 ? ` × ${c.samples} runs` : ""}`}</span>${f.scope ? `<span title="${esc(f.scope.join(", "))}">only when ${esc(f.scope.join(", "))} changes</span>` : ""}</div>
       </div>
       <div class="why-body">
         <section class="why-sec">

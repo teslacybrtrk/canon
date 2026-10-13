@@ -191,6 +191,25 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   flag it) passed every fact, but the rehearsal showed the previous version listing 5 products, not 6, on the migrated
   data: autopilot held it back, production never ran it
   ([record](https://canon.rodeo/p/rehearse/canon/7/acceptance), with the candidate rebuild).
+- **Rehearsal with state continuity, and the judge writing production** (`rehearse`, canon #10): the release uploaded a
+  version of a Durable Object app and the judge put it at 100% (no `wrangler deploy` from the run); the rehearsal kept
+  all 8 previous facts, and compared reads on the state the new code wrote with reads on the state the old code wrote
+  ([record](https://canon.rodeo/p/rehearse/canon/10/acceptance)).
+- **Held-out facts** (`rehearse`): the owner's "a basket line can never hold a negative quantity" was refused, because
+  canon breaks it (an earlier test change allows it); "adding the same product twice adds the quantities up" was
+  stored, and agents see it with no check. A change that quietly made a repeated add overwrite instead was rejected,
+  its verdict saying only that a held-out fact broke.
+- **Prerequisites** (`rehearse`): a product page declared `after` search-by-name; Ready, it waited ("it builds on
+  'Shoppers can search products by name', which isn't canon yet").
+- **Gradual rollout** (a third test project, `canary`, a stateless Worker): a correct change went out at 10%, then 50%,
+  then 100%, no failures on either version ([record](https://canon.rodeo/p/canary/canon/2/acceptance)). A change with
+  an upstream lookup failing one request in eight passed its preview, its release candidate and the 0% smoke test
+  (every check passes on a retry), and an owner accepted it ("item pages are wanted for the shop", kept as the reason);
+  at 10% the canary's raw requests failed 4 of 40 on the new version against 0 of 40 on the old, so it was taken back
+  out and held, and production never served it to more than a tenth of requests for 45 seconds
+  ([record](https://canon.rodeo/p/canary/canon/3/acceptance)). Real traffic per version came from Cloudflare's
+  analytics too (68 requests on the new version, 40 on the old), but those count exceptions, not 503s the app returns:
+  why the raw requests are there.
 - **Scope**: a claim that declared `src/index.ts` and also edited `README.md` waited for the owner ("outside the files
   its claim said it would touch"); one that stayed in scope landed, its record saying so
   ([record](https://canon.rodeo/p/rehearse/canon/9/acceptance), which also lists the alternatives it passed over).
@@ -222,6 +241,23 @@ rejected a correct change (platform failures are retried, never rejections).
 | Memory | PR threads | not part of the method | not part of the method | the fact chain, in Git notes; every failed attempt stays clonable |
 | A check that didn't run | often skipped, and the merge goes ahead | no review, no opinion | not part of the method | `unavailable`, never a pass: autopilot waits, only a person accepts over it, and the acceptance record names it |
 | Release | whatever merged | whatever merged | whatever passed | every fact on a full release candidate with long-lived data, a rehearsed rollback, then (for Workers without Durable Objects) 0% and a gradual rollout watched step by step; one that breaks in production anyway is rolled back when that's known to be safe |
+
+## Benchmark: against a strong merge queue
+
+`scripts/benchmark.mjs` replays the same attempts, in the same order, through a strong merge queue and through Canon
+with each mechanism switched off in turn. Both get every protected check (all canon facts plus the attempt's own, and
+CI), the same conflict repair (the judge's own model, as a service) and the same compute; production is a local Worker
+whose data persists across releases, with users. Full results and limits: [docs/benchmark.md](docs/benchmark.md).
+
+| Workload | Strong merge queue | Canon |
+|---|---|---|
+| Stateful app (7 attempts) | 4 landed safely; **2 wrong accepts** (a schema change broke the market page on existing data; a release lost a shopper's basket, unrecoverable) and 1 release unsafe to roll back | 4 landed safely; 0 wrong accepts; 1 decision for an owner (the destructive change) |
+| Stateless Worker (3 attempts) | 2 landed; **shipped a change failing 1 request in 8 to every user** | 2 landed; the canary took it back out at 10% |
+| Integration (16 attempts) | 8 features | the same 8 features, with about twice the checks |
+
+Switching off one Canon mechanism lets exactly its own failure through (release candidate: the schema break; rehearsal:
+the unsafe migration; data gate: the lost basket; canary: the flaky release; repair: 3 features and 6 people). Where
+Canon has no edge is getting code into main: with the same checks and repair, a careful queue lands the same features.
 
 ## How it works
 
@@ -348,7 +384,7 @@ to wrangler, so give the agent key only to agents you run.
 
 Building Canon surfaced a few places where the platform could make agent-scale Git workflows easier
 (for example, Previews that pin Durable Object code per commit, version overrides that reach Durable Objects, and
-Workers Builds for forks). All twenty-five are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
+Workers Builds for forks). All twenty-six are in [docs/cloudflare-notes.md](docs/cloudflare-notes.md).
 
 ## Roadmap
 

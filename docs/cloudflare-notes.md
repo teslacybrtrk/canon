@@ -134,6 +134,12 @@ Found while building, October 2026.
     migrations error until the namespace is gone, then succeeds on retry. *We did:* rebuild the candidate on that path
     (delete, then deploy production's code, retried). *Would help:* a way to reset or snapshot/restore a Durable Object
     namespace (or fork one from production's) for staging copies.
+26. **Per-version analytics count exceptions, not error responses.** During a gradual rollout, `workersInvocationsAdaptive`
+    by `scriptVersion` gave us real traffic per version (68 requests on the new one, 40 on the old, within a minute
+    or two), but a version returning a 503 one request in eight showed zero errors: `errors` counts exceptions, and
+    the app answered. *We did:* the canary also sends raw requests (no retries) to both versions, pinned with the
+    version-override header, and compares their 5xx rates. *Would help:* response status classes per `scriptVersion`
+    in the analytics, so a rollout can be judged on users' real error rate.
 
 ## Things that worked especially well
 

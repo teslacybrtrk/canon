@@ -1448,7 +1448,9 @@ export class Referee extends DurableObject<Env> {
     const cached = this.liveChecks.get(factId);
     if (cached && Date.now() - cached.at < LIVE_CHECK_TTL_MS) return cached;
     const url = this.productionUrl();
-    const result = { ...(await runCheck(fact.check, url)), url, at: Date.now() };
+    const ran = await runCheck(fact.check, url);
+    // A held-out fact says whether it holds, never how it's checked or what failed.
+    const result = { ...ran, ...(fact.origin === "heldout" && !ran.held ? { detail: HELD_OUT_DETAIL } : {}), url, at: Date.now() };
     this.liveChecks.set(factId, result);
     return result;
   }
