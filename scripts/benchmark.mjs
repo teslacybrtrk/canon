@@ -110,17 +110,23 @@ function shuffled(list, seed) {
 
 // ---- A local app: wrangler dev on a checkout, its storage in a directory (kept for production, fresh for a preview)
 
+// A local server that never comes up is the harness's failure, not the code's: it's started again (up to three times),
+// and a run that still can't get one stops rather than counting it against a system.
 async function serve(dir, state) {
-  const port = nextPort++;
-  const p = spawn("npx", ["wrangler", "dev", "--port", String(port), "--ip", "127.0.0.1", "--persist-to", state], { cwd: dir, stdio: "pipe", detached: true });
-  const url = `http://127.0.0.1:${port}`;
-  for (let i = 0; i < 90; i++) {
-    try {
-      if ((await fetch(url)).status) break;
-    } catch {}
-    await sleep(500);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const port = nextPort++;
+    const p = spawn("npx", ["wrangler", "dev", "--port", String(port), "--ip", "127.0.0.1", "--persist-to", state], { cwd: dir, stdio: "pipe", detached: true });
+    const url = `http://127.0.0.1:${port}`;
+    const stop = async () => { try { process.kill(-p.pid); } catch {} await sleep(800); };
+    for (let i = 0; i < 240; i++) {
+      try {
+        if ((await fetch(url)).status) return { url, stop };
+      } catch {}
+      await sleep(500);
+    }
+    await stop();
   }
-  return { url, stop: async () => { try { process.kill(-p.pid); } catch {} await sleep(800); } };
+  throw new Error(`infrastructure: a local wrangler dev server never started (${dir})`);
 }
 
 function checkout(repo, sha, app) {
@@ -137,6 +143,8 @@ async function factsHold(url, facts, seed, m) {
     m.checks++;
     let r = await runCheck(f.check, url, `${seed}:${f.id}`);
     for (const wait of [1500, 4000]) if (!r.held) { await sleep(wait); r = await runCheck(f.check, url, `${seed}:${f.id}`); }
+    // A connection the local server refused is the harness, not the code: keep trying for a while before it counts.
+    for (let i = 0; i < 6 && !r.held && /fetch failed|ECONNREFUSED|ECONNRESET/.test(r.detail); i++) { await sleep(5_000); r = await runCheck(f.check, url, `${seed}:${f.id}`); }
     if (!r.held) return { held: false, fact: f, detail: r.detail };
   }
   return { held: true };
