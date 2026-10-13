@@ -210,6 +210,11 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   ([record](https://canon.rodeo/p/canary/canon/3/acceptance)). Real traffic per version came from Cloudflare's
   analytics too (68 requests on the new version, 40 on the old), but those count exceptions, not 503s the app returns:
   why the raw requests are there.
+- **Specialist review and stronger breaks** (`evid`): a booking change (a new table and inserts) was reviewed in two
+  passes, general and data, with its coverage recorded (one file, shown around its changes); the data specialist
+  pointed at a `DROP TABLE` that runs every time the object starts. The new breaks (a dropped uniqueness constraint,
+  a retry that overwrites, a migration that isn't re-runnable) got past its facts: 2 of 5 caught, under the charter's
+  50%, so it waited for the owner.
 - **Scope**: a claim that declared `src/index.ts` and also edited `README.md` waited for the owner ("outside the files
   its claim said it would touch"); one that stayed in scope landed, its record saying so
   ([record](https://canon.rodeo/p/rehearse/canon/9/acceptance), which also lists the alternatives it passed over).
