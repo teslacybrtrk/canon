@@ -22,6 +22,8 @@ You don't have to replace how your team works to get Canon's main benefit. Each 
 4. **Let backlog facts land.** `"autoAccept": "backlog"`: the facts people write land on their own once an agent
    makes them true without breaking any other, with the release candidate, rollback rehearsal and acceptance record
    behind every one.
+   Add a few **held-out facts** the agents never see the checks of (`POST /p/<project>/heldout`, owner key): the
+   behaviours you'd least like an agent to tune its code against.
 5. **Charter autonomy.** `"autoAccept": "charter"`, with `mutation` minimums, locked rules and priorities: agents
    propose and confirm facts for each other, and people change the charter, not the code.
 
@@ -77,6 +79,10 @@ Each check is one of two kinds:
   at once and checks how the answers add up, for facts about races (double-booking, overselling, duplicate submits).
 - **Command:** a shell command run on each commit's checkout in CI, such as a linter, a type-check or a test
   suite. Call tools directly, not package scripts, so an attempt can't redefine what judges it.
+
+For a stateless Worker, a release rolls out gradually after its 0% smoke test: 10% then 50% of real traffic by
+default, each watched before the next (`"canary": {"steps": [...], "holdSeconds": n}` in the policy, or `false`). If
+production doesn't answer at `https://<project>.<your domain>`, say where it does: `"production": "https://..."`.
 
 A `scope` list of file globs judges a fact only on attempts that change a matching file. The full format is in
 [PROTOCOL.md](../PROTOCOL.md).

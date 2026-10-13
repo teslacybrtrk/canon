@@ -48,4 +48,24 @@ elif feat == "stall-hours-schema":
     rep("""INSERT INTO stalls VALUES (?, ?)""", """INSERT INTO stalls (id, name) VALUES (?, ?)""")
     rep("""    return this.sql.exec<{ id: number; name: string }>(`SELECT id, name FROM stalls ORDER BY id`).toArray();""", """    return this.sql.exec<{ id: number; name: string; hours: string }>(`SELECT id, name, hours FROM stalls ORDER BY id`).toArray();""")
     rep("""      <p class="tag">${esc(look.tagline)}</p>""", """      <p class="tag">${esc(look.tagline)} · Open ${esc((s as Stall & { hours?: string }).hours ?? "")}</p>""")
+elif feat == "sold-out-moved":
+    # Sold-out goods moved into their own table (a data migration the previous version can't read: it lists 5 products).
+    rep("      for (const p of PRODUCTS) this.sql.exec(`INSERT INTO products VALUES (?, ?, ?, ?, ?)`, p.id, p.stallId, p.name, p.priceCents, p.stock);\n    }\n",
+        "      for (const p of PRODUCTS) this.sql.exec(`INSERT INTO products VALUES (?, ?, ?, ?, ?)`, p.id, p.stallId, p.name, p.priceCents, p.stock);\n    }\n"
+        "    // Sold-out goods live in their own table, so the basket can refuse them by table.\n"
+        "    this.sql.exec(`CREATE TABLE IF NOT EXISTS sold_out (id TEXT PRIMARY KEY, stall_id INTEGER NOT NULL, name TEXT NOT NULL, price_cents INTEGER NOT NULL)`);\n"
+        "    this.sql.exec(`INSERT OR IGNORE INTO sold_out SELECT id, stall_id, name, price_cents FROM products WHERE stock = 0`);\n"
+        "    this.sql.exec(`DELETE FROM products WHERE stock = 0`);\n")
+    rep("      .exec<{ id: string; stall_id: number; name: string; price_cents: number; stock: number }>(`SELECT * FROM products ORDER BY stall_id, id`)",
+        "      .exec<{ id: string; stall_id: number; name: string; price_cents: number; stock: number }>(\n"
+        "        `SELECT id, stall_id, name, price_cents, stock FROM products UNION ALL SELECT id, stall_id, name, price_cents, 0 FROM sold_out ORDER BY stall_id, id`,\n"
+        "      )")
+    rep("    if (!product) return { ok: false, status: 400, error: `unknown product ${productId}` };\n",
+        "    if (!product) return { ok: false, status: 400, error: `unknown product ${productId}` };\n"
+        "    if (this.sql.exec(`SELECT 1 FROM sold_out WHERE id = ?`, productId).toArray().length) return { ok: false, status: 409, error: `${productId} is sold out` };\n")
+elif feat == "drop-legacy":
+    # Each stall's products, plus a "schema reset" that drops the basket table on start: every shopper's basket is lost.
+    rep("""    if (route === "GET /api/stalls") return Response.json(await market.stalls());\n""",
+        """    if (route === "GET /api/stalls") return Response.json(await market.stalls());\n    const stall = url.pathname.match(/^\\/api\\/stalls\\/(\\d+)\\/products$/);\n    if (request.method === "GET" && stall) return Response.json((await market.products()).filter((p) => p.stallId === Number(stall[1])));\n""")
+    rep("""      CREATE TABLE IF NOT EXISTS cart (product_id TEXT PRIMARY KEY, qty INTEGER NOT NULL);\n""", """      DROP TABLE IF EXISTS cart;\n      CREATE TABLE IF NOT EXISTS cart (product_id TEXT PRIMARY KEY, qty INTEGER NOT NULL);\n""")
 open(p, "w").write(s); print("applied", feat)

@@ -63,6 +63,10 @@ export default {
       if (route === "GET /previews") return json(await referee.previews());
       if (route === "GET /stats") return json(await referee.stats());
       // Held-out facts: the owner writes them into the judge and reads them back; agents see only their sentences.
+      if (route === "POST /repair") {
+        const b = await request.json<{ path?: string; conflicted?: string; intents?: string[] }>().catch(() => ({}) as { path?: string; conflicted?: string; intents?: string[] });
+        return json(await referee.repairText(String(b.path ?? ""), String(b.conflicted ?? ""), Array.isArray(b.intents) ? b.intents.map(String) : []));
+      }
       if (route === "POST /heldout") return json(await referee.addHeldOut(await request.json<FactDef>()), 201);
       if (route === "GET /heldout") {
         const denied = await deny(request, env, "owner");

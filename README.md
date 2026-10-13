@@ -221,7 +221,7 @@ rejected a correct change (platform failures are retried, never rejections).
 | Conflicts | text | text, plus an opinion | none | behaviour: clashes flagged before an accept, settled on the combined code |
 | Memory | PR threads | not part of the method | not part of the method | the fact chain, in Git notes; every failed attempt stays clonable |
 | A check that didn't run | often skipped, and the merge goes ahead | no review, no opinion | not part of the method | `unavailable`, never a pass: autopilot waits, only a person accepts over it, and the acceptance record names it |
-| Release | whatever merged | whatever merged | whatever passed | every fact on a full release candidate, then (for Workers without Durable Objects) on the production URL at 0% traffic; a version that breaks a fact there never serves anyone, and one that breaks in production anyway is rolled back |
+| Release | whatever merged | whatever merged | whatever passed | every fact on a full release candidate with long-lived data, a rehearsed rollback, then (for Workers without Durable Objects) 0% and a gradual rollout watched step by step; one that breaks in production anyway is rolled back when that's known to be safe |
 
 ## How it works
 
@@ -281,9 +281,19 @@ Producing evidence, approving it and releasing code are separate steps, and each
 - **An acceptance record per canon**: the exact commit, the canon it was judged on, each fact with its check version
   and evidence, who or what authorized it, any exception a person accepted over, the charter that allowed it, and how a
   failed release recovers. `GET /p/<project>/canon/<seq>/acceptance`, linked from the board, and in the Git note.
-- **A release fence, not a start-time check**: the release Workflow holds canon #seq's release as a lease, renewed
-  before every step that changes a Worker; each of those commands checks the deadline itself, a run that stalls is
-  fenced out and the judge settles without it, and a production change reported by a fenced-out run is undone.
+- **One writer of production, behind a fence**: the release run only uploads versions; the judge alone moves traffic,
+  checking the run's lease in the same turn as each write. A run that lost the lease writes nothing, not even a
+  rollback; the judge reconciles production to canon's version from its current state. Every Worker-changing command
+  runs under `timeout` to the lease.
+- **Rollback rehearsed on every release**, with state continuity: the new code writes, the old code reads it back, and
+  that's compared with the old code reading what it wrote itself. Autopilot doesn't ship what it can't take back.
+- **Gradual rollout** for stateless Workers: 0% smoke, then 10% and 50% of real traffic, each watched (paired checks on
+  both versions at the same moment, raw requests with no retries, analytics when allowed) before the next.
+- **Held-out facts**: the owner keeps some facts out of the repo; agents see the sentence, never the check.
+- **Specialist review with a track record**: data and security passes by what a change touches, whole-change coverage
+  (never truncated), every note validated, and confirmed/overruled/missed counts in `/stats`.
+- **Prerequisites and shared capacity**: a claim can say which facts it builds on; projects share the account's
+  verification capacity fairly.
 - **Races are facts too**: a probe step can send several copies at once and say how the answers must add up (one
   booking wins, the rest get 409), which a sequential check can't tell apart from a check-then-await-then-insert. Every
   response is held to the step's other assertions; an assertion a step can't apply is refused, never skipped.
@@ -342,34 +352,26 @@ Workers Builds for forks). All twenty-five are in [docs/cloudflare-notes.md](doc
 
 ## Roadmap
 
-Autonomy is a dial in `canon.json`: manual, backlog and charter are built. Next:
+Autonomy is a dial in `canon.json`: manual, backlog and charter are built, and so are the safety net under it
+(evidence states, acceptance records, the release fence, rollback rehearsal, a gradual rollout for stateless Workers,
+held-out facts, specialist review with a track record, prerequisites, account-wide capacity, and a benchmark). Next:
 
-- **Evidence**: people name goals instead of rules ("checkout errors under 0.1%"), and rule changes and clashes are
-  settled by splitting real traffic between candidates (Workers gradual deployments) and keeping the one that meets them.
+- **Goals as facts**: people name goals instead of rules ("checkout errors under 0.1%"), and rule changes and clashes
+  are settled by splitting real traffic between candidates and keeping the one that meets them.
 - **Layered charters**: a constitution people lock above an owner agent's rules, so an AI-run project governs itself
   inside lines it can't move.
 - **Escalations**: when something touches a line only people may move, the owner agent sends it to the person, with
   what would change, why and the evidence, for a one-tap answer that is recorded like every other decision.
-- **Stronger breaks**: today the judge breaks each Ready change up to six ways (guards, statuses, comparisons) and
-  shows which ones no fact noticed. Next, concurrency and retry breaks: two requests at once, a repeated request.
-- **Reviewer track record**: a charter can already route the reviewer's `risk` notes to the owner (`reviewRisk`).
-  Next, show how often its notes turned out right, so owners can tell when to trust it more.
-- **Shared capacity**: today a project's six verification slots go to the agent with the fewest builds running, then to
-  charter-priority and backlog facts, and a queued push made obsolete by a newer one is dropped. Next, share one
-  account's container capacity across its projects.
+- **Interleaving breaks**: the judge already breaks retries, uniqueness, migrations and failure paths; next, breaks that
+  make a check-then-write non-atomic, caught only by a race step.
+- **Reviewer learning, held out**: the track record is kept (confirmed, overruled, missed, per specialist); next, let a
+  proposed change to the reviewer's guidance count only after it does better on held-out cases (versioned, never
+  silently), and let a charter give a specialist with a good record more weight.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
-- **Canary traffic**: today a new canon runs every fact on a full release candidate, then (for Workers without Durable
-  Objects) on the production URL at 0% traffic, before it gets 100% (and rolls back if production still breaks). Next, real traffic in steps, 1% then 10%,
-  with error rates as facts.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
-- **Prerequisites between attempts**: an attempt that must account for another ("build on agent-2's bookings") says so,
-  and the scheduler orders and re-applies them together instead of discovering the dependency as a clash.
-- **A fair benchmark**: Canon against a strong merge queue given the same protected checks, repair, agents and
-  compute, with each Canon mechanism switched off in turn, measured as safely accepted features per hour alongside
-  wrong accepts, needless rejects, people's time, recovery time and cost, on several workloads (a stateless Worker, a
-  stateful app, a larger repo, permission and migration changes). Today's comparisons are one real run each.
-- **Reviewer learning, held out**: record which reviewer notes proved right and which regressions it missed, and let a
-  proposed change to its guidance count only after it does better on held-out cases (versioned, never silently).
+- **A wider benchmark**: `scripts/benchmark.mjs` replays three workloads through a strong merge queue and through
+  Canon with mechanisms switched off ([docs/benchmark.md](docs/benchmark.md)); next, more orders and seeds per workload,
+  a larger repository, permission changes, and wall-clock with real parallelism.
 
 ## Where the code lives
 

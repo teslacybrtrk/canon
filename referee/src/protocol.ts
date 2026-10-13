@@ -65,6 +65,7 @@ export interface CanonFile {
   // Facts people want made true. Agents claim them; with autoAccept "backlog" they land on their own.
   backlog?: FactDef[];
   policy?: Policy;
+  production?: string; // where production answers (https://...), when it isn't the deployment's {project} template
 }
 
 // Who decides when no person clicks. off: a person accepts everything. backlog: an attempt on a fact people wrote lands
@@ -94,6 +95,9 @@ export interface Policy {
   // combines them into one candidate, verifies it once and releases it once. A train that fails lands them one by one.
   batch?: boolean;
   charter?: Charter;
+  // The gradual rollout for a Worker without Durable Objects, after its 0% smoke test: the share of real traffic at each
+  // step and how long each is watched. Default {"steps": [10, 50], "holdSeconds": 45}; false releases at 100% at once.
+  canary?: { steps?: number[]; holdSeconds?: number } | false;
 }
 
 // ---- Checks -------------------------------------------------------------------
@@ -337,6 +341,9 @@ export interface Acceptance {
   alternatives?: Array<{ factId: string; attemptId: string; agent: string; outcome: string }>;
   policy: { autoAccept: string; charter: Charter; version: string };
   recovery: Recovery; // how a failed release recovers, and the rollback rehearsal's result once the release ran it
+  // The gradual rollout, step by step: the share of traffic, what was watched (synthetic checks on both versions at the
+  // same moment, routed checks, and real traffic per version when analytics allow), and the verdict.
+  exposure?: Array<{ percent: number; newFails: number; oldFails: number; routedFails: number; checks: number; raw: string; analytics: string; verdict: string; at: number }>;
   at: number;
 }
 

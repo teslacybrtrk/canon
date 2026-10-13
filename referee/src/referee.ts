@@ -31,10 +31,11 @@ import {
 } from "./protocol";
 import { edgeFailure, platformFailure } from "./platform";
 import { addedText, callsInto, changedSymbols } from "./symbols";
-import { fileFromAnswer, repairPrompt, validResolution } from "./repair";
+import { fileFromAnswer, parseConflicts, repairPrompt, validResolution } from "./repair";
 import { SCHEMA, UPGRADES } from "./schema";
 import { holdsLease, leaseDecision, RELEASE_LEASE_MS, type Lease } from "./release";
 import { ACCOUNT_SLOTS } from "./slots";
+import { canaryVerdict, versionTraffic } from "./telemetry";
 import { dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence, type DataChanges, type Evidence } from "./evidence";
 import { judgeAnswer, REVIEW_SCHEMA, reviewBatches, reviewPrompt, specialistsFor, type Review, type ReviewFile, type ReviewNote, type Specialist } from "./review";
 
@@ -472,6 +473,8 @@ export class Referee extends DurableObject<Env> {
       this.setMeta("autoAccept", auto === "backlog" || auto === "charter" ? auto : "off");
       this.setMeta("charter", JSON.stringify(file.ok && file.policy?.charter ? file.policy.charter : null));
       this.setMeta("batch", file.ok && file.policy?.batch ? "1" : "0");
+      this.setMeta("canary", JSON.stringify(file.ok && file.policy?.canary !== undefined ? file.policy.canary : null));
+      if (file.ok && typeof file.production === "string" && /^https:\/\/[\w.-]+$/.test(file.production)) this.setMeta("productionUrl", file.production);
     }
     const verdict = await this.evaluate(this.attempt(repo)!, sha, previewUrl, undefined, commands);
     const train = this.rows(`SELECT * FROM trains WHERE id = ? AND status = 'judging'`, repo)[0];
@@ -876,7 +879,7 @@ export class Referee extends DurableObject<Env> {
    * report: a fact that breaks long after a deploy is not evidence against that deploy's code.
    */
   private async checkCanonOnProduction() {
-    const url = this.env.PRODUCTION_URL.replace("{project}", this.requireProject());
+    const url = this.productionUrl();
     const results: Record<string, { held: boolean; detail: string }> = {};
     const facts = this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).filter((f) => f.check.kind === "probe");
     for (const f of facts) {
@@ -1061,7 +1064,7 @@ export class Referee extends DurableObject<Env> {
     // Its run stalled past its lease (or never took one): the run is fenced out from here, whatever its own status.
     if (cur.deployed === 0 && this.releasing() === null) {
       this.endLease(cur.seq as number, "its run stalled past its lease; the judge settled it from what production runs");
-      const url = this.env.PRODUCTION_URL.replace("{project}", this.requireProject());
+      const url = this.productionUrl();
       const ids = cur.facts_json ? (JSON.parse(cur.facts_json as string) as string[]) : [cur.accepted_fact as string];
       const probes = ids.map((id) => this.fact(id)).filter((f): f is Fact => f?.check.kind === "probe");
       const live = probes.length > 0 && (await Promise.all(probes.map((f) => runCheck(f.check as ProbeCheck, url)))).every((r) => r.held);
@@ -1170,7 +1173,7 @@ export class Referee extends DurableObject<Env> {
         return { released: true, detail: smoke ? "released with nothing to stage beside" : "released after its release candidate" };
       }
       await write([{ version_id: versionId, percentage: 0 }, { version_id: current, percentage: 100 }], `Canon #${seq}: staged at 0% for its smoke test`);
-      const url = this.env.PRODUCTION_URL.replace("{project}", project);
+      const url = this.productionUrl();
       const pin = { "cloudflare-workers-version-overrides": `${project}="${versionId}"` };
       // A fact that fails at 0% is only evidence against the new version if the old version behaves differently.
       const pinnedFails = await this.factsOn(seq, url, pin, "gate");
@@ -1190,12 +1193,115 @@ export class Referee extends DurableObject<Env> {
         if (keep) await write([{ version_id: keep, percentage: 100 }], `Canon #${seq} held back: broke ${broke[0].fact.id} at 0%`);
         return { released: false, detail: what };
       }
-      await write([{ version_id: versionId, percentage: 100 }], `Canon #${seq}: released, ${facts.length} facts held at 0%`);
-      return { released: true, detail: `${facts.length} facts held on the staged version` };
+      // The gradual rollout: a share of real traffic at each step, watched before the next.
+      const plan = this.canaryPlan();
+      const exposure: NonNullable<Acceptance["exposure"]> = [];
+      for (const percent of plan.steps) {
+        await write([{ version_id: versionId, percentage: percent }, { version_id: current, percentage: 100 - percent }], `Canon #${seq}: ${percent}% of traffic`);
+        const watched = await this.canaryWatch(seq, url, project, versionId, current, plan.holdSeconds);
+        exposure.push({ percent, ...watched, at: Date.now() });
+        this.recordExposure(seq, exposure);
+        if (watched.bad) {
+          const what = `broke at ${percent}% of production traffic: ${watched.verdict}`;
+          this.sql.exec(`UPDATE canon SET health = 'held', health_detail = ? WHERE seq = ?`, `${what}. Taken back out of production.`, seq);
+          this.broadcast();
+          const now = await liveNow();
+          const keep = now.filter((v) => v.version_id !== versionId).sort((a, b) => b.percentage - a.percentage)[0]?.version_id ?? current;
+          await write([{ version_id: keep, percentage: 100 }], `Canon #${seq} held back at ${percent}%`);
+          return { released: false, detail: what };
+        }
+      }
+      await write([{ version_id: versionId, percentage: 100 }], `Canon #${seq}: released, ${facts.length} facts held at 0%${plan.steps.length ? `, then ${plan.steps.join("%, ")}%` : ""}`);
+      return { released: true, detail: `${facts.length} facts held on the staged version${plan.steps.length ? `; rolled out at ${plan.steps.join("%, ")}%` : ""}` };
     } catch (err) {
       if (err instanceof Fenced) return { released: false, detail: FENCED };
       throw err;
     }
+  }
+
+  /** Where production answers: canon.json's "production", or the deployment's template for the project. */
+  private productionUrl(): string {
+    return this.meta("productionUrl") ?? this.env.PRODUCTION_URL.replace("{project}", this.requireProject());
+  }
+
+  /** The rollout plan from the project's policy (canon.json "canary"), with its defaults. */
+  private canaryPlan(): { steps: number[]; holdSeconds: number } {
+    const p = JSON.parse(this.meta("canary") ?? "null") as { steps?: number[]; holdSeconds?: number } | false | null;
+    if (p === false) return { steps: [], holdSeconds: 0 };
+    const steps = (p?.steps ?? [10, 50]).filter((n) => Number.isFinite(n) && n > 0 && n < 100).sort((a, b) => a - b);
+    return { steps, holdSeconds: Math.min(300, Math.max(10, p?.holdSeconds ?? 45)) };
+  }
+
+  /**
+   * Watches one rollout step. For holdSeconds, every canon probe fact runs three ways at the same moment with the same
+   * inputs: pinned to the new version, pinned to the old one, and routed as real traffic is. A failure counts against
+   * the new version only when the old one passed the same check at the same moment, so a flaky network or a shared
+   * dependency doesn't. Then real traffic per version from analytics, when the account allows it.
+   */
+  private async canaryWatch(seq: number, url: string, project: string, versionId: string, oldId: string, holdSeconds: number) {
+    const pin = (v: string) => ({ "cloudflare-workers-version-overrides": `${project}="${v}"` });
+    const facts = this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).filter((f) => f.check.kind === "probe");
+    // The facts this release lands fail on the old version by definition: they are judged on the new version alone.
+    const landing = new Set(this.acceptance(seq)?.facts.map((f) => f.id) ?? []);
+    const since = new Date(Date.now() - 5_000).toISOString();
+    const start = Date.now();
+    const rounds = 10;
+    let newFails = 0, oldFails = 0, routedFails = 0, checks = 0;
+    for (let round = 0; round < rounds; round++) {
+      for (const f of facts) {
+        const seed = `canary:${seq}:${round}:${f.id}`;
+        const [onNew, onOld, routed] = await Promise.all([
+          runCheck(f.check as ProbeCheck, url, seed, pin(versionId)),
+          landing.has(f.id) ? Promise.resolve({ held: true, detail: "ok", ms: 0 }) : runCheck(f.check as ProbeCheck, url, seed, pin(oldId)),
+          runCheck(f.check as ProbeCheck, url, seed),
+        ]);
+        checks++;
+        if (!onOld.held) oldFails++;
+        else {
+          if (!onNew.held) newFails++;
+          // Routed traffic lands on either version: a landing fact can fail on the old one, which says nothing.
+          if (!routed.held && !landing.has(f.id)) routedFails++;
+        }
+      }
+      // Spread the rounds over the hold, so the step is watched for its whole length (and real traffic has time to show).
+      const due = start + ((round + 1) * holdSeconds * 1000) / rounds;
+      if (Date.now() < due) await new Promise((r) => setTimeout(r, due - Date.now()));
+    }
+    // Raw requests, no retries, to both versions at once: every GET step of every fact, until 40 each.
+    const gets = facts.flatMap((f) => (f.check as ProbeCheck).steps.filter((st) => (st.method ?? "GET") === "GET" && !st.path.includes("{{")).map((st) => st.path));
+    let newErrors = 0, oldErrors = 0, each = 0;
+    for (let i = 0; gets.length && i < 40; i++) {
+      const path = gets[i % gets.length];
+      const hit = async (v: string) => {
+        try {
+          const res = await fetch(new URL(path, url), { headers: pin(v), signal: AbortSignal.timeout(10_000) });
+          await res.arrayBuffer();
+          return res.status >= 500;
+        } catch {
+          return true;
+        }
+      };
+      const [n, o] = await Promise.all([hit(versionId), hit(oldId)]);
+      each++;
+      if (n) newErrors++;
+      if (o) oldErrors++;
+    }
+    let analytics = "unavailable";
+    let rates: { newRate: number; oldRate: number; newRequests: number } | undefined;
+    const t = await versionTraffic(this.env.CLOUDFLARE_ACCOUNT_ID, this.env.CF_TOKEN, project, since);
+    if (t.ok) {
+      const n = t.traffic[versionId] ?? { requests: 0, errors: 0 };
+      const o = t.traffic[oldId] ?? { requests: 0, errors: 0 };
+      rates = { newRate: n.requests ? n.errors / n.requests : 0, oldRate: o.requests ? o.errors / o.requests : 0, newRequests: n.requests };
+      analytics = `real traffic so far (analytics lag a minute or two): new ${n.errors}/${n.requests} errors, old ${o.errors}/${o.requests}`;
+    } else analytics = `real-traffic analytics unavailable (${t.why})`;
+    const v = canaryVerdict({ newFails, oldFails, raw: { newErrors, oldErrors, each }, ...(rates ? { analytics: rates } : {}) });
+    return { newFails, oldFails, routedFails, checks, raw: `${newErrors}/${each} raw errors on the new version, ${oldErrors}/${each} on the old`, analytics, verdict: v.why, bad: v.bad };
+  }
+
+  private recordExposure(seq: number, exposure: NonNullable<Acceptance["exposure"]>) {
+    const record = this.acceptance(seq);
+    if (record) this.sql.exec(`UPDATE acceptances SET json = ? WHERE seq = ?`, JSON.stringify({ ...record, exposure: exposure.map(({ ...e }) => { delete (e as { bad?: boolean }).bad; return e; }) }), seq);
   }
 
   /**
@@ -1341,7 +1447,7 @@ export class Referee extends DurableObject<Env> {
     if (fact.check.kind !== "probe") throw new ProtocolError(400, "command facts run in CI on every push, not against production");
     const cached = this.liveChecks.get(factId);
     if (cached && Date.now() - cached.at < LIVE_CHECK_TTL_MS) return cached;
-    const url = this.env.PRODUCTION_URL.replace("{project}", this.requireProject());
+    const url = this.productionUrl();
     const result = { ...(await runCheck(fact.check, url)), url, at: Date.now() };
     this.liveChecks.set(factId, result);
     return result;
@@ -1647,6 +1753,8 @@ export class Referee extends DurableObject<Env> {
         lines.push(`  recovery: ${record.recovery.how}`);
         if (record.recovery.rehearsal) lines.push(`  rollback rehearsal: ${record.recovery.rehearsal.state}: ${record.recovery.rehearsal.detail.slice(0, 200)}`);
         for (const a of record.alternatives ?? []) lines.push(`  alternative: ${a.agent}, ${a.attemptId}: ${a.outcome}`);
+        for (const e of record.exposure ?? []) lines.push(`  rollout ${e.percent}%: ${e.verdict}; ${e.checks} paired checks (new failed ${e.newFails}, old ${e.oldFails}); ${e.analytics}`);
+        if (record.chosenBecause) lines.push(`  chosen because: ${record.chosenBecause.slice(0, 300)}`);
       }
       lines.push("", `Every attempt stays clonable: git clone ${origin}/a/<attempt>.git`, `Canon-Seq: ${c.seq}`, ...(c.accepted_fact ? [`Canon-Fact: ${c.accepted_fact}`] : []));
       notes.push({ sha: c.sha as string, text: lines.join("\n") + "\n" });
@@ -1812,6 +1920,21 @@ export class Referee extends DurableObject<Env> {
   }
 
   /** One answer from the frontier models on Workers AI: retried when they're out of capacity, then the next one down. */
+  /**
+   * The judge's conflict repair as a service, for comparisons: the same model and the same validity rule (every
+   * conflict hunk resolved from its two sides, nothing outside them touched) the judge uses on its own re-applies.
+   * Owner only. Returns the resolved file, or null when the model's answer isn't a valid resolution.
+   */
+  async repairText(path: string, conflicted: string, intents: string[]): Promise<{ file: string | null; detail: string }> {
+    if (!this.env.AI) return { file: null, detail: "no model bound" };
+    if (!parseConflicts(conflicted)) return { file: null, detail: "no conflict markers to resolve" };
+    const answer = await this.askModel(repairPrompt(path, conflicted, intents.slice(0, 4)));
+    const file = fileFromAnswer(answer);
+    if (!file) return { file: null, detail: "the model's answer wasn't a file" };
+    if (!validResolution(conflicted, file)) return { file: null, detail: "the model's file changed lines outside the conflicts, or didn't resolve them all" };
+    return { file, detail: "resolved" };
+  }
+
   private async askModel(messages: Array<{ role: "system" | "user"; content: string }>): Promise<string | null> {
     for (const m of [REVIEW_MODELS[0], REVIEW_MODELS[0], ...REVIEW_MODELS.slice(1)]) {
       try {

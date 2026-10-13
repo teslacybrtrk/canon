@@ -27,7 +27,7 @@ fi
 remote="$(node -e 'const r=JSON.parse(process.argv[1]); const u=new URL(r.remote); u.username="x"; u.password=r.token; console.log(u.toString())' "$resp")"
 
 work="$(mktemp -d)"
-cp -R demo-app/. "$work/"
+cp -R "${DEMO_DIR:-demo-app}/." "$work/"
 rm -rf "$work/node_modules" "$work/.wrangler"
 [ -n "${CANON_FILE:-}" ] && cp "$CANON_FILE" "$work/canon.json"
 git -C "$work" init -q -b main

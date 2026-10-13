@@ -275,7 +275,9 @@ A latency budget that fails under load is compared with canon's own preview at t
 too, the verdict is a platform error (retried), not a rejection. Waiting never turns into permission: a push not
 admitted in about three and a half hours isn't verified at all; it gets a platform error, which the judge retries. A
 verification that a newer push of the same attempt has made pointless stops as soon as its preview is built, before
-any check runs, and gives its slot back.
+any check runs, and gives its slot back. Projects share the account's capacity too: a verification needs a slot in its
+project (six) and an account-wide slot (twelve, in one Durable Object), and a free account slot goes to the project with
+the fewest verifications running, then the longest wait, so one busy project can't starve the rest.
 
 **Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release
 runs board for 3 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is
@@ -283,9 +285,12 @@ built and checked while that release goes out. A train checked before the releas
 lands the moment the release is out, without a second check, because it was checked on exactly what production now
 runs. If the release is held back, the train's base is gone: it fails, and its riders land one at a time.
 
-**Checks that are checked.** When a claim is Ready, the judge breaks the attempt's own change on purpose in CI: it drops a
-one-line guard, swaps an error status for 200, or flips a comparison in the lines the attempt added (up to six breaks),
-builds each break as a preview of its own, and runs the attempt's fact and every canon probe fact on each. A break no
+**Checks that are checked.** When a claim is Ready, the judge breaks the attempt's own change on purpose in CI, in the
+lines the attempt added, up to eight breaks, the ones a happy-path check is likeliest to miss first: a repeated write
+that overwrites instead of adding, a duplicate that replaces or is silently dropped (`INSERT OR IGNORE`/`OR REPLACE`),
+a dropped uniqueness constraint (two writers could both win), a migration that isn't safe to re-run or gives existing
+rows no default, a swallowed `throw` or a removed failing check; then a dropped one-line guard, an error status
+swapped for 200, a flipped comparison. It builds each break as a preview of its own, and runs the attempt's fact and every canon probe fact on each. A break no
 fact notices is code no check covers; the claim shows `mutation` (`caught` of `total`, and each break that got
 through). With `charter.mutation` (say `0.8`), autopilot only lands a claim whose facts catch that share.
 
@@ -293,7 +298,10 @@ through). With `charter.mutation` (say `0.8`), autopilot only lands a claim whos
 on Workers AI; the agents are Claude or Grok) reads it: the fact it claims, the facts it must keep, the breaks no fact
 caught, and the lines it added. It writes at most three notes (`risk`, `untested`, or `intent`: beyond what the fact
 asks), and each must quote the exact line it is about; a note whose quote isn't in the file is dropped and counted.
-The notes (`reviewer` on the claim and the verdict, `REVIEWER` in `canon verdict`) are advice for whoever decides,
+Specialists: a change that touches stored data (or couldn't be inspected) also gets a data pass (migrations, whether the
+previous version can read what this one writes, lost or non-idempotent writes), and one touching authentication,
+permissions, secrets or a charter `review` path a security pass; each note says which pass wrote it. The notes
+(`reviewer` on the claim and the verdict, `REVIEWER` in `canon verdict`) are advice for whoever decides,
 never a verdict: the facts decide, the reviewer only points. The owner can ask for a fresh review with
 `POST /p/:project/attempts/:id/review`. With `"reviewRisk": true` in the charter, the reviewer becomes a gate in one
 direction only: a change it flags with a `risk` note waits for the owner instead of landing on autopilot (it can
@@ -301,10 +309,16 @@ never land or reject anything itself). A model's reviews vary from run to run, s
 every re-apply of it until an agent changes the code: the judge re-applying the same change can't clear it by drawing
 a kinder review. A review that never finishes (a deploy can cut one off) is retried once; after that it is unavailable.
 Only a complete answer in the notes format counts as a review: an empty list of notes is a finding ("nothing to
-flag"), but an answer that was cut off, isn't the notes format, or names a risk it can't quote from the code is an
-error (unavailable), never a clean review. Not knowing which files changed is an error too (never "no source files
-changed"), and a change touching more than six source files is too big for one review (unavailable: the owner decides).
-A risk is never dropped to make room for other notes.
+flag"), but an answer that was cut off, isn't the notes format, has any entry that isn't a whole note (file, line,
+quote, kind, note), or names a risk it can't quote from the code is an error (unavailable), never a clean review. Not
+knowing which files changed is an error too (never "no source files changed"). Nothing is cut to fit: every changed
+source file is shown whole, or around every change when it's too big to show whole, packed into as many passes as that
+takes (`coverage` on the review says how many, and which files were shown around their changes); a file too big even
+that way, or more than twelve files, makes the review unavailable and the owner decides. A risk is never dropped to make
+room for other notes. `/stats` keeps the reviewer's track record, overall and per specialist, from what happened to the
+changes it read: risks confirmed (that attempt later broke a fact), overruled (a person accepted it and its release
+stayed healthy), and missed (no risk named, and the accepted change broke a fact at release or in production). With
+`"intentRisk": true`, an `intent` note (the change does something its fact doesn't ask for) waits for the owner too.
 
 **Required evidence is required.** Each piece of evidence the charter asks for has an explicit state: `passed`,
 `failed`, `unavailable`, `not-applicable`, `not-required` or `pending` (`referee/src/evidence.ts`). The gates are
@@ -318,24 +332,46 @@ accept names the exception. Data is always required of autopilot, and the judge 
 Did it read every changed file that could hold data code (code in any JS/TS flavour, SQL, config; up to 60 files, and
 a failed read is told apart from a deleted file)? If not, the data evidence is unavailable and the owner decides. Do
 the added lines destroy stored data (drop or rename a table or column, even on an interpolated name; delete or rename a
-Durable Object class)? Then it waits for the owner, because rolling a Worker back doesn't bring data back. Do they
-touch stored data at all (additive schema or writes)? Then it lands, but it isn't called rollback-safe until the
-release has rehearsed the rollback (below). Not finding anything is never the same as "safe"; the line patterns are a
-heuristic that routes and rehearses, never one that approves.
+Durable Object class)? Then it waits for the owner, because rolling a Worker back doesn't bring data back. Anything
+else lands, and no release is called rollback-safe until it has rehearsed the rollback (below): patterns can't prove a
+change leaves stored data alone (a new value passed to an old helper changes what's stored), so they only decide which
+evidence is needed. A file too big for the exact line diff is still read in full (lines are counted, so every new
+line is found; a big file never reads as "nothing added"), and data inspection keeps its own cache of strict reads,
+apart from the advisory overlap reads.
 
 **Scope.** A claim may declare the files it will change (`touches`, globs; `canon claim --touches`). Declared, the
 verdict lists anything changed outside it (`outside`), the agent sees OUTSIDE YOUR SCOPE, and autopilot leaves it to
-the owner: passing a fact doesn't excuse an unclaimed edit. Undeclared, scope is not required.
+the owner: passing a fact doesn't excuse an unclaimed edit. Undeclared, scope is not required, unless the charter says
+`"requireScope": true`, and then every claim must declare it.
+
+**Prerequisites.** A claim may name the facts it builds on (`after`; `canon claim --after`): it isn't landed until they
+are canon (autopilot says which one it's waiting for, and an owner who accepts early accepts over it, recorded), and
+its pushes are admitted after everything else, since it can't land yet. When a prerequisite lands, the claim is behind
+and the judge re-applies it on top, as with any canon move.
+
+**Held-out facts.** The owner can add facts straight to the judge (`POST /p/:project/heldout`, owner key), never to
+`canon.json`: they're enforced on every verdict, release and mutation run like any canon fact, but agents and the public
+board see only the sentence, never the check, and a failure says only that a held-out fact broke. A probe must hold on
+canon when it's added. An agent can't tune its code to a check it can't read, or edit one it can't see.
 
 **The acceptance record.** When canon moves, the judge writes what exactly was authorized, in the same write as the
 canon pointer: the commit, the canon its verdict was judged on, each fact it lands with a version of its check, the
 commit and seed that made it true, its evidence (mutation, review, data, each with its state and why), who or what
 authorized it (the owner, or the autopilot reasons), any exception a person accepted over, the policy that allowed
 it (the charter as stored, and a version of it), the other attempts at the same facts and what became of them (the
-alternatives it passed over, with a person's reason when they declined one), and how a failed release recovers. `GET
+alternatives it passed over, with a person's reason when they declined one), why this one was chosen (`chosenBecause`: the
+rule that chose it, or the owner's own words, `POST .../accept` with `{"reason"}`), how a failed release recovers, and,
+for a gradual rollout, each step and what it saw. `GET
 /p/:project/canon/:seq/acceptance` returns it, the board links it, and the Git note on that canon commit carries it.
 
-**The release fence.** The release Workflow consumes the record, and holds the release as a lease. Its first step asks
+**The release fence.** The judge is the only writer of production's deployment: the release run uploads the exact commit
+as a Worker version that serves nobody (Durable Object apps too; only a Durable Object class change has to deploy
+atomically from the run), and the judge puts it in front of traffic. Every deployment write checks the lease in the
+same turn, right before the request, and a run that has lost it writes nothing at all, not even a rollback or cleanup:
+putting production right is the judge's own reconciliation, which, whenever no release holds the lease, sets
+production's deployment to canon's released version from the deployment as it is now (a 0% version a fenced-out run
+left staged, say). Every container command that changes a Worker runs under `timeout` to the lease's deadline, so it
+can't still be running when the run could have been fenced out. The release Workflow consumes the record, and holds the release as a lease. Its first step asks
 whether this exact commit is what canon #seq authorized and whether #seq is still the latest canon; a stale or
 unauthorized candidate is refused (nothing deploys, and canon goes back). The lease lasts 15 minutes and is renewed
 before every step that changes a Worker (the release candidate, the rollback rehearsal, the version upload, the gate,
@@ -345,18 +381,38 @@ starts late refuses itself. A run that stalls past its lease is fenced out: the 
 deployment change, and if a fenced-out run still reports a production change, production is put back on the version
 canon says it runs. Authorization is checked at every production-changing step, not only at the start.
 
-**Rollback rehearsal.** For a change that touches stored data, or whose files couldn't all be read, the release
-rehearses its own rollback before production: after the release candidate passes (this release's code, running on
+**Rollback rehearsal.** Every release rehearses its own rollback before production (patterns can't prove a change
+leaves stored data alone): after the release candidate passes (this release's code, running on
 the candidate's long-lived data), the code production runs now is deployed onto the candidate, over the data the new
 code just wrote, and the facts that were canon before must still hold (the new fact must fail there first: proof the
-old code is the one answering). Passed: rollback is known safe, and the record says so. Failed or unavailable (the old
+old code is the one answering). Then state continuity: the release's code ran every fact once more under one shared run
+identity, writing the state the old code is now asked to read; the old code does the same writes under a second
+identity, then reads each fact back under both. A fact that holds on the state the old code wrote itself but not on the
+state the new code wrote is a rollback that breaks it (a fact that doesn't hold on its own rerun either is inconclusive,
+and not counted). A passed rehearsal covers the state and facts it exercised, not every dataset production may hold.
+Passed: rollback is known safe, and the record says so. Failed or unavailable (the old
 code couldn't be deployed, e.g. a Durable Object migration that can't be undone): autopilot holds the release back,
 because it doesn't release what it can't take back; a person's accept still goes out, with rollback marked unsafe. And
 when a release that touched stored data doesn't ship (held back, rehearsal failed, any failure after its code ran on the
 candidate), the run rebuilds the release candidate from production's code before it lets go of the release: the
 candidate Worker is deleted with its Durable Objects and production's code deployed fresh, so no later release is
 judged on data in a shape production never had (found live: one held-back migration otherwise held back the next,
-correct, release too).
+correct, release too). A candidate that couldn't be rebuilt (the rebuild failed, or the run was fenced out first) is
+marked dirty, and the next release rebuilds it from production's code before deploying its own, or stops there as a
+platform failure: a dirty candidate is never reused as it is.
+
+**Gradual rollout.** For a Worker without Durable Objects (where any request may land on either version), after the 0%
+smoke test the judge rolls the version out in steps of real traffic, by default 10% then 50%, each watched for 45
+seconds before the next (`"canary": {"steps": [1, 10, 50], "holdSeconds": 60}` in the policy; `false` for none). At
+each step every canon fact runs three ways at the same moment with the same inputs: pinned to the new version, pinned
+to the old one, and routed as real traffic is. A failure counts against the new version only when the old one passed
+the same check at the same moment. Raw requests with no retries go to both versions too, so an error rate the checks'
+own retries would hide (a request in eight failing) still shows; and real traffic per version comes from Cloudflare's
+analytics when the account allows it. A step that goes wrong takes the new version back out (production's deployment as
+it is now, the old version at 100%) and holds the release back; each step and what it saw goes into the acceptance
+record. A Durable Object runs one version at a time, so a Durable Object app has no traffic split to stage: its release
+candidate (a full copy, with its own long-lived data) is its gate. `canon.json` may name where production answers
+(`"production": "https://..."`) when it isn't the deployment's `{project}` address.
 
 In the release gate, a fact that fails at 0% counts against the new version only if the old version answers
 differently (both run with the same inputs).

@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pricecheck",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // A stateless Worker (no Durable Objects): the case where a release can be staged at 0% and then rolled out to a
+  // share of real traffic (1%, 10%, 50%), because every request may land on either version.
+  "workers_dev": true,
+  "preview_urls": true,
+  // Every commit gets a Workers Preview (Canon's verdicts run on it); a stateless app needs no bindings there.
+  "previews": {}
+}
