@@ -400,7 +400,10 @@ a new one waits until no earlier judge write is outstanding, then, in the same t
 who owns production. Each write's record is settled only by its own answer; when its outcome is unknown (a timeout, a
 lost connection, the judge evicted mid-request), that record is held for a two-minute quarantine, and no other write's
 answer can clear it. Every production-changing step of a release or republish run passes the fence first, and the
-fence waits until no judge write is outstanding; so do the gate's own writes. That covers the direct-deploy paths too
+fence waits until no judge write is outstanding, checks again after every wait (a judge write may register while it
+waits), and only then validates authority and grants the lease, in one turn with no await; so do the gate's own
+writes. A judge write and a fence started together therefore have two possible outcomes: the write registers first
+and the fence waits for it, or the lease is granted first and the write sees it and sends nothing. That covers the direct-deploy paths too
 (a Durable Object class change, a project's first release). The quarantine is a bounded-risk policy, not proof: a
 client timeout isn't a cancellation, and Cloudflare documents no completion bound for a deployments request, so after
 two minutes a write that never answered is presumed not to land. Only an answer counts as confirmed settlement.

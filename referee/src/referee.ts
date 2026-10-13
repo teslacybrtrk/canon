@@ -1244,7 +1244,10 @@ export class Referee extends DurableObject<Env> {
     const FENCED = "fenced out: this run no longer holds the release, so it makes no deployment write (the judge reconciles production)";
     class Fenced extends Error {}
     const write = async (versions: Array<{ version_id: string; percentage: number }>, message: string) => {
-      await this.judgeWriteSettled(); // a judge write already on the wire lands (or its quarantine passes) first
+      // A judge write already on the wire lands (or its quarantine passes) first; checked again after each wait, then
+      // the lease check and the request go out in the same turn.
+      await this.judgeWriteSettled();
+      while (Object.keys(this.judgeWrites()).length) await this.judgeWriteSettled();
       if (holder !== undefined && !this.holds(seq, holder)) throw new Fenced();
       const res = await fetch(api, { method: "POST", headers, body: JSON.stringify({ strategy: "percentage", versions, annotations: { "workers/message": message.slice(0, 100) } }) });
       if (!res.ok) throw new Error(`deployments API returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -1253,6 +1256,7 @@ export class Referee extends DurableObject<Env> {
       (await (await fetch(api, { headers })).json<{ result?: { deployments?: Array<{ versions: Array<{ version_id: string; percentage: number }> }> } }>()).result?.deployments?.[0]?.versions ?? [];
     try {
       await this.judgeWriteSettled(); // read the deployment after any judge write in flight lands
+      while (Object.keys(this.judgeWrites()).length) await this.judgeWriteSettled();
       const live = await liveNow();
       const current = (live.find((v) => v.percentage === 100) ?? live[0])?.version_id;
       if (!smoke || !current || current === versionId) {
@@ -2723,8 +2727,12 @@ export class Referee extends DurableObject<Env> {
    */
   async fence(seq: number, sha: string, holder: string): Promise<{ go: true; until: number } | { go: false; why: string; settle: boolean }> {
     // Every production-changing step of a release run asks here first, direct deploys included: none of them may be
-    // overtaken by a judge write already on the wire. Everything below runs after the wait, in one turn.
+    // overtaken by a judge write already on the wire. Waiting yields, and a judge write may register meanwhile (it had
+    // checked ownership before this lease existed), so after each wait the barrier is checked again; once it's empty,
+    // everything below (authority, then the lease) runs in this same turn, with no await, so a judge write either
+    // registered before it (and this waited) or sees the lease and backs off.
     await this.judgeWriteSettled();
+    while (Object.keys(this.judgeWrites()).length) await this.judgeWriteSettled();
     const refusal = this.releaseRefusal(seq, sha);
     if (refusal) return { go: false, why: refusal, settle: !refusal.includes("no longer the latest") };
     const row = this.rows(`SELECT deployed FROM canon WHERE seq = ?`, seq)[0];

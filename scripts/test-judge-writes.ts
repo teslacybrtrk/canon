@@ -174,6 +174,30 @@ const check = (name: string, fn: () => void) => { try { fn(); ok(name); } catch 
   check("and then writes", () => assert.equal(posts.length, before + 1));
 }
 
+// 6. A restore and a republish started at the same moment (no pause between the calls), in both orders, on an
+//    already-released canon with no pending release. Only two outcomes are allowed: the restore registers first and the
+//    fence waits until it's answered, or the republish takes the lease first and the restore sends nothing. Never both.
+for (const order of ["restore first", "fence first"] as const) {
+  reset();
+  const { judge, db } = project();
+  db.exec(`INSERT INTO acceptances (seq, sha, json) VALUES (1, 'a1', '{"sha":"a1"}')`);
+  let granted: boolean | null = null;
+  const fence = () => judge.fence(1, "a1", "promote-1-a1-rabc").then((r) => { granted = (r as { go: boolean }).go; log.push(`fence ${granted ? "go" : "refused"}`); });
+  const restore = () => judge.restoreProduction("concurrent drift").catch(() => {});
+  const [a, b] = order === "restore first" ? [restore(), fence()] : [fence(), restore()];
+  await tick(1_200);
+  const sent = posts.length;
+  check(`simultaneous restore and republish (${order}): never both (the fence granted while a restore write was outstanding)`, () => assert.ok(!(granted === true && sent > 0 && !posts[0].answered), log.join(", ")));
+  if (sent > 0) {
+    check(`  the restore registered first, so the fence waits until it's answered (${order})`, () => assert.notEqual(granted, true, log.join(", ")));
+    posts[0].answer();
+  } else {
+    check(`  the republish took the lease first, so the restore sent nothing (${order})`, () => assert.equal(granted, true, log.join(", ")));
+  }
+  await Promise.all([a, b]);
+  check(`  and the fence ends granted (${order})`, () => assert.equal(granted, true, log.join(", ")));
+}
+
 Date.now = realNow;
 if (failures) {
   console.log(`${failures} ordering check${failures === 1 ? "" : "s"} failed`);
