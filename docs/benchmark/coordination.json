@@ -1,0 +1,291 @@
+{
+ "revision": "c4c9a2bf118b",
+ "orders": 3,
+ "repeats": 1,
+ "conditions": "7 processes in parallel on one Mac (outcome counts; elapsed time under contention)",
+ "node": "v26.7.0",
+ "results": {
+  "coordination": {
+   "queue": [
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 84,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 13,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 222
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 87,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 16,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 142
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "item-link (item-link): a text conflict nobody could repair"
+     ],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 70,
+     "releases": 4,
+     "repairs": 3,
+     "repairFailures": 1,
+     "redundant": {
+      "attempts": 1,
+      "checks": 19,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 122
+    }
+   ],
+   "queue-safe": [
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 160,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 27,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 319
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 166,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 33,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 404
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "bulk-discount",
+      "item-link"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "item-link (item-link): its own fact failed (step 2: GET /api/items/kale returned 404, expected 200)"
+     ],
+     "resubmits": 1,
+     "held": [],
+     "checks": 173,
+     "releases": 5,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 39,
+      "releases": 1
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 203
+    }
+   ],
+   "canon": [
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 222
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 108
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "item-page",
+      "item-link",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 133,
+     "releases": 4,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 1,
+      "checks": 5,
+      "releases": 0
+     },
+     "deferred": 1,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 215
+    }
+   ]
+  }
+ }
+}

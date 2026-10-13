@@ -1,0 +1,87 @@
+{
+ "revision": "c4c9a2bf118b",
+ "orders": 2,
+ "repeats": 1,
+ "conditions": "7 processes in parallel on one Mac (outcome counts; elapsed time under contention)",
+ "node": "v26.7.0",
+ "results": {
+  "integration": {
+   "canon-no-repair": [
+    {
+     "landed": [
+      "line-limit",
+      "sold-out-refused",
+      "search-by-name",
+      "product-page",
+      "stall-hours"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "stall-products (stall-products): a text conflict nobody could repair",
+      "no-double-booking (no-double-booking2): a text conflict nobody could repair",
+      "remove-from-basket (remove-from-basket2): a text conflict nobody could repair",
+      "stall-products (stall-products): a text conflict nobody could repair",
+      "no-double-booking (no-double-booking2): a text conflict nobody could repair",
+      "remove-from-basket (remove-from-basket2): a text conflict nobody could repair"
+     ],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 315,
+     "releases": 5,
+     "repairs": 0,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 5,
+      "checks": 45,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 330
+    },
+    {
+     "landed": [
+      "stall-hours",
+      "line-limit",
+      "no-double-booking",
+      "stall-products",
+      "sold-out-refused"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "product-page (product-page): a text conflict nobody could repair",
+      "search-by-name (search-by-name): a text conflict nobody could repair",
+      "product-page (product-page): a text conflict nobody could repair",
+      "remove-from-basket (remove-from-basket2): a text conflict nobody could repair",
+      "remove-from-basket (remove-from-basket2): a text conflict nobody could repair",
+      "search-by-name (search-by-name): a text conflict nobody could repair"
+     ],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 315,
+     "releases": 5,
+     "repairs": 0,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 5,
+      "checks": 45,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 207
+    }
+   ]
+  }
+ }
+}

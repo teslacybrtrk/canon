@@ -1,0 +1,79 @@
+{
+ "revision": "aed2d4e076d4",
+ "orders": 2,
+ "repeats": 1,
+ "conditions": "7 processes in parallel on one Mac (outcome counts; elapsed time under contention)",
+ "node": "v26.7.0",
+ "results": {
+  "integration": {
+   "canon": [
+    {
+     "landed": [
+      "line-limit",
+      "sold-out-refused",
+      "search-by-name",
+      "product-page",
+      "stall-products",
+      "no-double-booking",
+      "remove-from-basket",
+      "stall-hours"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 576,
+     "releases": 8,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 8,
+      "checks": 72,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 534
+    },
+    {
+     "landed": [
+      "stall-hours",
+      "line-limit",
+      "no-double-booking",
+      "stall-products",
+      "product-page",
+      "search-by-name",
+      "sold-out-refused",
+      "remove-from-basket"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 576,
+     "releases": 8,
+     "repairs": 3,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 8,
+      "checks": 72,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 587
+    }
+   ]
+  }
+ }
+}

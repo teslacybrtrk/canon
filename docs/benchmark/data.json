@@ -1,0 +1,485 @@
+{
+ "revision": "aed2d4e076d4",
+ "orders": 2,
+ "repeats": 1,
+ "conditions": "one process at a time (the data workload re-run alone after a harness fix)",
+ "node": "v26.7.0",
+ "results": {
+  "data": {
+   "queue": [
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "sold-out-refused",
+      "remove-from-basket",
+      "search-by-name"
+     ],
+     "landedUnsafe": [
+      "sold-out-refused"
+     ],
+     "wrongAccepts": [
+      "stall-hours (stall-hours-schema): broke market-lists-stalls in production (step 1: GET / returned 500, expected 200)",
+      "stall-products (drop-legacy): broke a shopper's basket in production (lost in the release)"
+     ],
+     "unrecoverable": 1,
+     "unsafeShipped": [
+      "sold-out-refused (sold-out-moved)"
+     ],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 199,
+     "releases": 7,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 202
+    },
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "search-by-name",
+      "sold-out-refused",
+      "remove-from-basket"
+     ],
+     "landedUnsafe": [
+      "sold-out-refused"
+     ],
+     "wrongAccepts": [
+      "stall-hours (stall-hours-schema): broke market-lists-stalls in production (step 1: GET / returned 500, expected 200)",
+      "stall-products (drop-legacy): broke a shopper's basket in production (lost in the release)"
+     ],
+     "unrecoverable": 1,
+     "unsafeShipped": [
+      "sold-out-refused (sold-out-moved)"
+     ],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 187,
+     "releases": 7,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 162
+    }
+   ],
+   "queue-safe": [
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "remove-from-basket",
+      "search-by-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "stall-products (drop-legacy): destructive data change, an owner decides (src/index.ts: DROP TABLE IF EXISTS cart;)"
+     ],
+     "reworks": [
+      "stall-hours (stall-hours-schema): held back at release",
+      "sold-out-refused (sold-out-moved): held back: rollback not safe"
+     ],
+     "resubmits": 0,
+     "held": [
+      "stall-hours (stall-hours-schema): release candidate broke market-lists-stalls on production's data",
+      "sold-out-refused (sold-out-moved): rollback rehearsal: the previous version broke products-have-prices",
+      "stall-products (drop-legacy): the owner declined the destructive change"
+     ],
+     "checks": 257,
+     "releases": 4,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 218
+    },
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "search-by-name",
+      "remove-from-basket"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "stall-products (drop-legacy): destructive data change, an owner decides (src/index.ts: DROP TABLE IF EXISTS cart;)"
+     ],
+     "reworks": [
+      "stall-hours (stall-hours-schema): held back at release",
+      "sold-out-refused (sold-out-moved): held back: rollback not safe"
+     ],
+     "resubmits": 0,
+     "held": [
+      "stall-hours (stall-hours-schema): release candidate broke market-lists-stalls on production's data",
+      "stall-products (drop-legacy): the owner declined the destructive change",
+      "sold-out-refused (sold-out-moved): rollback rehearsal: the previous version broke products-have-prices"
+     ],
+     "checks": 258,
+     "releases": 4,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 308
+    }
+   ],
+   "canon": [
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "remove-from-basket",
+      "search-by-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "stall-products (drop-legacy): destructive data change, an owner decides (src/index.ts: DROP TABLE IF EXISTS cart;)"
+     ],
+     "reworks": [
+      "stall-hours (stall-hours-schema): held back at release",
+      "sold-out-refused (sold-out-moved): held back: rollback not safe"
+     ],
+     "resubmits": 0,
+     "held": [
+      "stall-hours (stall-hours-schema): release candidate broke market-lists-stalls on production's data",
+      "sold-out-refused (sold-out-moved): rollback rehearsal: the previous version broke products-have-prices",
+      "stall-products (drop-legacy): the owner declined the destructive change"
+     ],
+     "checks": 257,
+     "releases": 4,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 220
+    },
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "search-by-name",
+      "remove-from-basket"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "stall-products (drop-legacy): destructive data change, an owner decides (src/index.ts: DROP TABLE IF EXISTS cart;)"
+     ],
+     "reworks": [
+      "stall-hours (stall-hours-schema): held back at release",
+      "sold-out-refused (sold-out-moved): held back: rollback not safe"
+     ],
+     "resubmits": 0,
+     "held": [
+      "stall-hours (stall-hours-schema): release candidate broke market-lists-stalls on production's data",
+      "stall-products (drop-legacy): the owner declined the destructive change",
+      "sold-out-refused (sold-out-moved): rollback rehearsal: the previous version broke products-have-prices"
+     ],
+     "checks": 258,
+     "releases": 4,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 250
+    }
+   ],
+   "canon-no-candidate": [
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "sold-out-refused",
+      "search-by-name"
+     ],
+     "landedUnsafe": [
+      "sold-out-refused"
+     ],
+     "wrongAccepts": [
+      "stall-hours (stall-hours-schema): broke market-lists-stalls in production (step 1: GET / returned 500, expected 200)"
+     ],
+     "unrecoverable": 0,
+     "unsafeShipped": [
+      "sold-out-refused (sold-out-moved)"
+     ],
+     "peopleNeeded": [
+      "stall-products (drop-legacy): destructive data change, an owner decides (src/index.ts: DROP TABLE IF EXISTS cart;)",
+      "remove-from-basket (remove-from-basket2): a text conflict nobody could repair"
+     ],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [
+      "stall-products (drop-legacy): the owner declined the destructive change"
+     ],
+     "checks": 174,
+     "releases": 5,
+     "repairs": 1,
+     "repairFailures": 1,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 229
+    },
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "search-by-name",
+      "sold-out-refused",
+      "remove-from-basket"
+     ],
+     "landedUnsafe": [
+      "sold-out-refused"
+     ],
+     "wrongAccepts": [
+      "stall-hours (stall-hours-schema): broke market-lists-stalls in production (step 1: GET / returned 500, expected 200)"
+     ],
+     "unrecoverable": 0,
+     "unsafeShipped": [
+      "sold-out-refused (sold-out-moved)"
+     ],
+     "peopleNeeded": [
+      "stall-products (drop-legacy): destructive data change, an owner decides (src/index.ts: DROP TABLE IF EXISTS cart;)"
+     ],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [
+      "stall-products (drop-legacy): the owner declined the destructive change"
+     ],
+     "checks": 211,
+     "releases": 6,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 199
+    }
+   ],
+   "canon-no-rehearsal": [
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "sold-out-refused",
+      "remove-from-basket",
+      "search-by-name"
+     ],
+     "landedUnsafe": [
+      "sold-out-refused"
+     ],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [
+      "sold-out-refused (sold-out-moved)"
+     ],
+     "peopleNeeded": [
+      "stall-products (drop-legacy): destructive data change, an owner decides (src/index.ts: DROP TABLE IF EXISTS cart;)"
+     ],
+     "reworks": [
+      "stall-hours (stall-hours-schema): held back at release"
+     ],
+     "resubmits": 0,
+     "held": [
+      "stall-hours (stall-hours-schema): release candidate broke market-lists-stalls on production's data",
+      "stall-products (drop-legacy): the owner declined the destructive change"
+     ],
+     "checks": 202,
+     "releases": 5,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 177
+    },
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "search-by-name",
+      "sold-out-refused",
+      "remove-from-basket"
+     ],
+     "landedUnsafe": [
+      "sold-out-refused"
+     ],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [
+      "sold-out-refused (sold-out-moved)"
+     ],
+     "peopleNeeded": [
+      "stall-products (drop-legacy): destructive data change, an owner decides (src/index.ts: DROP TABLE IF EXISTS cart;)"
+     ],
+     "reworks": [
+      "stall-hours (stall-hours-schema): held back at release"
+     ],
+     "resubmits": 0,
+     "held": [
+      "stall-hours (stall-hours-schema): release candidate broke market-lists-stalls on production's data",
+      "stall-products (drop-legacy): the owner declined the destructive change"
+     ],
+     "checks": 198,
+     "releases": 5,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 186
+    }
+   ],
+   "canon-no-data-gate": [
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "remove-from-basket",
+      "search-by-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [
+      "stall-products (drop-legacy): broke a shopper's basket in production (lost in the release)"
+     ],
+     "unrecoverable": 1,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "stall-hours (stall-hours-schema): held back at release",
+      "sold-out-refused (sold-out-moved): held back: rollback not safe"
+     ],
+     "resubmits": 0,
+     "held": [
+      "stall-hours (stall-hours-schema): release candidate broke market-lists-stalls on production's data",
+      "sold-out-refused (sold-out-moved): rollback rehearsal: the previous version broke products-have-prices"
+     ],
+     "checks": 308,
+     "releases": 5,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 197
+    },
+    {
+     "landed": [
+      "no-double-booking",
+      "line-limit",
+      "search-by-name",
+      "remove-from-basket"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [
+      "stall-products (drop-legacy): broke a shopper's basket in production (lost in the release)"
+     ],
+     "unrecoverable": 1,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "stall-hours (stall-hours-schema): held back at release",
+      "sold-out-refused (sold-out-moved): held back: rollback not safe"
+     ],
+     "resubmits": 0,
+     "held": [
+      "stall-hours (stall-hours-schema): release candidate broke market-lists-stalls on production's data",
+      "sold-out-refused (sold-out-moved): rollback rehearsal: the previous version broke products-have-prices"
+     ],
+     "checks": 303,
+     "releases": 5,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 189
+    }
+   ]
+  }
+ }
+}

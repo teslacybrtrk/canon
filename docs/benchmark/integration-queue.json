@@ -1,0 +1,83 @@
+{
+ "revision": "c4c9a2bf118b",
+ "orders": 2,
+ "repeats": 1,
+ "conditions": "7 processes in parallel on one Mac (outcome counts; elapsed time under contention)",
+ "node": "v26.7.0",
+ "results": {
+  "integration": {
+   "queue": [
+    {
+     "landed": [
+      "line-limit",
+      "sold-out-refused",
+      "search-by-name",
+      "product-page",
+      "stall-products",
+      "no-double-booking",
+      "remove-from-basket",
+      "stall-hours"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "no-double-booking (no-double-booking2): CI: code-typechecks"
+     ],
+     "resubmits": 0,
+     "held": [],
+     "checks": 569,
+     "releases": 15,
+     "repairs": 8,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 8,
+      "checks": 309,
+      "releases": 7
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 1385
+    },
+    {
+     "landed": [
+      "stall-hours",
+      "line-limit",
+      "no-double-booking",
+      "stall-products",
+      "product-page",
+      "search-by-name",
+      "sold-out-refused",
+      "remove-from-basket"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "no-double-booking (no-double-booking2): a text conflict nobody could repair"
+     ],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 544,
+     "releases": 15,
+     "repairs": 9,
+     "repairFailures": 1,
+     "redundant": {
+      "attempts": 8,
+      "checks": 284,
+      "releases": 7
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 1493
+    }
+   ]
+  }
+ }
+}

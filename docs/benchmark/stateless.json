@@ -1,0 +1,379 @@
+{
+ "revision": "c4c9a2bf118b",
+ "orders": 3,
+ "repeats": 1,
+ "conditions": "7 processes in parallel on one Mac (outcome counts; elapsed time under contention)",
+ "node": "v26.7.0",
+ "results": {
+  "stateless": {
+   "queue": [
+    {
+     "landed": [
+      "bulk-discount",
+      "quote-has-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [
+      "quote-has-name (quote-has-name-flaky): broke users' error rate in production (6/60 requests failed)"
+     ],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 46,
+     "releases": 3,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 214
+    },
+    {
+     "landed": [
+      "bulk-discount",
+      "quote-has-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [
+      "quote-has-name (quote-has-name-flaky): broke users' error rate in production (6/60 requests failed)"
+     ],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 46,
+     "releases": 3,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 95
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [
+      "quote-has-name (quote-has-name-flaky): broke users' error rate in production (5/60 requests failed)"
+     ],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 42,
+     "releases": 3,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 44
+    }
+   ],
+   "queue-safe": [
+    {
+     "landed": [
+      "bulk-discount",
+      "quote-has-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "quote-has-name (quote-has-name-flaky): held back by the canary"
+     ],
+     "resubmits": 0,
+     "held": [
+      "quote-has-name (quote-has-name-flaky): canary: 4/40 raw errors against 0/40"
+     ],
+     "checks": 63,
+     "releases": 2,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 83
+    },
+    {
+     "landed": [
+      "bulk-discount",
+      "quote-has-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "quote-has-name (quote-has-name-flaky): held back by the canary"
+     ],
+     "resubmits": 0,
+     "held": [
+      "quote-has-name (quote-has-name-flaky): canary: 4/40 raw errors against 0/40"
+     ],
+     "checks": 63,
+     "releases": 2,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 192
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "quote-has-name (quote-has-name-flaky): held back by the canary"
+     ],
+     "resubmits": 0,
+     "held": [
+      "quote-has-name (quote-has-name-flaky): canary: 3/40 raw errors against 0/40"
+     ],
+     "checks": 61,
+     "releases": 2,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 181
+    }
+   ],
+   "canon": [
+    {
+     "landed": [
+      "bulk-discount",
+      "quote-has-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "quote-has-name (quote-has-name-flaky): held back by the canary"
+     ],
+     "resubmits": 0,
+     "held": [
+      "quote-has-name (quote-has-name-flaky): canary: 4/40 raw errors against 0/40"
+     ],
+     "checks": 63,
+     "releases": 2,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 81
+    },
+    {
+     "landed": [
+      "bulk-discount",
+      "quote-has-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "quote-has-name (quote-has-name-flaky): held back by the canary"
+     ],
+     "resubmits": 0,
+     "held": [
+      "quote-has-name (quote-has-name-flaky): canary: 4/40 raw errors against 0/40"
+     ],
+     "checks": 63,
+     "releases": 2,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 84
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [
+      "quote-has-name (quote-has-name-flaky): held back by the canary"
+     ],
+     "resubmits": 0,
+     "held": [
+      "quote-has-name (quote-has-name-flaky): canary: 3/40 raw errors against 0/40"
+     ],
+     "checks": 61,
+     "releases": 2,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 67
+    }
+   ],
+   "canon-no-canary": [
+    {
+     "landed": [
+      "bulk-discount",
+      "quote-has-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [
+      "quote-has-name (quote-has-name-flaky): broke users' error rate in production (6/60 requests failed)"
+     ],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 85,
+     "releases": 3,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 108
+    },
+    {
+     "landed": [
+      "bulk-discount",
+      "quote-has-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [
+      "quote-has-name (quote-has-name-flaky): broke users' error rate in production (6/60 requests failed)"
+     ],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 85,
+     "releases": 3,
+     "repairs": 2,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 207
+    },
+    {
+     "landed": [
+      "quote-has-name",
+      "bulk-discount"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [
+      "quote-has-name (quote-has-name-flaky): broke users' error rate in production (5/60 requests failed)"
+     ],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 78,
+     "releases": 3,
+     "repairs": 1,
+     "repairFailures": 0,
+     "redundant": {
+      "attempts": 0,
+      "checks": 0,
+      "releases": 0
+     },
+     "deferred": 0,
+     "order": 3,
+     "repeat": 1,
+     "seconds": 72
+    }
+   ]
+  }
+ }
+}

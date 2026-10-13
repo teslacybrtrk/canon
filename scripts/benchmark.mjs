@@ -227,7 +227,16 @@ async function run(workloadName, systemName, order = 1, repeat = 1) {
     if (have < 3) await fetch(new URL("/api/cart", prod.url), { method: "POST", headers: survivor, body: JSON.stringify({ productId: "eggs", qty: 3 - have }) });
   };
   await seedSurvivor();
-  const survived = async () => !stateful || (await fetch(new URL("/api/cart", prod.url), { headers: survivor }).then((r) => r.json()).catch(() => null))?.items?.[0]?.qty === 3;
+  // Lost only if production answers and the basket isn't there; a request a just-restarted server refused is retried.
+  const survived = async () => {
+    if (!stateful) return true;
+    for (let i = 0; i < 8; i++) {
+      const cart = await fetch(new URL("/api/cart", prod.url), { headers: survivor }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (cart) return cart.items?.[0]?.qty === 3;
+      await sleep(2_500);
+    }
+    return false;
+  };
 
   // The queue: every attempt, in this order's sequence. An attempt rejected because its own fact failed is resubmitted
   // once by its agent, at the back (rework). Canon holds an attempt whose prerequisites ("after") aren't canon yet
@@ -301,7 +310,7 @@ async function run(workloadName, systemName, order = 1, repeat = 1) {
     const preview = await serve(code, mkdtempSync(join(tmpdir(), "bench-fresh-")));
     const verdict = await factsHold(preview.url, [...canonFacts, fact], `verdict:${i}`, m);
     await preview.stop();
-    if (!verdict.held) { reject(verdict.fact.id === factId ? `its own fact failed (${String(verdict.detail).slice(0, 80)})` : `broke ${verdict.fact.id}`, verdict.fact.id === factId); continue; }
+    if (!verdict.held) { reject(verdict.fact.id === factId ? `its own fact failed (${String(verdict.detail).slice(0, 80)})` : `broke ${verdict.fact.id} (${String(verdict.detail).slice(0, 80)})`, verdict.fact.id === factId); continue; }
     // Canon's data gate: a destructive schema change waits for a person (who, here, accepts it: counted as needed).
     const added = dataFiles(git(repo, "diff", "--name-only", before, sha).split("\n").filter(Boolean)).map((p) => ({ path: p, lines: addedText(sh(repo, `git show ${before}:${p} 2>/dev/null || true`), sh(repo, `git show ${sha}:${p}`)) }));
     const data = dataChanges(added);

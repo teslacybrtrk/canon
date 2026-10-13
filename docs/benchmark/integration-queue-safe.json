@@ -1,0 +1,88 @@
+{
+ "revision": "c4c9a2bf118b",
+ "orders": 2,
+ "repeats": 1,
+ "conditions": "7 processes in parallel on one Mac (outcome counts; elapsed time under contention)",
+ "node": "v26.7.0",
+ "results": {
+  "integration": {
+   "queue-safe": [
+    {
+     "landed": [
+      "line-limit",
+      "sold-out-refused",
+      "search-by-name",
+      "product-page",
+      "stall-products",
+      "no-double-booking",
+      "remove-from-basket",
+      "stall-hours"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "stall-products (stall-products): a text conflict nobody could repair",
+      "stall-hours (stall-hours): a text conflict nobody could repair"
+     ],
+     "reworks": [
+      "no-double-booking (no-double-booking2): CI: code-typechecks"
+     ],
+     "resubmits": 0,
+     "held": [],
+     "checks": 945,
+     "releases": 13,
+     "repairs": 8,
+     "repairFailures": 2,
+     "redundant": {
+      "attempts": 8,
+      "checks": 441,
+      "releases": 5
+     },
+     "deferred": 0,
+     "order": 1,
+     "repeat": 1,
+     "seconds": 1725
+    },
+    {
+     "landed": [
+      "stall-hours",
+      "line-limit",
+      "no-double-booking",
+      "stall-products",
+      "product-page",
+      "sold-out-refused",
+      "remove-from-basket",
+      "search-by-name"
+     ],
+     "landedUnsafe": [],
+     "wrongAccepts": [],
+     "unrecoverable": 0,
+     "unsafeShipped": [],
+     "peopleNeeded": [
+      "stall-hours (stall-hours): a text conflict nobody could repair",
+      "search-by-name (search-by-name): a text conflict nobody could repair",
+      "no-double-booking (no-double-booking2): a text conflict nobody could repair"
+     ],
+     "reworks": [],
+     "resubmits": 0,
+     "held": [],
+     "checks": 902,
+     "releases": 13,
+     "repairs": 8,
+     "repairFailures": 3,
+     "redundant": {
+      "attempts": 7,
+      "checks": 398,
+      "releases": 5
+     },
+     "deferred": 0,
+     "order": 2,
+     "repeat": 1,
+     "seconds": 1154
+    }
+   ]
+  }
+ }
+}

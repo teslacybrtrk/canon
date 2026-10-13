@@ -495,6 +495,9 @@ held-out facts, specialist review with a track record, prerequisites, account-wi
 - **Reviewer learning, held out**: the track record is kept (confirmed, overruled, missed, per specialist); next, let a
   proposed change to the reviewer's guidance count only after it does better on held-out cases (versioned, never
   silently), and let a charter give a specialist with a good record more weight.
+- **Faster installs without shared workspaces**: each attempt's checkout cache stays its own (a shared workspace would
+  carry one agent's files into another's); a content-addressed cache of downloaded packages, verified by their
+  lockfile hashes, can be shared safely.
 - **Any stack**: facts about apps beyond Workers, built and previewed in Containers.
 - **Facts from production**: an error in production becomes a proposed fact, so once fixed it stays fixed.
 - **A wider benchmark**: `scripts/benchmark.mjs` replays four workloads, in several seeded orders, through a strong
