@@ -200,7 +200,10 @@ The features built after the Oct 12 run were each tested live on throwaway proje
   stored, and agents see it with no check. A change that quietly made a repeated add overwrite instead was rejected,
   its verdict saying only that a held-out fact broke.
 - **Prerequisites** (`rehearse`): a product page declared `after` search-by-name; Ready, it waited ("it builds on
-  'Shoppers can search products by name', which isn't canon yet").
+  'Shoppers can search products by name', which isn't canon yet"). When search-by-name landed (canon #12, its
+  rehearsal now read-only: the old version kept all 11 facts and read back the new version's writes in 6 comparisons),
+  the judge re-applied the product page on top, and the combined code failed the linter (the request handler grew too
+  complex with both features): the dependency resolved, and the combination judged on its own.
 - **Gradual rollout** (a third test project, `canary`, a stateless Worker): a correct change went out at 10%, then 50%,
   then 100%, no failures on either version ([record](https://canon.rodeo/p/canary/canon/2/acceptance)). A change with
   an upstream lookup failing one request in eight passed its preview, its release candidate and the 0% smoke test
