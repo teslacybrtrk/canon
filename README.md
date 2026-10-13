@@ -70,11 +70,25 @@ left up for inspection); **simulated** results come from a local harness; **unit
 | Rollback compatibility is compared on the exact state each version wrote, and missing evidence holds the release | recorded: [rehearse #13](https://canon.rodeo/p/rehearse/canon/13/acceptance) (two facts with no read-back: unavailable, held), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) (an owner released over it; `recovery.override` names it) | `node scripts/test-probe.ts`, `node scripts/test-evidence.ts` |
 | A flaky release is taken back out at 10% | recorded: [canary #3](https://canon.rodeo/p/canary/canon/3/acceptance) | `node scripts/benchmark.mjs --workloads stateless` |
 | One writer of production, behind a lease (republishes included) | unit-tested: `scripts/test-release.ts`; the `fence:` step every release takes before each Worker-changing step ([docs/timings.md](docs/timings.md)) | `node scripts/test-release.ts` |
-| Duplicates are superseded, prerequisites wait, merge trains release once | deployed run: [docs/e2e.md](docs/e2e.md); simulated: [docs/benchmark.md](docs/benchmark.md), coordination workload | `node scripts/e2e.mjs`, `node scripts/benchmark.mjs --workloads coordination` |
+| Duplicates are superseded, prerequisites wait, merge trains release once | deployed run: [docs/e2e.md](docs/e2e.md), records [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance) and [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance); simulated: [docs/benchmark.md](docs/benchmark.md), coordination workload | `node scripts/e2e.mjs`, `node scripts/benchmark.mjs --workloads coordination` |
 | Where the time goes, and what was changed because of it | [docs/timings.md](docs/timings.md), from Cloudflare's own Workflows records | `node scripts/timings.mjs` |
 | Held-out checks stay private | recorded: `rehearse` (the board shows the sentence, never the check); the API redacts details | |
 
 Nothing here needs a secret to read. Held-out checks and keys are never in a public record.
+
+**Which code made which record.** The judge was redeployed as fixes landed, so each headline record names the judge
+version (Cloudflare Worker version) that produced it and the commit it was deployed from:
+
+| Record | Judge version | Commit |
+|---|---|---|
+| [rehearse #13](https://canon.rodeo/p/rehearse/canon/13/acceptance) (held: no read-back), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) (owner override) | `22e54713`, deployed Oct 13 18:02 UTC | `b9f3a2c` |
+| [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance), [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance) (the deployed run, [docs/e2e.md](docs/e2e.md)) | `a83d0b92`, Oct 13 18:41 UTC | `4c84499` |
+| everything after Oct 13 20:19 UTC | `118c6f12` | `79de603` |
+| earlier records (Oct 12–13: farmstand, rodeo, evid #2–3, rehearse #2–12, canary) | earlier versions | before `b9f3a2c` |
+
+Two rules changed after the convoy run, so a stateless release judged today would differ: a zero-comparison
+rehearsal now also needs the owner's `"state": "none"` declaration (convoy's records say "no storage bindings" alone),
+and the production-write barrier now covers direct deploys.
 
 ## How Cloudflare is used
 
@@ -178,8 +192,8 @@ projects sharing one account's container limit.
 own records ([docs/timings.md](docs/timings.md)). On the push-to-verdict path an agent waits on, the preview upload
 (median 18 s), the dependency install (17 s) and the command facts (9.5 s) were the three longest steps, and the
 preview and the command facts ran one after the other although they need nothing from each other: they now run side
-by side: build to verdict went from a median of 54 s to 48 s, and p90 from 79 s to 60 s (same day, 46 verifications
-before and 28 after; a small sample). Releases spend most of their time deploying the release candidate (22 s median) and checking it
+by side. Observed afterwards (not a controlled experiment: different attempts, and a small sample): build to verdict
+went from a median of 54 s to 48 s, and p90 from 79 s to 60 s (same day, 46 verifications before, 28 after). Releases spend most of their time deploying the release candidate (22 s median) and checking it
 (26 s, including a 20-second settle while Durable Objects pick up new code); the canary's holds are policy, not
 overhead. What wasn't changed, and why: the install cache is per attempt, because every attempt is its own repo, and
 sharing a cached workspace between attempts would carry one agent's files into another's checkout.
@@ -284,7 +298,9 @@ The features built after the Oct 12 run were each tested live on throwaway proje
 What broke in those tests, and is fixed: the first end-to-end run on a brand-new project (`relay`, Oct 13) passed
 its merge train, release candidate and rehearsal, then couldn't upload its first version, because Cloudflare won't
 upload a version of a Worker that doesn't exist yet; the release was held back and canon stepped back, as it should,
-and a project's first release now deploys directly (there is nothing in production to stage beside). Earlier: the first line-limit attempt was flagged by the reviewer (two adds of 50 and
+and a project's first release now deploys directly (there is nothing in production to stage beside). `relay`, left
+on autopilot, had been held back twice on it (canon #2 and #4, each reverted); after the fix it landed all four facts
+by itself (canon #6 to #8), with no clicks. Earlier: the first line-limit attempt was flagged by the reviewer (two adds of 50 and
 60 make a line of 110) and waited, but its re-apply drew a review without that risk and landed, so a risk named on an
 attempt now stands on its re-applies until an agent changes the code (deployed; in the live retest the reviewer named
 the risk again itself, so that rule didn't have to act). Two reviews were cut off by a deploy and sat at "reading"

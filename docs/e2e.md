@@ -23,7 +23,28 @@ agent-2 and agent-3 build the same fact two ways (a duplicate); agent-1's fact n
 
 Releases: 2 (canon #3: item-link + bulk-discount; canon #2: quote-has-name + item-page). Merge trains landed: 2 (4 facts). Re-applied by the judge: 2. Rejected: 0. Held back: 0. Accepted by a person: 0; by policy: 4.
 
-Verification work: 10 pushes, 10 verdicts, 80 checks, 7 verification minutes; median push to verdict 41 s (p90 50 s). Compute the judge times itself: about $0.08 (only what the judge times itself: push-to-verdict seconds, plus mutation runs that recorded a start; each second priced as a busy standard-4 container at list price. Re-applies, trains and releases are not included (Workflows' own instance records have the full total)).
+Verification work: 10 pushes, 10 verdicts, 80 checks; median push to verdict 41 s (p90 50 s).
+
+**Time.** First push to the last fact in production: 660 s (76 s → 736 s in the timeline), including Cloudflare's
+queueing, container starts, both releases' release candidates and rehearsals, and the second release's two 30-second
+canary holds.
+
+**Cost.** Every Workflow instance of this project, from Cloudflare's own records (`node scripts/timings.mjs --project
+convoy`), priced the way the judge prices its compute (each second a fully busy standard-4 container at list price;
+instance wall time, so waiting inside an instance counts):
+
+| Workflow | Instances | Seconds | Cost at list price |
+|---|---|---|---|
+| verify | 12 | 436 | $0.049 |
+| mutate (deliberate breaks: diagnostic, not required by this project's policy) | 6 | 464 | $0.052 |
+| refresh (re-applies) | 2 | 133 | $0.015 |
+| train (merge trains) | 2 | 29 | $0.003 |
+| promote (releases) | 2 | 520 | $0.058 |
+| **all measured delivery stages** | **24** | **1,582** | **$0.18** |
+
+Not included: the judge's own Worker and Durable Object requests, Artifacts and R2 storage, and the Workers Preview
+deploys themselves (billed as Workers requests, not container time). The judge's own `computeUsdEstimate` in
+`/stats` ($0.08 here) is a partial figure: it times only push-to-verdict and mutation runs.
 
 Acceptance records: [canon #3](https://canon.rodeo/p/convoy/canon/3/acceptance), [canon #2](https://canon.rodeo/p/convoy/canon/2/acceptance).
 

@@ -30,7 +30,8 @@ Build to verdict (install start to judge end, per verification):
 | before 2026-10-13 18:22 UTC | 140 | 60 | 91 |
 | after | 28 | 48 | 60 |
 
-The change at 18:22 UTC ran the preview upload and the command facts side by side. Against every verification since
+This is an observational before/after, not a controlled causal estimate: the verifications on either side were
+different attempts on different projects. The change at 18:22 UTC ran the preview upload and the command facts side by side. Against every verification since
 Oct 12 the median went from 60 s to 48 s, but that baseline includes the Oct 12 load tests (more contention). Against
 the same day only (46 verifications before, 28 after, similar load): **median 54 s → 48 s, p90 79 s → 60 s**. The
 saving is bounded by the shorter of the two steps (command facts, median 9.5 s), and the "after" sample is small.

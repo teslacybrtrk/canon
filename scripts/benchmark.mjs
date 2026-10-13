@@ -16,7 +16,8 @@
 // Measured per system: features safely landed, wrong accepts (a release that broke a fact in production), incidents a
 // rollback couldn't fix, releases shipped that couldn't be rolled back safely (found by rehearsing the rollback after
 // the fact), unnecessary rejects (a feature Canon landed safely that this system didn't), people needed (conflicts
-// nobody could repair, decisions routed to an owner), agent reworks, checks run and seconds spent.
+// nobody could repair, decisions routed to an owner), rejections and resubmissions (events, not agent effort), repair
+// calls and failures, checks run and seconds spent. Metric definitions and the objectives: docs/benchmark-objectives.md.
 import { execFileSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -179,7 +180,7 @@ async function repair(repo, files, intent, m) {
   for (const path of files) {
     const conflicted = readFileSync(join(repo, path), "utf8");
     const res = await fetch(REPAIR_URL, { method: "POST", headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" }, body: JSON.stringify({ path, conflicted, intents: [intent] }) }).then((r) => r.json()).catch(() => null);
-    if (!res?.file) return false;
+    if (!res?.file) { if (m) m.repairFailures++; return false; }
     writeFileSync(join(repo, path), res.file);
   }
   return true;
@@ -187,11 +188,11 @@ async function repair(repo, files, intent, m) {
 
 // ---- One system through one workload ----------------------------------------------------------------------------
 
-async function run(workloadName, systemName, order = 1) {
+async function run(workloadName, systemName, order = 1, repeat = 1) {
   const w = WORKLOADS[workloadName];
   const sys = { safeguards: true, candidate: true, rehearsal: true, canary: true, dataGate: true, repair: true, ...SYSTEMS[systemName] };
   const t0 = Date.now();
-  const m = { landed: [], landedUnsafe: [], wrongAccepts: [], unrecoverable: 0, unsafeShipped: [], peopleNeeded: [], reworks: [], held: [], checks: 0, releases: 0, repairs: 0, redundant: { attempts: 0, checks: 0, releases: 0 }, deferred: 0, order };
+  const m = { landed: [], landedUnsafe: [], wrongAccepts: [], unrecoverable: 0, unsafeShipped: [], peopleNeeded: [], reworks: [], resubmits: 0, held: [], checks: 0, releases: 0, repairs: 0, repairFailures: 0, redundant: { attempts: 0, checks: 0, releases: 0 }, deferred: 0, order, repeat };
   const repo = mkdtempSync(join(tmpdir(), "bench-repo-"));
   cpSync(join(ROOT, w.app), repo, { recursive: true, filter: (p) => !p.includes("node_modules") && !p.includes(".wrangler") });
   writeFileSync(join(repo, "canon.json"), JSON.stringify({ ...w.canon, backlog: [] }, null, 2));
@@ -291,7 +292,7 @@ async function run(workloadName, systemName, order = 1) {
       m.reworks.push(`${name}: ${why}`);
       done();
       // Its own fact didn't hold: the agent tries again later, once (what's missing may land meanwhile).
-      if (own && item.tries < 1) work.push({ ...item, tries: item.tries + 1 });
+      if (own && item.tries < 1) { m.resubmits++; work.push({ ...item, tries: item.tries + 1 }); }
     };
     // The verdict: every canon fact and its own, plus CI, on a fresh copy (a preview, or the queue's CI).
     const code = checkout(repo, sha);
@@ -392,6 +393,10 @@ async function run(workloadName, systemName, order = 1) {
 
 const chosen = (args.workloads ?? "data,stateless,integration,coordination").split(",");
 const orders = Number(args.orders ?? 1);
+const repeats = Number(args.repeats ?? 1);
+// How the run shared the machine: "sequential" (one process, nothing else running) or a note such as "7 processes in
+// parallel". Elapsed time is compared only from sequential runs.
+const conditions = args.conditions ?? "not stated";
 const revision = (() => { try { return git(ROOT, "rev-parse", "--short=12", "HEAD"); } catch { return "unknown"; } })();
 const results = {};
 // --render a.json,b.json: no runs, just the report from saved results (each workload and system from whichever file has it).
@@ -403,13 +408,21 @@ for (const wl of rendered ? [] : chosen) {
   for (const s of PLAN[wl].filter((x) => !args.systems || args.systems.split(",").includes(x))) {
     results[wl][s] = [];
     for (let o = 1; o <= orders; o++) {
-      process.stderr.write(`${wl} / ${s} / order ${o}…\n`);
-      results[wl][s].push(await run(wl, s, o));
+      for (let rep = 1; rep <= repeats; rep++) {
+        process.stderr.write(`${wl} / ${s} / order ${o} / repeat ${rep}…\n`);
+        results[wl][s].push(await run(wl, s, o, rep));
+      }
     }
   }
 }
-if (args.json) writeFileSync(join(ROOT, args.json), JSON.stringify({ revision, orders, results }, null, 1));
-const ordersOf = Object.fromEntries(Object.entries(results).map(([wl, bySys]) => [wl, Math.max(...Object.values(bySys).map((r) => r.length))]));
+if (args.json) writeFileSync(join(ROOT, args.json), JSON.stringify({ revision, orders, repeats, conditions, node: process.version, results }, null, 1));
+const shape = (wl) => {
+  const runs = Object.values(results[wl]).flat();
+  return { orders: new Set(runs.map((r) => r.order)).size, repeats: Math.max(...runs.map((r) => r.repeat ?? 1)) };
+};
+const conditionsByWl = {};
+if (rendered) for (const r of rendered) for (const wl of Object.keys(r.results)) conditionsByWl[wl] = r.conditions ?? "not stated";
+const conditionsOf = (wl) => conditionsByWl[wl] ?? conditions;
 const safe = (r) => r.landed.filter((f) => !r.landedUnsafe.includes(f));
 const stat = (xs) => {
   const min = Math.min(...xs), max = Math.max(...xs), mean = xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -418,26 +431,26 @@ const stat = (xs) => {
 const lines = [
   "# Benchmark (simulated): Canon against merge queues, and Canon with each mechanism switched off",
   "",
-  `Generated by \`scripts/benchmark.mjs\` on ${new Date().toISOString().slice(0, 10)} at revision \`${rendered ? rendered[0].revision : revision}\`, with ${Object.entries(ordersOf).map(([wl, n]) => `${n} order${n === 1 ? "" : "s"} of ${wl}`).join(", ")} (order 1 as written, the others seeded shuffles, the same for every system). **This is a simulation of the pipelines on local Workers**, not deployed Canon: the release candidate is a copy of production's local storage, the rehearsal replays the facts, and the canary compares raw error rates instead of routing a share of traffic. The deployed, end-to-end run is [docs/e2e.md](e2e.md).`,
+  `Generated by \`scripts/benchmark.mjs\` on ${new Date().toISOString().slice(0, 10)} at revision \`${rendered ? rendered[0].revision : revision}\`, with ${Object.keys(results).map((wl) => { const { orders: o, repeats: r } = shape(wl); return `${wl}: ${o} order${o === 1 ? "" : "s"} × ${r} repeat${r === 1 ? "" : "s"}, ${conditionsOf(wl)}`; }).join("; ")} (order 1 as written, the others seeded shuffles, the same for every system; a repeat runs the same order again, and differs only through timing and the repair model). Raw results: [docs/benchmark/](benchmark/). Objectives, tolerances and metric definitions, written before this run: [docs/benchmark-objectives.md](benchmark-objectives.md). **This is a simulation of the pipelines on local Workers**, not deployed Canon: the release candidate is a copy of production's local storage, the rehearsal replays the facts, and the canary compares raw error rates instead of routing a share of traffic. The deployed, end-to-end run is [docs/e2e.md](e2e.md).`,
   "",
   "Every system gets the same attempts, the same protected checks (every canon fact plus the attempt's own, and the repo's CI), the same conflict repair (3-way re-apply, then the judge's repair model as a service), the same compute (one machine, sequential), and the same agent behaviour (an attempt whose own fact fails is resubmitted once, at the back). Production is a local Worker whose storage persists across releases, with user traffic between them.",
   "",
   "**Systems.** *Strong merge queue*: tests each change on the merged tree with every protected check, then ships. *Merge queue with the same release safeguards*: the same, plus everything Canon does at release (a release candidate on long-lived data, a rollback rehearsal, a canary, a gate on destructive data changes): these aren't Canon's alone. *Canon*: the safeguards plus its coordination (a claim on a fact that's already canon is superseded instead of integrated; a claim waits for the facts it declares it builds on).",
   "",
-  "**Safely landed**: a feature in production at the end, every fact holding, whose release can be rolled back safely. **Wrong accepts**: a release that broke a fact in production. **Unsafe to roll back**: shipped releases whose previous version, run on production's data afterwards, broke a fact. **Needless rejects**: features Canon landed safely (same order) that this system didn't. **People**: conflicts nobody could repair, decisions routed to an owner. **Repairs**: calls to the repair model. **Redundant**: attempts that delivered nothing new (a duplicate of a feature already in), and the checks and releases spent on them. Several orders: mean (min–max).",
+  "**Safely landed**: a feature in production at the end, every fact holding, whose release can be rolled back safely. **Wrong accepts**: a release that broke a fact in production. **Unsafe to roll back**: shipped releases whose previous version, run on production's data afterwards, broke a fact. **Needless rejects**: features Canon landed safely (same order) that this system didn't. **People**: conflicts nobody could repair, decisions routed to an owner. **Rejections / resubmissions**: attempts sent back, and of those the ones whose own fact failed that the modelled agent sends once more (events, not agent effort: no agent's time is measured). **Repairs / failed**: calls to the repair model, and calls that returned nothing usable. **Redundant**: attempts that delivered nothing new (a duplicate of a feature already in), and the checks and releases spent on them. **Seconds**: elapsed, under the stated conditions; only sequential runs are comparable. Several runs: mean (min–max).",
   "",
 ];
 for (const [wl, bySys] of Object.entries(results)) {
-  lines.push(`## ${wl}: ${WORKLOADS[wl].about}`, "", "| System | Safely landed | Wrong accepts | Unrecoverable | Unsafe to roll back | Needless rejects | People | Agent reworks | Repairs | Redundant attempts / checks / releases | Checks | Releases | Seconds |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+  lines.push(`## ${wl}: ${WORKLOADS[wl].about}`, "", `| System | Runs | Safely landed | Wrong accepts | Unrecoverable | Unsafe to roll back | Needless rejects | People | Rejections / resubmissions | Repairs / failed | Redundant attempts / checks / releases | Checks | Releases | Seconds (${conditionsOf(wl)}) |`, "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
   for (const [s, runs] of Object.entries(bySys)) {
-    const needless = runs.map((r, o) => { const c = bySys.canon?.[o]; return c ? safe(c).filter((f) => !r.landed.includes(f)).length : 0; });
+    const needless = runs.map((r) => { const c = bySys.canon?.find((x) => x.order === r.order && (x.repeat ?? 1) === (r.repeat ?? 1)); return c ? safe(c).filter((f) => !r.landed.includes(f)).length : 0; });
     const col = (f) => stat(runs.map(f));
-    lines.push(`| ${SYSTEMS[s].label} | ${col((r) => safe(r).length)} | ${col((r) => r.wrongAccepts.length)} | ${col((r) => r.unrecoverable)} | ${col((r) => r.unsafeShipped.length)} | ${s === "canon" ? "-" : stat(needless)} | ${col((r) => r.peopleNeeded.length)} | ${col((r) => r.reworks.length)} | ${col((r) => r.repairs)} | ${col((r) => r.redundant.attempts)} / ${col((r) => r.redundant.checks)} / ${col((r) => r.redundant.releases)} | ${col((r) => r.checks)} | ${col((r) => r.releases)} | ${col((r) => r.seconds)} |`);
+    lines.push(`| ${SYSTEMS[s].label} | ${runs.length} | ${col((r) => safe(r).length)} | ${col((r) => r.wrongAccepts.length)} | ${col((r) => r.unrecoverable)} | ${col((r) => r.unsafeShipped.length)} | ${s === "canon" ? "-" : stat(needless)} | ${col((r) => r.peopleNeeded.length)} | ${col((r) => r.reworks.length)} / ${col((r) => r.resubmits ?? 0)} | ${col((r) => r.repairs)} / ${col((r) => r.repairFailures ?? 0)} | ${col((r) => r.redundant.attempts)} / ${col((r) => r.redundant.checks)} / ${col((r) => r.redundant.releases)} | ${col((r) => r.checks)} | ${col((r) => r.releases)} | ${col((r) => r.seconds)} |`);
   }
   lines.push("", "In order 1:", "");
   for (const [s, runs] of Object.entries(bySys)) {
     const r = runs[0];
-    const notes = [...r.wrongAccepts.map((x) => `wrong accept: ${x}`), ...r.unsafeShipped.map((x) => `shipped, unsafe to roll back: ${x}`), ...r.held.map((x) => `held: ${x}`), ...r.peopleNeeded.map((x) => `person: ${x}`), ...r.reworks.filter((x) => /own fact failed/.test(x)).map((x) => `rework: ${x}`), ...(r.deferred ? [`waited for a prerequisite ${r.deferred} time${r.deferred === 1 ? "" : "s"}`] : [])];
+    const notes = [...r.wrongAccepts.map((x) => `wrong accept: ${x}`), ...r.unsafeShipped.map((x) => `shipped, unsafe to roll back: ${x}`), ...r.held.map((x) => `held: ${x}`), ...r.peopleNeeded.map((x) => `person: ${x}`), ...r.reworks.filter((x) => /own fact failed/.test(x)).map((x) => `rejected, resubmitted: ${x}`), ...(r.deferred ? [`waited for a prerequisite ${r.deferred} time${r.deferred === 1 ? "" : "s"}`] : [])];
     if (notes.length) lines.push(`- **${SYSTEMS[s].label}**: ${notes.join("; ")}`);
   }
   lines.push("");

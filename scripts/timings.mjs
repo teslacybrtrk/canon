@@ -107,6 +107,24 @@ function buildToVerdict(list, split) {
   } else out.push(line("all", rows.map((r) => r.d)));
   return out.join("\n");
 }
+// --project <name>: the total for one project's delivery instead (every Workflow instance whose repo is one of its
+// attempts or trains), priced the way the judge prices its own compute: each second a fully busy standard-4 container
+// (4 vCPU, 12 GiB, 20 GB disk) at list price. Durations are instance wall time, so waiting inside an instance counts.
+if (args.project) {
+  const PER_SECOND = 4 * 0.00002 + 12 * 0.0000025 + 20 * 0.00000007;
+  const repoOf = (i) => i.params?.source?.repoName ?? i.params?.repo ?? "";
+  const rows = [];
+  let total = 0;
+  for (const wf of ["canon-verify", "canon-mutate", "canon-refresh", "canon-train", "canon-promote"]) {
+    const list = (await instances(wf)).filter((i) => repoOf(i).startsWith(`${args.project}-`) && i.start && i.end);
+    const secs = list.reduce((a, i) => a + ms(i.start, i.end) / 1000, 0);
+    total += secs;
+    rows.push(`| ${wf.replace("canon-", "")} | ${list.length} | ${Math.round(secs)} | $${(secs * PER_SECOND).toFixed(3)} |`);
+  }
+  const out = [`| Workflow | Instances | Seconds | Cost at list price |`, "|---|---|---|---|", ...rows, `| **all** | | **${Math.round(total)}** | **$${(total * PER_SECOND).toFixed(3)}** |`].join("\n");
+  console.log(out);
+  process.exit(0);
+}
 const verifyList = await instances("canon-verify");
 const verify = summarize(verifyList);
 const split = args.split ? new Date(args.split).getTime() : null;
