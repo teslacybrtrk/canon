@@ -1,4 +1,5 @@
 import type { Review } from "./review";
+import type { DataChanges, Evidence } from "./evidence";
 // The Canon protocol: four moves, one referee per project.
 //
 //   1. read     GET  /p/:project/canon               -> CanonState
@@ -122,9 +123,14 @@ export interface ProbeStep {
   path: string; // relative to the preview origin; may use {{var}}
   body?: unknown; // JSON; string leaves may use {{var}} (a leaf that is only "{{var}}" keeps the value's type)
   repeat?: number; // send the request this many times (after one warm-up) to measure latency
+  // Send this many copies at the same moment (2-20), for facts about races: double-booking, overselling, duplicate
+  // submits. Each copy may use {{i}} (0, 1, 2...) to differ. With statusCounts, the answers must add up exactly.
+  concurrent?: number;
   expect?: {
     p95Ms?: number; // latency budget across the repeats
     status?: number | number[];
+    // For a concurrent step: how many copies must get each status, e.g. {"201": 1, "409": 4}: exactly one booking wins.
+    statusCounts?: Record<string, number>;
     // dot-path -> expected value. Paths support array indices and `.length`.
     // A value of {"$exists": true|false} asserts presence only.
     json?: Record<string, unknown>;
@@ -191,6 +197,9 @@ export interface Mutant {
 }
 export interface Mutation {
   status: "running" | "done" | "none";
+  // Why there are no mutants: nothing to break ("no-source", "no-mutants": not applicable) or the platform failed
+  // ("build-failed", "start-failed": unavailable, never a pass). See evidence.ts.
+  reason?: "no-source" | "no-mutants" | "build-failed" | "start-failed";
   startedAt?: number; // when the run began (at is when it finished)
   total: number; // mutants that built and were checked
   caught: number;
@@ -200,7 +209,7 @@ export interface Mutation {
 
 export interface CanonState {
   project: string;
-  canon: { attemptId: string; sha: string; seq: number; previewUrl: string | null } | null;
+  canon: { attemptId: string; sha: string; seq: number; previewUrl: string | null; acceptance?: boolean } | null; // acceptance: it has a record
   facts: Fact[]; // canon + proposed
   claims: Array<Claim & { sentence: string; verdict: Verdict | null; clashes: Clash[]; headsUp?: Clash[]; mutation?: Mutation | null; reviewer?: Review | null }>;
   policy: { autoAccept: AutoAccept; charter: Charter | null };
@@ -269,6 +278,9 @@ export interface Verdict {
   seed?: string;
   // Files this attempt changed that the charter routes to review (see Charter.review).
   review?: string[];
+  // Schema changes in the lines it adds: destructive ones (DROP, RENAME, deleted Durable Object classes) wait for the
+  // owner, since rolling a Worker back doesn't roll its data back. See evidence.ts.
+  data?: DataChanges;
   // Accepted, then held back at release (or rolled back): the canon reverted, and this says what broke where.
   heldBack?: string;
   // Added when the verdict is read (GET /attempts/:id/verdict), not stored with it:
@@ -279,6 +291,32 @@ export interface Verdict {
   // either is Ready, so they can talk it over (or one can change course) instead of finding out at accept time.
   headsUp?: Clash[];
   reviewer?: Review | null; // the advisory reviewer's grounded notes (a model that didn't write the change), never a verdict
+}
+
+/**
+ * The acceptance record: what exactly was authorized to become canon and be released, on what evidence, under which
+ * policy. Written once, when canon moves; the release Workflow deploys only the commit it names, and only while it is
+ * still the latest canon (a stale candidate is refused). GET /p/:project/canon/:seq/acceptance, and in the Git note.
+ */
+export interface Acceptance {
+  canonSeq: number;
+  sha: string; // the one commit authorized for release
+  attemptId: string; // the attempt (or merge train) that holds it
+  judgedOnCanon: number; // the canon its verdict was judged against: the one it lands on
+  facts: Array<{
+    id: string;
+    sentence: string;
+    check: string; // a version of the fact's check definition (policyVersion of its JSON)
+    madeTrueBy: { attemptId: string; sha: string; seed?: string; previewUrl?: string };
+    evidence: { mutation: Evidence; review: Evidence; data: Evidence };
+  }>;
+  verdict: { kept: number; skipped: number; seed?: string; previewUrl: string; judgedAt: number };
+  environment: string; // where the checks ran
+  authorizedBy: string; // "the owner", or the autopilot/charter reasons
+  exceptions: string[]; // required evidence that failed or was unavailable, which a person accepted anyway
+  policy: { autoAccept: string; charter: Charter; version: string };
+  recovery: { rollbackSafe: boolean; how: string };
+  at: number;
 }
 
 // Errors lose their class crossing the Durable Object RPC boundary, so the HTTP

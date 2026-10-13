@@ -341,6 +341,20 @@
             "expect": {
               "status": 201
             }
+          },
+          {
+            "method": "POST",
+            "path": "/api/reservations",
+            "body": {
+              "stallId": 2,
+              "date": "2026-10-31",
+              "name": "shopper-{{i}}"
+            },
+            "concurrent": 6,
+            "expect": {
+              "status": [201, 409],
+              "statusCounts": { "201": 1, "409": 5 }
+            }
           }
         ]
       }

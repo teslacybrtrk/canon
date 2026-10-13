@@ -151,3 +151,52 @@ assert.ok(progress("sample 2, step 1: x") > progress("step 3: y"));
 assert.equal(progress("build failed: x"), 0);
 console.log(`ok  clash rule                -> lacking the code fails where canon does; building it the other way gets further (${onShared.detail})`);
 for (const srv of [canonApp, lacking, shared]) srv.close();
+
+// A race: N bookings of the same stall leave at once. A check-then-insert with an await in between lets several
+// win; an atomic one lets exactly one. A sequential probe can't tell them apart; a concurrent step can.
+const booking = (atomic: boolean) => {
+  const taken = new Set<string>();
+  return createServer((req, res) => {
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", async () => {
+      const { stallId, date } = JSON.parse(raw || "{}");
+      const key = `${stallId}:${date}`;
+      if (atomic) {
+        if (taken.has(key)) return res.writeHead(409).end();
+        taken.add(key);
+        return res.writeHead(201).end();
+      }
+      const free = !taken.has(key);
+      await new Promise((r) => setTimeout(r, 20)); // e.g. an async storage read before the write
+      if (!free) return res.writeHead(409).end();
+      taken.add(key);
+      res.writeHead(201).end();
+    });
+  });
+};
+const race = {
+  kind: "probe" as const,
+  steps: [{ method: "POST" as const, path: "/api/reservations", body: { stallId: 1, date: "2026-11-07", name: "shopper-{{i}}" }, concurrent: 5, expect: { status: [201, 409], statusCounts: { "201": 1, "409": 4 } } }],
+};
+const sequential = {
+  kind: "probe" as const,
+  steps: [
+    { method: "POST" as const, path: "/api/reservations", body: { stallId: 1, date: "2026-11-07", name: "Ada" }, expect: { status: 201 } },
+    { method: "POST" as const, path: "/api/reservations", body: { stallId: 1, date: "2026-11-07", name: "Bo" }, expect: { status: 409 } },
+  ],
+};
+for (const [atomic, want] of [[true, true], [false, false]] as const) {
+  const srv = booking(atomic);
+  await new Promise<void>((r) => srv.listen(0, r));
+  const url = `http://127.0.0.1:${(srv.address() as { port: number }).port}`;
+  const seq = await runCheck(sequential, url);
+  srv.close();
+  const fresh = booking(atomic);
+  await new Promise<void>((r) => fresh.listen(0, r));
+  const raced = await runCheck(race, `http://127.0.0.1:${(fresh.address() as { port: number }).port}`);
+  fresh.close();
+  assert.equal(seq.held, true);
+  assert.equal(raced.held, want, raced.detail);
+  console.log(`ok  race, ${atomic ? "atomic booking" : "check-then-await-then-insert"} -> sequential probe holds; concurrent step ${want ? "holds" : `fails (${raced.detail})`}`);
+}

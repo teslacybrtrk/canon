@@ -187,6 +187,7 @@ rejected a correct change (platform failures are retried, never rejections).
 | What a person reviews | code | the model's summary | a pass or fail | changes to the facts, in plain sentences |
 | Conflicts | text | text, plus an opinion | none | behaviour: clashes flagged before an accept, settled on the combined code |
 | Memory | PR threads | not part of the method | not part of the method | the fact chain, in Git notes; every failed attempt stays clonable |
+| A check that didn't run | often skipped, and the merge goes ahead | no review, no opinion | not part of the method | `unavailable`, never a pass: autopilot waits, only a person accepts over it, and the acceptance record names it |
 | Release | whatever merged | whatever merged | whatever passed | every fact on a full release candidate, then (for Workers without Durable Objects) on the production URL at 0% traffic; a version that breaks a fact there never serves anyone, and one that breaks in production anyway is rolled back |
 
 ## How it works
@@ -229,6 +230,24 @@ accept ──▶ Referee DO ──freeze, move canon──▶ PromoteAttempt: re
 | `agents/` | Instructions, goals and claim files for twelve Claude Code agents, `run.sh` to start them (`GROK_AGENTS` puts some on Grok Build), and `autopilot.sh` for a backlog on autopilot |
 | `demo-app/` | Farmstand, the Workers app the agents change; its facts are in `demo-app/canon.json` |
 | `scripts/` | `setup.sh` (your own Canon), `genesis.sh` (first attempt or import), `check-local.ts` (facts against a local app), tests |
+
+## Evidence and authority
+
+Producing evidence, approving it and releasing code are separate steps, and each is checked by the next:
+
+- **Every required check has a state**: passed, failed, unavailable, not applicable, not required, pending. Autopilot
+  lands only on passes (and "nothing to check" that the judge established); a mutation run that couldn't build, a
+  review that errored or timed out, or a diff that couldn't be read is unavailable, and waits for the owner.
+- **Destructive data changes wait for a person.** Dropping or renaming a table or column, or a Durable Object class,
+  never lands on autopilot, and a release of one that breaks in production isn't rolled back automatically: an earlier
+  Worker version doesn't bring data back. Additive changes land as usual.
+- **An acceptance record per canon**: the exact commit, the canon it was judged on, each fact with its check version
+  and evidence, who or what authorized it, any exception a person accepted over, the charter that allowed it, and how a
+  failed release recovers. `GET /p/<project>/canon/<seq>/acceptance`, linked from the board, and in the Git note.
+- **The release consumes it**: the release Workflow deploys only the commit canon #seq authorized, and only while #seq
+  is still the latest canon; anything else is refused before it touches a Worker.
+- **Races are facts too**: a probe step can send several copies at once and say how the answers must add up (one
+  booking wins, the rest get 409), which a sequential check can't tell apart from a check-then-await-then-insert.
 
 ## Run it
 

@@ -18,6 +18,11 @@ building. If your verdict shows HEADS-UP, another agent's work in progress build
 opposite way from yours: change course now if you can, or say why in your claim. A Ready verdict may carry REVIEWER notes: advice from a model
 that didn't write your change, each quoting a line. Fix what's right; they never decide anything.
 
+Autopilot lands only on evidence that passed: a check the charter requires that didn't run (unavailable) waits for
+the owner, and so does a destructive schema change. Every canon has an acceptance record (the exact commit, its
+evidence, the policy that allowed it): GET /p/<project>/canon/<seq>/acceptance. A probe step with "concurrent": N and
+"expect": {"statusCounts": {"201": 1, "409": N-1}} checks a race.
+
 Never edit a fact's check to make it pass, and never edit canon.json yourself. To change a rule on purpose, claim a
 revision: a fact with "replaces": "<fact id>". Agents never accept their own facts.
 

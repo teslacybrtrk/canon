@@ -829,7 +829,7 @@
       : `${thisDeploy?.reverts ? `${HAT(20)}<b>judge</b><span class="msg">reverted canon #${thisDeploy.reverts}: it wasn’t released, and canon is what production runs</span>`
         : trainFacts.length > 1 ? `${icon("merged")}<b>merge train</b><span class="msg">made ${trainFacts.length} facts canon in one release: ${trainFacts.map((id) => `“${esc(sentenceOf2(id))}”`).join(", ")}</span>`
         : landed ? `${avatar(landed.agent)}<b>${esc(landed.agent)}</b><span class="msg">made “${esc(landed.sentence)}” canon</span>` : `${HAT(20)}<b>genesis</b><span class="msg">the seed facts from canon.json</span>`}
-         <span class="right"><span class="sha" title="${esc(c.attemptId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${MOCK ? "<span>demo</span>" : ""}</span>`;
+         <span class="right"><span class="sha" title="${esc(c.attemptId)}">${esc(c.sha.slice(0, 7))}</span><span>canon #${esc(c.seq)}</span>${landedAt ? `<span>${ago(landedAt)}</span>` : ""}${c.acceptance && !MOCK ? `<a href="/p/${esc(project)}/canon/${esc(c.seq)}/acceptance" target="_blank" rel="noopener" title="The acceptance record: the exact commit authorized, each fact’s evidence (mutation, review, data), the policy that allowed it, and how a failed release recovers">record</a>` : ""}${MOCK ? "<span>demo</span>" : ""}</span>`;
     $("cloneurl").value = c ? (MOCK ? cloneCmd(c.attemptId) : `git clone ${location.origin}/p/${project}.git`) : "";
 
     // Canon's probe facts run against production every hour and after each deploy.

@@ -17,6 +17,7 @@ export { VerifyAttempt, PromoteAttempt, RefreshAttempt, TrainAttempt, MutateAtte
 //   POST /p/:project/claims                   move 2: declare  (fork + token)        agent or owner key
 //        git push <remote> main               move 3: push     (plain Git)
 //   GET  /p/:project/attempts/:id/verdict       move 4: verdict
+//   GET  /p/:project/canon/:seq/acceptance      what canon #seq authorized, on what evidence, under which policy
 //   POST /p/:project/claims/:id/accept        review: a human accepts a fact          owner key
 //   POST /p/:project/claims/:id/decline       review: a human says no ({"reason"})    owner key
 //   GET  /p/:project/facts/:id/why            the fact chain
@@ -58,6 +59,10 @@ export default {
       if (route === "GET /canon") return json(await referee.read());
       if (route === "GET /previews") return json(await referee.previews());
       if (route === "GET /stats") return json(await referee.stats());
+      if ((match = route.match(/^GET \/canon\/(\d+)\/acceptance$/))) {
+        const record = await referee.acceptance(Number(match[1]));
+        return record ? json(record) : json({ error: "no acceptance record (genesis, a revert, or accepted before records existed)" }, 404);
+      }
       if (route === "POST /republish") return json(await referee.republish(), 202);
       if (route === "POST /reconcile") return json(await referee.reconcile());
       if (route === "POST /genesis") {

@@ -68,6 +68,7 @@ async function runStep(
 ): Promise<StepFailure | null> {
   const fail = (message: string, transient = false): StepFailure => ({ message, transient });
   if (step.repeat && step.repeat > 1) return runRepeated(step, origin, run, vars, fail, extra);
+  if (step.concurrent && step.concurrent > 1) return runConcurrent(step, origin, run, vars, fail, extra);
   const method = step.method ?? "GET";
   const url = new URL(fill(step.path, vars) as string, origin);
   let res: Response;
@@ -152,6 +153,50 @@ async function runRepeated(
   } catch (err) {
     return fail(`${method} ${url.pathname} failed: ${(err as Error).message}`, true);
   }
+}
+
+// A race: `concurrent` copies of the request leave at once (each may use {{i}}). Every answer must meet the status
+// expectation, and with statusCounts the answers must add up exactly (one 201, the rest 409). A server error is
+// transient, as anywhere; a count that comes out wrong is the code, and fails.
+async function runConcurrent(
+  step: ProbeStep,
+  origin: string,
+  run: string | null,
+  vars: Record<string, unknown>,
+  fail: (message: string, transient?: boolean) => StepFailure,
+  extra: Record<string, string>,
+): Promise<StepFailure | null> {
+  const method = step.method ?? "GET";
+  const n = step.concurrent ?? 1;
+  const statuses = step.expect?.status === undefined ? null : [step.expect.status].flat();
+  let answers: number[];
+  try {
+    answers = await Promise.all(
+      Array.from({ length: n }, async (_, i) => {
+        const each = { ...vars, i };
+        const res = await fetch(new URL(fill(step.path, each) as string, origin), {
+          method,
+          headers: { ...headersFor(run, step.body !== undefined), ...extra },
+          body: step.body === undefined ? undefined : JSON.stringify(fill(step.body, each)),
+          signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+        });
+        await res.arrayBuffer();
+        return res.status;
+      }),
+    );
+  } catch (err) {
+    return fail(`${n} concurrent ${method} ${step.path} failed: ${(err as Error).message}`, true);
+  }
+  const tally = answers.reduce<Record<string, number>>((t, s) => ((t[s] = (t[s] ?? 0) + 1), t), {});
+  const got = Object.entries(tally).map(([s, c]) => `${c}× ${s}`).join(", ");
+  if (answers.some((s) => s >= 500) && !statuses?.some((s) => s >= 500)) return fail(`${n} concurrent ${method} ${step.path} got ${got}`, true);
+  const off = statuses ? answers.find((s) => !statuses.includes(s)) : undefined;
+  if (off !== undefined) return fail(`${n} concurrent ${method} ${step.path} got ${got}, expected only ${statuses!.join(" or ")}`);
+  const want = step.expect?.statusCounts;
+  if (want && Object.entries({ ...tally, ...want }).some(([s]) => (tally[s] ?? 0) !== (want[s] ?? 0))) {
+    return fail(`${n} concurrent ${method} ${step.path} got ${got}, expected ${Object.entries(want).map(([s, c]) => `${c}× ${s}`).join(", ")}`);
+  }
+  return null;
 }
 
 function pick(value: unknown, path: string): unknown {

@@ -132,6 +132,10 @@ Attempts that still carry the old fact are behind and refresh. Without a revisio
 | `{"kind":"command","run":"…"}` | a shell command on the commit's checkout, in a clean CI container | lint, type-check, tests, coverage thresholds, bundle size, pinned config |
 
 - **Latency budget:** a probe step with `"repeat": 20` and `"expect": {"p95Ms": 400}` sends one warm-up request, then 20 timed ones.
+- **Races:** a probe step with `"concurrent": 6` sends six copies at the same moment (each may use `{{i}}`, 0 to 5, to
+  differ), and `"expect": {"statusCounts": {"201": 1, "409": 5}}` says how the answers must add up: exactly one booking
+  wins. A sequential "book twice, the second gets 409" passes a check-then-insert with an await in between; the race
+  doesn't (`scripts/test-probe.ts` shows both). The backlog's double-booking fact (`agents/canon.autopilot.json`) carries one.
 - **Scope:** `"scope": ["src/db/**", "migrations/**"]` judges a fact only on attempts that change a matching file. The judge diffs
   the attempt's Git tree against the commit it forked from (in Artifacts), skipping identical subtrees. `canon read --for <path>`
   lists the facts that govern a file.
@@ -262,7 +266,8 @@ starve the others and what people asked for comes first. A queued push whose att
 limit made the CI runner fail, ten let platform retries back the queue up, and six gave every push a real verdict in
 under four minutes (median 115 s); 4 and 8 were both slower, and 60 pushes at six took under 11 minutes for the last.
 A latency budget that fails under load is compared with canon's own preview at the same moment: if canon misses it
-too, the verdict is a platform error (retried), not a rejection.
+too, the verdict is a platform error (retried), not a rejection. Waiting never turns into permission: a push not
+admitted in about three and a half hours isn't verified at all; it gets a platform error, which the judge retries.
 
 **Speculative trains.** A train doesn't wait for the release in front of it. Claims that become Ready while a release
 runs board for 3 seconds, then leave as a train built on the canon being released (`speculative` in `trains`): it is
@@ -286,6 +291,29 @@ never a verdict: the facts decide, the reviewer only points. The owner can ask f
 direction only: a change it flags with a `risk` note waits for the owner instead of landing on autopilot (it can
 never land or reject anything itself).
 
+**Required evidence is required.** Each piece of evidence the charter asks for has an explicit state: `passed`,
+`failed`, `unavailable`, `not-applicable`, `not-required` or `pending` (`referee/src/evidence.ts`). The gates are
+non-compensatory: autopilot lands a claim only when every required piece passed, or the judge established there was
+nothing to check (`not-applicable`: the change touches no source file, or adds no line the mutator can break; never
+a failure assumed away). A check that didn't run is `unavailable`, not a pass: deliberate breaks that couldn't be
+built, a mutation run or review that timed out or errored, a review the charter requires with no model to ask, a
+command fact (deliberate breaks are judged by probe facts only), or a commit whose changed files couldn't be read
+while the charter has `review` paths. Autopilot then waits and says why; only the owner can accept over it, and the
+accept names the exception. Data is always required of autopilot: a change whose added lines drop or rename a table
+or column, or delete or rename a Durable Object class, waits for the owner, because rolling a Worker back doesn't bring
+its data back. Additive schema changes (`CREATE TABLE`, `ADD COLUMN`, a new class) land as usual: the earlier version
+ignores them, so rollback stays safe (expand first, contract by a person).
+
+**The acceptance record.** When canon moves, the judge writes what exactly was authorized, in the same write as the
+canon pointer: the commit, the canon its verdict was judged on, each fact it lands with a version of its check, the
+commit and seed that made it true, its evidence (mutation, review, data, each with its state and why), who or what
+authorized it (the owner, or the autopilot reasons), any exception a person accepted over, the policy that allowed
+it (the charter as stored, and a version of it), and how a failed release recovers. `GET
+/p/:project/canon/:seq/acceptance` returns it, the board links it, and the Git note on that canon commit carries it.
+The release Workflow consumes it: before touching anything it asks whether this exact commit is what canon #seq
+authorized and whether #seq is still the latest canon; a stale or unauthorized candidate is refused (nothing deploys,
+and canon goes back).
+
 In the release gate, a fact that fails at 0% counts against the new version only if the old version answers
 differently (both run with the same inputs).
 
@@ -297,7 +325,10 @@ attempt held back at release never lands as it is. Claims that forked from the r
 never ran, so they are behind: the judge re-applies their own change on the restored canon. While a release is in
 progress, accepts wait (one release at a time), and a fact held back twice when it went out alone doesn't land automatically
 again: the owner decides (a held-back train counts against none of its riders; it splits to find the culprit, and a
-release that failed without a fact breaking counts separately, four times before the owner decides). The judge checks this invariant on every alarm; `POST /p/:project/reconcile` (owner key) applies it now.
+release that failed without a fact breaking counts separately, four times before the owner decides). A release that
+breaks a fact in production is rolled back only when rollback is known to be safe: if its acceptance record says it
+changed stored data destructively (which only a person can accept), it stays up, marked broken, and the owner decides
+between a fix forward and a rollback with a data repair. The judge checks this invariant on every alarm; `POST /p/:project/reconcile` (owner key) applies it now.
 
 ## MCP
 

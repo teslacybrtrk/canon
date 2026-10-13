@@ -7,6 +7,9 @@ import { refereeForRepo } from "./stub";
 
 // Started by the cf.artifacts.repo.pushed trigger for every repo in the namespace.
 // Builds the pushed attempt as a Workers Preview, then hands it to the referee to judge.
+// 120 turns 15 seconds apart, then 180 a minute apart: about 3.5 hours, and 600 of a Workflow's steps at most.
+const ADMISSION_TURNS = 300;
+
 export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
     const { repo, sha, branch } = event.payload;
@@ -14,13 +17,19 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const referee = refereeForRepo(this.env, repo);
     const attemptId = await step.do("register push", () => referee.pushed(repo, sha));
     if (!attemptId) return;
-    // Admission: at most a few verifications per project build at once; this one waits its turn (up to ~30 minutes).
-    // A newer push of the same attempt makes this one pointless: it stops here.
-    for (let turn = 0; turn < 120; turn++) {
+    // Admission: at most a few verifications per project build at once; this one waits its turn. A newer push of the
+    // same attempt makes this one pointless: it stops here. Waiting never turns into permission: a commit that isn't
+    // admitted in about three and a half hours is not verified at all; it gets a platform error the judge retries.
+    let admitted = false;
+    for (let turn = 0; turn < ADMISSION_TURNS && !admitted; turn++) {
       const turnFor = await step.do(`slot ${turn}`, () => referee.admit(repo, sha));
       if (turnFor === "stale") return;
-      if (turnFor === "go") break;
-      await step.sleep(`queued ${turn}`, "15 seconds");
+      if (turnFor === "go") admitted = true;
+      else await step.sleep(`queued ${turn}`, turn < 120 ? "15 seconds" : "1 minute");
+    }
+    if (!admitted) {
+      await step.do("never admitted", () => referee.couldNotJudge(repo, sha, "it waited about three and a half hours for a verification slot and never got one, so nothing was built or checked"));
+      return;
     }
 
     // One Preview per pushed commit. Within a single Preview, Durable Objects always run the
@@ -108,6 +117,12 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const referee = refereeForRepo(this.env, repo);
     // A later accept already moved canon on: its own deploy wins, and this older one must not land after it.
     if ((await step.do("still the latest canon", () => referee.canonSeq())) > seq) return;
+    // The release deploys exactly the commit canon #seq's acceptance authorized, and only while #seq is still canon.
+    const refused = await step.do("authorized", () => referee.releaseRefusal(seq, event.payload.sha));
+    if (refused) {
+      if (!refused.includes("no longer the latest")) await step.do("refused", () => referee.releaseRefused(seq, refused));
+      return;
+    }
     let ok = true;
     let versionId: string | null = null;
     try {
@@ -285,11 +300,12 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const referee = refereeForRepo(this.env, repo);
     const files = await step.do("mutation job", async () => await referee.mutationJob(repo));
     if (!files) {
-      await step.do("no source changes", () => referee.mutantsBuilt(repo, sha, []));
+      await step.do("no source changes", () => referee.mutantsBuilt(repo, sha, [], "no-source"));
       return;
     }
     const prefix = `${repo}-mut`;
     let built: Array<{ file: string; line: number; op: string; before: string; after: string; preview: string | null }> = [];
+    let failed = false;
     try {
       const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
       const ran = await deps.runner({
@@ -302,10 +318,13 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       const out = typeof ran.logs.stdout === "string" ? ran.logs.stdout : "";
       const line = out.split("\n").find((l) => l.startsWith("CANON_MUTANTS "));
       built = line ? JSON.parse(line.slice("CANON_MUTANTS ".length)) : [];
+      if (!line) failed = true;
     } catch {
       built = [];
+      failed = true;
     }
-    await step.do("judge mutants", { timeout: "15 minutes" }, () => referee.mutantsBuilt(repo, sha, built));
+    // No mutants because the platform failed is not "nothing to break": the judge records it as unavailable evidence.
+    await step.do("judge mutants", { timeout: "15 minutes" }, () => referee.mutantsBuilt(repo, sha, built, built.length ? undefined : failed ? "build-failed" : "no-mutants"));
     try {
       await ci.runner({
         name: "delete mutant previews",

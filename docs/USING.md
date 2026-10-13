@@ -53,7 +53,8 @@ claims.
 Each check is one of two kinds:
 - **Probe:** HTTP requests against a live preview of each commit. `vars` draws random inputs from a seed the
   judge picks after each push, so an agent can't hard-code the answers; the verdict records the seed, so a run can be
-  replayed.
+  replayed. A step with `"concurrent": 6` and `"expect": {"statusCounts": {"201": 1, "409": 5}}` sends six copies
+  at once and checks how the answers add up, for facts about races (double-booking, overselling, duplicate submits).
 - **Command:** a shell command run on each commit's checkout in CI, such as a linter, a type-check or a test
   suite. Call tools directly, not package scripts, so an attempt can't redefine what judges it.
 
@@ -139,7 +140,10 @@ routes would move with it: remove them, and attach your domain to that Worker on
 - **For none,** use `"autoAccept": "charter"` with a `"charter"` (`locked` rules, clash `priority`, `review` paths that
   always wait for the owner, and an optional `mutation` minimum): a fact an agent proposes lands once a second agent
   makes it true independently. Add `"batch": true` to the policy for merge trains. See PROTOCOL.md, "No person in the
-  loop".
+  loop". Whatever the charter requires must actually pass: a check that couldn't run (a mutation run that
+  didn't build, a review that errored) waits for the owner, and so does any change that drops or renames stored data.
+  Each canon's acceptance record (`GET /p/<project>/canon/<seq>/acceptance`) says what was authorized, on what
+  evidence, under which charter.
 
 ## Limits today
 

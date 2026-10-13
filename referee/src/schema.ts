@@ -24,6 +24,7 @@ export const UPGRADES = [
   `ALTER TABLE trains ADD COLUMN base_seq INTEGER`,
   `ALTER TABLE trains ADD COLUMN speculative INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE trains ADD COLUMN half INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS acceptances (seq INTEGER PRIMARY KEY, sha TEXT NOT NULL, json TEXT NOT NULL)`,
   // A fact with no id was once accepted by declare; it can never be claimed, so drop it.
   `DELETE FROM facts WHERE id IS NULL`,
 ];
