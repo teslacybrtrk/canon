@@ -1,8 +1,8 @@
-# End to end, on deployed Canon
+# End to end, on deployed Canon: five scripted agent attempts
 
-Run by `scripts/e2e.mjs` on 2026-10-13 18:54 UTC against canon.rodeo, judge at revision `4c84499` (deployed as Worker version `a83d0b92`: `5081b94` plus the first-release fix the previous attempt at this run found), project [`convoy`](https://canon.rodeo/p/convoy/canon) (left up). **This is deployed execution**, not a simulation: the real judge (a Durable Object), Workflows and Containers for every verification and release, Artifacts forks, Workers Previews, the persistent release candidate, merge trains, the release fence, the rollback rehearsal and the gradual rollout on a live Worker. One run; no person clicked.
+Run by `scripts/e2e.mjs` on 2026-10-13 18:54 UTC against canon.rodeo, judge at revision `4c84499` (deployed as Worker version `a83d0b92`: `5081b94` plus the first-release fix the previous attempt at this run found), project [`convoy`](https://canon.rodeo/p/convoy/canon) (left up). **This is deployed, scripted execution**: not a simulation, and not autonomous agents. `scripts/e2e.mjs` applies predefined patches under five agent names (no AI agent wrote them); everything after the push is the real system: the real judge (a Durable Object), Workflows and Containers for every verification and release, Artifacts forks, Workers Previews, the persistent release candidate, merge trains, the release fence, the rollback rehearsal and the gradual rollout on a live Worker. One run; no person clicked.
 
-**Workload.** The stateless Worker from `demo-stateless`, with four backlog facts and policy `{"autoAccept":"backlog","batch":true,"canary":{"steps":[10,50],"holdSeconds":30}}`. Five attempts pushed within seconds of each other:
+**Workload.** The stateless Worker from `demo-stateless`, with four backlog facts and policy `{"autoAccept":"backlog","batch":true,"canary":{"steps":[10,50],"holdSeconds":30}}`. Five scripted agent attempts (predefined patches, one per agent name) pushed within seconds of each other:
 
 - agent-1 → “A quote links to its item's page” (`item-link`, declared `--after item-page`)
 - agent-2 → “A quote names the item” (`quote-has-name`)
@@ -29,7 +29,7 @@ Verification work: 10 pushes, 10 verdicts, 80 checks; median push to verdict 41 
 queueing, container starts, both releases' release candidates and rehearsals, and the second release's two 30-second
 canary holds.
 
-**Cost.** Every Workflow instance of this project, from Cloudflare's own records (`node scripts/timings.mjs --project
+**Cost: an estimate, not a bill.** Every Workflow instance of this project, from Cloudflare's own records (`node scripts/timings.mjs --project
 convoy`), priced the way the judge prices its compute (each second a fully busy standard-4 container at list price;
 instance wall time, so waiting inside an instance counts):
 
@@ -40,7 +40,7 @@ instance wall time, so waiting inside an instance counts):
 | refresh (re-applies) | 2 | 133 | $0.015 |
 | train (merge trains) | 2 | 29 | $0.003 |
 | promote (releases) | 2 | 520 | $0.058 |
-| **all measured delivery stages** | **24** | **1,582** | **$0.18** |
+| **all measured delivery stages** | **24** | **1,582** | **about $0.18 (list-price estimate)** |
 
 Not included: the judge's own Worker and Durable Object requests, Artifacts and R2 storage, and the Workers Preview
 deploys themselves (billed as Workers requests, not container time). The judge's own `computeUsdEstimate` in
@@ -54,7 +54,7 @@ Acceptance records: [canon #3](https://canon.rodeo/p/convoy/canon/3/acceptance),
 **Reading it.** Each mechanism shows up in the timeline. The duplicate: both quote attempts were Ready, one rode the first merge
 train, and the other was superseded at 240 s without being integrated or released. The prerequisite: agent-1's
 attempt was unproven on its own fork (the item pages weren't there yet), was re-applied by the judge onto the canon
-that had them, became Ready and rode the second train, with no agent rework. The overlapping change: the discount
+that had them, became Ready and rode the second train, with no resubmission (nothing an agent had to redo). The overlapping change: the discount
 edits the same function as the named quote, so it didn't ride the first train; the judge re-applied it on the new
 canon and it rode the second. The second train was built and checked while the first was still releasing
 (speculative), and landed the moment that release shipped. The first release deployed directly (the project's

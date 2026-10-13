@@ -99,7 +99,9 @@ raw results in [benchmark/](benchmark/).
    release safeguards' doing, and the ablations show which: each mechanism switched off lets its own failure through.
 2. **Delivery is not traded for efficiency: met.** In every order of every workload Canon delivered at least as many
    features safely as the safeguarded queue (needless rejects 0).
-3. **Coordination saves work where it applies: met.** On the coordination workload, against the safeguarded queue,
+3. **Coordination saves work where it applies: met, against this baseline.** The modelled queues have no duplicate
+   supersession and no dependency-aware scheduling; an advanced queue could implement both, and this doesn't show it
+   couldn't. On the coordination workload, against the safeguarded queue,
    with the same 4 features delivered in every order: 133 checks against 160–173 (20% fewer), 4 releases against 5,
    1.7 repair calls against 3, and no rejection, where the queue tested the dependent change before its prerequisite,
    rejected it and had it resubmitted. Canon's own verification of the duplicate (its command fact and probes, 5
@@ -111,7 +113,7 @@ raw results in [benchmark/](benchmark/).
    know two changes build the same thing) and Canon supersedes them; the safeguarded queue also needed a person 2.5
    times per run, for text conflicts the repair model couldn't resolve on those duplicates. A team that closes
    duplicate pull requests by hand would narrow this gap; that's people's time, which isn't measured.
-5. **Time only from controlled runs:** **met, by a small margin, against the safeguarded queue; not met against the plain queue.** In the sequential run (one benchmark process, nothing else on the machine; the coordination workload, 3 orders × 2 repeats, 6 runs per system; raw results in [benchmark/coordination-timing.json](benchmark/coordination-timing.json)), Canon took 83–130 s (mean 102), the safeguarded queue 137–291 s (mean 188) and the plain queue 122–226 s (mean 160). Canon's slowest run is faster than the safeguarded queue's fastest, which is the bar set in advance, but only by 7 s. Against the plain queue the ranges overlap, so there is no reliable time difference (and the plain queue has none of the release safeguards). No repair call failed for Canon or the safeguarded queue; one failed for the plain queue in one run, which then landed 3 features instead of 4. These are local, small workloads: read the times as relative, not as deployed latency.
+5. **Time only from controlled runs:** **met, by a small margin, against the safeguarded queue; not met against the plain queue.** In the sequential run (one benchmark process, nothing else on the machine; the coordination workload, 3 orders × 2 repeats, 6 runs per system; raw results in [benchmark/coordination-timing.json](benchmark/coordination-timing.json)), Canon took 83–130 s (mean 102), the safeguarded queue 137–291 s (mean 188) and the plain queue 122–226 s (mean 160). Canon's slowest run is faster than the safeguarded queue's fastest, which is the bar set in advance, but only by 7 s: an observed advantage in six runs per system, not a guarantee. Against the plain queue the ranges overlap, so there is no reliable time difference (and the plain queue has none of the release safeguards). No repair call failed for Canon or the safeguarded queue; one failed for the plain queue in one run, which then landed 3 features instead of 4. These are local, small workloads: read the times as relative, not as deployed latency.
 
 **Execution conditions.** The data workload was re-run alone (one process) after a harness fix: the first, parallel
 run counted a request refused by a just-restarted local server as a lost basket. The stateless, integration and

@@ -58,9 +58,12 @@ change yourself, then 40 the Canon way.
 
 ## Evidence map
 
-**Submission revision: [`79ddce9`](https://github.com/teslacybrtrk/canon/tree/79ddce9)** (tag `submission`). Every
-claim in this README, with where to check it. **Recorded** links are real records from canon.rodeo (projects
-left up for inspection); **simulated** results come from a local harness; **unit-tested** behaviour is in `npm test`.
+**Submission revision: SUBMISSION_PIN** (tag `submission`). Every claim in this README, with where to check it.
+Three kinds of execution are kept apart: **autonomous agents** (the Oct 12 run: Claude Code agents writing their own
+changes), **deployed scripted execution** (the real system on canon.rodeo driven by predefined patches under
+agent names: the convoy run and most live tests; the ones with a real Claude Code session say so), and the **browser simulation** (the demo). **Recorded** links are real
+records from canon.rodeo (projects left up for inspection); **simulated** benchmark results come from a local harness;
+**unit-tested** behaviour is in `npm test`.
 
 | Claim | Evidence | Reproduce |
 |---|---|---|
@@ -70,8 +73,8 @@ left up for inspection); **simulated** results come from a local harness; **unit
 | A change that passes its preview but breaks on existing data never reaches production | recorded: [rehearse #7](https://canon.rodeo/p/rehearse/canon/7/acceptance) (data migration the previous version can't read); simulated: [docs/benchmark.md](docs/benchmark.md), data workload | `node scripts/benchmark.mjs --workloads data` |
 | Rollback compatibility is compared on the exact state each version wrote, and missing evidence holds the release | recorded: [rehearse #13](https://canon.rodeo/p/rehearse/canon/13/acceptance) (two facts with no read-back: unavailable, held), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) (an owner released over it; `recovery.override` names it) | `node scripts/test-probe.ts`, `node scripts/test-evidence.ts` |
 | A flaky release is taken back out at 10% | recorded: [canary #3](https://canon.rodeo/p/canary/canon/3/acceptance) | `node scripts/benchmark.mjs --workloads stateless` |
-| One writer of production, behind a lease (republishes included) | unit-tested: `scripts/test-release.ts`; the `fence:` step every release takes before each Worker-changing step ([docs/timings.md](docs/timings.md)) | `node scripts/test-release.ts` |
-| Duplicates are superseded, prerequisites wait, merge trains release once | deployed run: [docs/e2e.md](docs/e2e.md), records [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance) and [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance); simulated: [docs/benchmark.md](docs/benchmark.md), coordination workload | `node scripts/e2e.mjs`, `node scripts/benchmark.mjs --workloads coordination` |
+| One writer of production, behind a lease (republishes included); production writes never overtake each other | method-level tests of the real write, fence and gate methods with hand-answered requests (`scripts/test-judge-writes.ts`: overlapping writes, both answer orders, an unknown outcome, a judge restart; it fails on the judge before `b013736`); `scripts/test-release.ts`; the `fence:` step every release takes ([docs/timings.md](docs/timings.md)). Unknown outcomes are held for a two-minute quarantine: a bounded-risk policy, not proof of settlement | `npm test` |
+| Duplicates are superseded, prerequisites wait, merge trains release once | deployed scripted run (five scripted agent attempts): [docs/e2e.md](docs/e2e.md), records [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance) and [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance); simulated: [docs/benchmark.md](docs/benchmark.md), coordination workload | `node scripts/e2e.mjs`, `node scripts/benchmark.mjs --workloads coordination` |
 | Where the time goes, and what was changed because of it | [docs/timings.md](docs/timings.md), from Cloudflare's own Workflows records | `node scripts/timings.mjs` |
 | Held-out checks stay private | recorded: `rehearse` (the board shows the sentence, never the check); the API redacts details | |
 
@@ -83,13 +86,14 @@ version (Cloudflare Worker version) that produced it and the commit it was deplo
 | Record | Judge version | Commit |
 |---|---|---|
 | [rehearse #13](https://canon.rodeo/p/rehearse/canon/13/acceptance) (held: no read-back), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) (owner override) | `22e54713`, deployed Oct 13 18:02 UTC | `b9f3a2c` |
-| [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance), [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance) (the deployed run, [docs/e2e.md](docs/e2e.md)) | `a83d0b92`, Oct 13 18:41 UTC | `4c84499` |
-| everything after Oct 13 20:19 UTC | `118c6f12` | `79de603` |
+| [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance), [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance) (the deployed scripted run, [docs/e2e.md](docs/e2e.md)) | `a83d0b92`, Oct 13 18:41 UTC | `4c84499` |
+| Oct 13 20:19–23:07 UTC | `118c6f12` | `79de603` |
+| everything after Oct 13 23:07 UTC (per-write ordering of production writes) | `8dcb7761` | `b013736` |
 | earlier records (Oct 12–13: farmstand, rodeo, evid #2–3, rehearse #2–12, canary) | earlier versions | before `b9f3a2c` |
 
 Two rules changed after the convoy run, so a stateless release judged today would differ: a zero-comparison
 rehearsal now also needs the owner's `"state": "none"` declaration (convoy's records say "no storage bindings" alone),
-and the production-write barrier now covers direct deploys.
+and production writes are now ordered per write (judge writes serialized, each settled only by its own answer), covering direct deploys too. No earlier record exercised that code.
 
 ## How Cloudflare is used
 
@@ -353,12 +357,15 @@ across releases, with users. It is a **simulation** of the pipelines on local Wo
 
 **Safety is parity, not an advantage:** the queue with the same release safeguards had no wrong accepts either. The
 plain queue's failures are what the release safeguards prevent, whoever runs them; switching one off in Canon lets
-exactly its own failure through. **Canon's own edge is work:** it supersedes a claim whose fact is already canon
-instead of integrating and releasing it again, and holds a claim until the facts it builds on are in instead of
-testing and rejecting it. On the coordination workload that's 20% fewer checks, fewer releases and repairs, and no
-rejection, for the same features; on integration, where every feature is built twice, 38% fewer checks than the
-safeguarded queue. Elapsed time is compared only from a sequential run: there Canon's slowest of six runs (130 s) was faster than the safeguarded queue's fastest (137 s), a narrow margin; against the plain queue there was no reliable difference. Small workloads written by Canon's author, merge trains not modelled for either
-system, and people's time not measured.
+exactly its own failure through. **Canon's own edge, in this benchmark, is work:** the modelled queues have no
+duplicate supersession and no dependency-aware scheduling (an advanced queue could add both; this doesn't show
+otherwise), so they integrate and release a duplicate again and test a dependent change before its prerequisite.
+Against the safeguarded queue on the coordination workload that's about 20% fewer checks, fewer releases and repairs,
+and no rejection, for the same features; on the integration workload, where every feature is built twice, 38% fewer
+checks. Time was compared only in a sequential run: in six runs per system Canon's slowest (130 s) finished before the
+safeguarded queue's fastest (137 s), an observed advantage with 7 s between the ranges, not a general guarantee;
+against the plain queue there was no reliable difference. Small workloads written by Canon's author, merge trains not
+modelled for either system, people's time not measured, and no claim about other systems.
 
 ## How it works
 
