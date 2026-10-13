@@ -2,7 +2,7 @@
 // A transient 5xx is retried with a fresh run; a real failure is reported on the first try.
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
-import { progress, readOnlyCheck, runCheck, templateNames } from "../referee/src/probe.ts";
+import { compareFixtures, fixtureContract, progress, readFixture, runCheck, templateNames, writeFixture } from "../referee/src/probe.ts";
 
 let hits = 0;
 let failFirst = 0;
@@ -248,11 +248,90 @@ const replayed = await runCheck(profileFact, oldUrl, "fixture", { "x-canon-run":
 assert.equal(replayed.held, true, "replaying the whole probe rewrites the profile in the old format, and passes");
 profiles.clear();
 await runCheck(profileFact, newUrl, "fixture", { "x-canon-run": "reh" });
-const readOnly = readOnlyCheck(profileFact)!;
-assert.deepEqual(readOnly.steps.map((s) => s.method ?? "GET"), ["GET"]);
-const read = await runCheck(readOnly, oldUrl, "fixture", { "x-canon-run": "reh" });
+const readOnly = fixtureContract(profileFact);
+assert.equal(readOnly.kind, "read");
+const readCheck = (readOnly as { check: typeof profileFact }).check;
+assert.deepEqual(readCheck.steps.map((st) => (st as { method?: string }).method ?? "GET"), ["GET"]);
+const fx = await writeFixture(profileFact, newUrl, "fixture", { "x-canon-run": "reh" });
+const read = await readFixture(readCheck, oldUrl, fx, { "x-canon-run": "reh" });
 assert.equal(read.held, false, read.detail);
 assert.equal(JSON.parse(profiles.get("reh")!).v, 2, "the fixture is still the new version's, after the read and its retries");
-assert.equal(readOnlyCheck({ kind: "probe", steps: [{ method: "POST", path: "/x", save: { id: "id" }, expect: { status: 201 } }, { path: "/x/{{id}}", expect: { status: 200 } }] }), null);
 newApp.close(); oldApp.close();
 console.log(`ok  read-only rehearsal       -> the old version can't read the new profile (${read.detail}); replaying the POST would have hidden it`);
+
+// The fixture contract with generated ids: POST a profile, save the id the server made up, GET /profiles/{{id}}. The read
+// needs the id the writer saved, so the fixture carries it; the old code reads its own control, then the new fixture.
+{
+  const store = new Map<string, string>(); // run:id -> stored JSON
+  let next = 0, writes = 0;
+  const app = (version: "old" | "new" | "new-compatible") => createServer((req, res) => {
+    const run = String(req.headers["x-canon-run"] ?? "public");
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", () => {
+      if (req.method === "POST") {
+        writes++;
+        const { name } = JSON.parse(raw || "{}");
+        const id = `p${++next}`;
+        store.set(`${run}:${id}`, JSON.stringify(version === "new" ? { v: 2, display: { name } } : { name, ...(version === "new-compatible" ? { v: 2 } : {}) }));
+        return res.writeHead(201, { "content-type": "application/json" }).end(JSON.stringify({ id }));
+      }
+      const m = req.url!.match(/^\/profiles\/(\w+)$/);
+      const stored = m ? store.get(`${run}:${m[1]}`) : undefined;
+      if (!stored) return res.writeHead(404).end("no such profile");
+      const p = JSON.parse(stored);
+      const name = version === "new" ? p.display?.name ?? p.name : p.name;
+      if (!name) return res.writeHead(500).end("unreadable profile");
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ name }));
+    });
+  });
+  const fact = { kind: "probe" as const, vars: { who: { oneOf: ["Ada", "Bo", "Cy"] } }, steps: [
+    { method: "POST" as const, path: "/profiles", body: { name: "{{who}}" }, save: { id: "id" }, expect: { status: 201 } },
+    { path: "/profiles/{{id}}", expect: { status: 200, json: { name: "{{who}}" } } },
+  ] };
+  const contract = fixtureContract(fact);
+  assert.equal(contract.kind, "read", "a read that needs a saved id is supported: the fixture carries the id");
+  const rd = (contract as { check: typeof fact }).check;
+  const servers = { old: app("old"), new: app("new"), ok: app("new-compatible") };
+  const url = { old: await serveOn(servers.old), new: await serveOn(servers.new), ok: await serveOn(servers.ok) };
+  const write = async (on: string, run: string) => ({ own: await writeFixture(fact, on, "seed-1", { "x-canon-run": `${run}:f` }), shared: await writeFixture(fact, on, "seed-1", { "x-canon-run": run }) });
+  const runs = { reh: "reh-9", ctl: "ctl-9", id: "f" };
+
+  // Incompatible: the old code reads its own old-format control but not the new-format fixture.
+  let mine = await write(url.new, "reh-9");
+  let theirs = await write(url.old, "ctl-9");
+  assert.ok(mine.own.ok && typeof mine.own.vars.id === "string", "the fixture keeps the generated id");
+  const before = new Map(store);
+  writes = 0;
+  const bad = await compareFixtures(url.old, rd, runs, mine, theirs);
+  assert.equal(bad.kind, "incompatible", bad.detail);
+  assert.equal(writes, 0, "comparing (and re-reading) never writes");
+  assert.deepEqual(new Map(store), before, "the fixtures are exactly as written, after the reads and the retry");
+  console.log(`ok  create, save id, read     -> a genuine comparison: the old version reads its own profile, not the new one (${bad.detail})`);
+
+  // Compatible: the same comparison passes, and still writes nothing.
+  store.clear();
+  mine = await write(url.ok, "reh-9");
+  theirs = await write(url.old, "ctl-9");
+  const good = await compareFixtures(url.old, rd, runs, mine, theirs);
+  assert.equal(good.kind, "compared", good.detail);
+  console.log("ok  compatible fixtures       -> compared, and the reads leave both fixtures unchanged");
+
+  // A control the old code can't read back is inconclusive, never a successful comparison.
+  store.clear();
+  mine = await write(url.ok, "reh-9");
+  theirs = await write(url.old, "ctl-9");
+  for (const k of [...store.keys()]) if (k.startsWith("ctl-9")) store.delete(k);
+  const lost = await compareFixtures(url.old, rd, runs, mine, theirs);
+  assert.equal(lost.kind, "inconclusive", lost.detail);
+  const unwritten = await compareFixtures(url.old, rd, runs, { own: { ok: false, vars: {}, detail: "step 1: 500" }, shared: { ok: false, vars: {}, detail: "" } }, theirs);
+  assert.equal(unwritten.kind, "inconclusive");
+  console.log(`ok  failed control read       -> inconclusive (${lost.detail})`);
+  for (const srv of Object.values(servers)) srv.close();
+
+  assert.equal(fixtureContract({ kind: "probe", steps: [{ method: "POST", path: "/book", expect: { status: 201 } }] }).kind, "unsupported");
+  assert.equal(fixtureContract({ kind: "probe", steps: [{ method: "POST", path: "/book", expect: { status: 400 } }] }).kind, "not-applicable");
+  assert.equal(fixtureContract({ kind: "probe", fixture: "none", steps: [{ method: "POST", path: "/book", expect: { status: 201 } }] }).kind, "not-applicable");
+  assert.equal(fixtureContract({ kind: "probe", steps: [{ method: "POST", path: "/b", concurrent: 4, expect: { status: [201, 409], statusCounts: { "201": 1, "409": 3 } } }] }).kind, "unsupported");
+  console.log("ok  fixture contract          -> a write with no read is unsupported; refused writes or a declared \"fixture\": \"none\" leave nothing to read");
+}

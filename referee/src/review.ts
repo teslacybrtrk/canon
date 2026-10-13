@@ -34,6 +34,7 @@ export interface ReviewCoverage {
   files: number; // source files the change touches
   reviewed: number; // shown to the reviewer whole or around every change
   compact: string[]; // shown around each change, not whole
+  omitted?: string[]; // changed files the review couldn't show (too large even around each change): coverage is incomplete
   passes: number; // model calls (files per pass x specialists)
   specialists: Specialist[];
 }
@@ -43,6 +44,7 @@ export interface Review {
   model: string;
   notes: ReviewNote[];
   dropped: number; // notes the model wrote that quoted nothing in the file
+  unresolved?: UnresolvedNote[]; // risk or intent findings among them: unconfirmed, and so not a clean review
   detail?: string;
   at: number;
   coverage?: ReviewCoverage; // what the review actually covered: a "done" review covered every changed source file
@@ -117,36 +119,39 @@ export function reviewPrompt(
   ];
 }
 
+/** The most lines (old × new, after common lines at both ends are set aside) the line diff will compare. */
+export const DIFF_MAX_CELLS = 4_000_000;
+
 /**
  * The change as hunks: lines added (numbered in the new file) and lines removed (numbered in the old file, with where
- * in the new file they were). A line diff when the file is small enough, else counted lines, placed proportionally.
+ * in the new file they were). Order matters: a line moved (a validation taken from before a write to after it) is a
+ * removal and an addition, never "nothing changed". Lines the two versions share at the start and the end are set
+ * aside first, so a localized change in a large file is diffed exactly; when the changed region itself is too large to
+ * diff, `complete` is false and the file can't be represented (its review is unavailable, never a pass).
  * A change that only deletes (a guard taken out) has removed lines and no added ones; both are part of the change.
  */
-export function changedLines(base: string, head: string): { added: Array<{ n: number; text: string }>; removed: Array<{ n: number; text: string; at: number }> } {
+export function changedLines(base: string, head: string): { added: Array<{ n: number; text: string }>; removed: Array<{ n: number; text: string; at: number }>; complete: boolean } {
   const a = base.split("\n");
   const b = head.split("\n");
   const added: Array<{ n: number; text: string }> = [];
   const removed: Array<{ n: number; text: string; at: number }> = [];
-  if (a.length * b.length <= 4_000_000) {
-    const dp = Array.from({ length: a.length + 1 }, () => new Int32Array(b.length + 1));
-    for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    let i = 0, j = 0;
-    while (i < a.length && j < b.length) {
-      if (a[i] === b[j]) (i++, j++);
-      else if (dp[i + 1][j] >= dp[i][j + 1]) removed.push({ n: i + 1, text: a[i++], at: j + 1 });
-      else added.push({ n: j + 1, text: b[j++] });
-    }
-    while (i < a.length) removed.push({ n: i + 1, text: a[i++], at: b.length });
-    while (j < b.length) added.push({ n: j + 1, text: b[j++] });
-  } else {
-    const count = (xs: string[]) => xs.reduce((m, l) => m.set(l, (m.get(l) ?? 0) + 1), new Map<string, number>());
-    const inA = count(a), inB = count(b);
-    const left = new Map(inA);
-    b.forEach((text, i) => { const k = left.get(text) ?? 0; if (k > 0) left.set(text, k - 1); else added.push({ n: i + 1, text }); });
-    const right = new Map(inB);
-    a.forEach((text, i) => { const k = right.get(text) ?? 0; if (k > 0) right.set(text, k - 1); else removed.push({ n: i + 1, text, at: Math.max(1, Math.round(((i + 1) * b.length) / a.length)) }); });
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let endA = a.length, endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) (endA--, endB--);
+  const m = endA - start, n = endB - start;
+  if (m * n > DIFF_MAX_CELLS) return { added: [], removed: [], complete: false };
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+  for (let i = m - 1; i >= 0; i--) for (let j = n - 1; j >= 0; j--) dp[i][j] = a[start + i] === b[start + j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  let i = 0, j = 0;
+  while (i < m && j < n) {
+    if (a[start + i] === b[start + j]) (i++, j++);
+    else if (dp[i + 1][j] >= dp[i][j + 1]) (removed.push({ n: start + i + 1, text: a[start + i], at: start + j + 1 }), i++);
+    else (added.push({ n: start + j + 1, text: b[start + j] }), j++);
   }
-  return { added: added.filter((x) => x.text.trim()), removed: removed.filter((x) => x.text.trim()) };
+  while (i < m) (removed.push({ n: start + i + 1, text: a[start + i], at: Math.min(b.length, start + j + 1) }), i++);
+  while (j < n) (added.push({ n: start + j + 1, text: b[start + j] }), j++);
+  return { added: added.filter((x) => x.text.trim()), removed: removed.filter((x) => x.text.trim()), complete: true };
 }
 
 /**
@@ -154,8 +159,9 @@ export function changedLines(base: string, head: string): { added: Array<{ n: nu
  * whole file won't fit the budget, the same lists with 20 lines of context around each change, added or removed
  * ("compact"). A deletion-only change is shown too: what was taken out, and where.
  */
-export function fileBlock(f: ReviewFile, budget: number): { text: string; compact: boolean } {
-  const { added, removed } = changedLines(f.base, f.head);
+export function fileBlock(f: ReviewFile, budget: number): { text: string; compact: boolean; represented: boolean } {
+  const { added, removed, complete } = changedLines(f.base, f.head);
+  if (!complete) return { text: `FILE ${f.path}\n(the changed region is too large to diff line by line)`, compact: true, represented: false };
   const lines = f.head.split("\n");
   const head = [
     `FILE ${f.path}`,
@@ -163,7 +169,7 @@ export function fileBlock(f: ReviewFile, budget: number): { text: string; compac
     ...(removed.length ? [`REMOVED LINES (old line number: text, then where it was in the new file):\n${removed.map((r) => `${r.n}: ${r.text}   [was before new line ${r.at}]`).join("\n")}`] : []),
   ].join("\n");
   const whole = `${head}\nNEW FILE:\n${lines.map((l, i) => `${String(i + 1).padStart(4)}| ${l}`).join("\n")}`;
-  if (whole.length <= budget) return { text: whole, compact: false };
+  if (whole.length <= budget) return { text: whole, compact: false, represented: true };
   const keep = new Set<number>();
   for (const n of [...added.map((a) => a.n), ...removed.map((r) => r.at)]) for (let i = Math.max(1, n - 20); i <= Math.min(lines.length, n + 20); i++) keep.add(i);
   const shown: string[] = [];
@@ -173,12 +179,13 @@ export function fileBlock(f: ReviewFile, budget: number): { text: string; compac
     shown.push(`${String(i).padStart(4)}| ${lines[i - 1]}`);
     prev = i;
   }
-  return { text: `${head}\nNEW FILE (around each change; the rest is unchanged):\n${shown.join("\n")}`, compact: true };
+  return { text: `${head}\nNEW FILE (around each change; the rest is unchanged):\n${shown.join("\n")}`, compact: true, represented: true };
 }
 
 /**
  * The review passes a change needs so that every changed file is shown whole or around every change, never cut off:
- * files are packed into passes that each fit the budget. A file too big even in compact form can't be reviewed.
+ * files are packed into passes that each fit the budget. A file too big even in compact form, or whose change can't be
+ * diffed, can't be reviewed: it is listed in tooBig, and the review's coverage says it was left out.
  */
 export function reviewBatches(files: ReviewFile[], budget = 14_000): { batches: ReviewFile[][]; compact: string[]; tooBig: string[] } {
   const batches: ReviewFile[][] = [];
@@ -188,7 +195,7 @@ export function reviewBatches(files: ReviewFile[], budget = 14_000): { batches: 
   let used = 0;
   for (const f of files) {
     const b = fileBlock(f, budget);
-    if (b.text.length > budget) {
+    if (!b.represented || b.text.length > budget) {
       tooBig.push(f.path);
       continue;
     }
@@ -225,40 +232,46 @@ export function parseAnswer(answer: unknown): unknown {
   }
 }
 
+/** A finding that could govern acceptance (a risk or an intent note) but quoted nothing in the change: not confirmed, not resolved either. */
+export interface UnresolvedNote {
+  file: string;
+  quote: string;
+  kind: "risk" | "intent";
+  note: string;
+  by?: Specialist;
+}
+
 /**
- * Keep only notes whose quote is really in that file (nearest match to the line the model gave); count the rest, and
- * say whether a dropped note was a risk. At most three notes are kept, risks first, so a risk is never cut for room.
+ * Keep only notes whose quote is really in that file (nearest match to the line the model gave); count the rest. A risk
+ * or intent finding that can't be tied to the code isn't a confirmed violation, but it isn't a clean review either: it
+ * comes back as unresolved, so required review evidence can't pass over it. Every grounded risk and intent finding is
+ * kept; only "untested" notes are trimmed to make room.
  */
-export function ground(raw: unknown, files: ReviewFile[]): { notes: ReviewNote[]; dropped: number; droppedRisk: boolean } {
+export function ground(raw: unknown, files: ReviewFile[]): { notes: ReviewNote[]; dropped: number; droppedRisk: boolean; unresolved: UnresolvedNote[] } {
   const list = Array.isArray((raw as { notes?: unknown })?.notes) ? ((raw as { notes: unknown[] }).notes as Array<Partial<ReviewNote>>) : [];
   const notes: ReviewNote[] = [];
+  const unresolved: UnresolvedNote[] = [];
   let dropped = 0;
-  let droppedRisk = false;
   for (const n of list.slice(0, 12)) {
     const file = files.find((f) => f.path === n.file);
     const quote = squash(String(n.quote ?? ""));
     const kind = n.kind === "risk" || n.kind === "untested" || n.kind === "intent" ? n.kind : null;
-    if (!file || quote.length < 6 || !kind || !n.note) {
+    const hits = file && quote.length >= 6 ? file.head.split("\n").flatMap((l, i) => (squash(l).includes(quote) ? [i + 1] : [])) : [];
+    if (!kind || !n.note || !hits.length) {
       dropped++;
-      droppedRisk ||= n.kind === "risk";
+      if ((kind === "risk" || kind === "intent") && n.note) unresolved.push({ file: String(n.file ?? ""), quote: quote.slice(0, 160), kind, note: String(n.note).slice(0, 400) });
       continue;
     }
-    const lines = file.head.split("\n");
-    const hits = lines.flatMap((l, i) => (squash(l).includes(quote) ? [i + 1] : []));
-    if (!hits.length) {
-      dropped++;
-      droppedRisk ||= kind === "risk";
-      continue;
-    }
+    const lines = file!.head.split("\n");
     const want = Number(n.line) || hits[0];
     const line = hits.reduce((a, b) => (Math.abs(b - want) < Math.abs(a - want) ? b : a));
-    notes.push({ file: file.path, line, quote: squash(lines[line - 1]).slice(0, 160), kind, note: String(n.note).slice(0, 400) });
+    notes.push({ file: file!.path, line, quote: squash(lines[line - 1]).slice(0, 160), kind, note: String(n.note).slice(0, 400) });
   }
   // Risks and intent findings can govern acceptance (reviewRisk, intentRisk), so none is ever dropped for room; only
   // "untested" notes are trimmed, to keep at most three notes beside them.
   const governing = notes.filter((n) => n.kind === "risk" || n.kind === "intent");
   const ranked = [...notes.filter((n) => n.kind === "risk"), ...notes.filter((n) => n.kind === "intent"), ...notes.filter((n) => n.kind === "untested").slice(0, Math.max(0, 3 - governing.length))];
-  return { notes: ranked, dropped, droppedRisk };
+  return { notes: ranked, dropped, droppedRisk: unresolved.some((u) => u.kind === "risk"), unresolved };
 }
 
 /** The notes across passes: every risk and intent finding (they can decide acceptance), then up to five untested. */
@@ -268,10 +281,11 @@ export function rankNotes(notes: ReviewNote[]): ReviewNote[] {
 
 /**
  * What a model's answer amounts to. Only a complete answer in the notes format is a review: an empty list of notes is
- * a finding ("nothing to flag"); an answer that was cut off, isn't the format, or names a risk it can't quote from the
- * code is not, and the review is an error (unavailable evidence), never a silent pass.
+ * a finding ("nothing to flag"); an answer that was cut off or isn't the format is not, and the review is an error
+ * (unavailable evidence), never a silent pass. A risk or intent finding it can't quote from the code comes back as
+ * unresolved (see ground), which required review evidence treats as unavailable, not as a clean review.
  */
-export function judgeAnswer(answer: unknown, finishReason: string | undefined, files: ReviewFile[]): { ok: true; notes: ReviewNote[]; dropped: number } | { ok: false; detail: string } {
+export function judgeAnswer(answer: unknown, finishReason: string | undefined, files: ReviewFile[]): { ok: true; notes: ReviewNote[]; dropped: number; unresolved: UnresolvedNote[] } | { ok: false; detail: string } {
   const said = (typeof answer === "string" ? answer : JSON.stringify(answer ?? null)).slice(0, 200);
   if (finishReason === "length") return { ok: false, detail: `the answer was cut off before it finished: ${said}` };
   const parsed = parseAnswer(answer);
@@ -284,7 +298,6 @@ export function judgeAnswer(answer: unknown, finishReason: string | undefined, f
   });
   if (bad >= 0) return { ok: false, detail: `note ${bad + 1} isn't a whole note (file, line, quote, kind, note): ${JSON.stringify(entries[bad]).slice(0, 120)}` };
   if (entries.length > 12) return { ok: false, detail: `the answer has ${entries.length} notes, more than the 3 asked for` };
-  const { notes, dropped, droppedRisk } = ground(parsed, files);
-  if (droppedRisk && !notes.some((n) => n.kind === "risk")) return { ok: false, detail: "the reviewer named a risk but quoted no line that is in the code" };
-  return { ok: true, notes, dropped };
+  const { notes, dropped, unresolved } = ground(parsed, files);
+  return { ok: true, notes, dropped, unresolved };
 }

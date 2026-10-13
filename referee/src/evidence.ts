@@ -47,11 +47,13 @@ export function reviewEvidence(required: boolean | undefined, hasModel: boolean,
   }
   if (r.status === "error") return { state: "unavailable", detail: `the review failed: ${(r.detail ?? "no detail").slice(0, 120)}` };
   if (r.status === "none") return { state: "not-applicable", detail: r.detail ?? "no source files changed" };
-  if (r.coverage && r.coverage.reviewed < r.coverage.files) return { state: "unavailable", detail: `the review covered ${r.coverage.reviewed} of ${r.coverage.files} changed source files` };
+  if (r.coverage && r.coverage.reviewed < r.coverage.files) return { state: "unavailable", detail: `the review covered ${r.coverage.reviewed} of ${r.coverage.files} changed source files${r.coverage.omitted?.length ? ` (${r.coverage.omitted.join(", ")} changed too much to show, even around each change)` : ""}` };
   const risk = r.notes.find((n) => n.kind === "risk") ?? (intentCounts ? r.notes.find((n) => n.kind === "intent") : undefined);
-  return risk
-    ? { state: "failed", detail: `the reviewer flagged ${risk.kind === "intent" ? "something its fact doesn't ask for" : "a risk"} at ${risk.file}:${risk.line} (${risk.note.slice(0, 120)})` }
-    : { state: "passed", detail: `the reviewer (${r.model.split("/").pop()}) named no risk${r.notes.length ? ` (${r.notes.length} other note${r.notes.length > 1 ? "s" : ""})` : ""}` };
+  if (risk) return { state: "failed", detail: `the reviewer flagged ${risk.kind === "intent" ? "something its fact doesn't ask for" : "a risk"} at ${risk.file}:${risk.line} (${risk.note.slice(0, 120)})` };
+  // A finding the reviewer couldn't tie to a line of the change is unconfirmed, not resolved: the review isn't clean.
+  const open = (r.unresolved ?? []).find((u) => u.kind === "risk" || (intentCounts && u.kind === "intent"));
+  if (open) return { state: "unavailable", detail: `the reviewer named ${open.kind === "intent" ? "something the change does that its fact doesn't ask for" : "a risk"} but quoted nothing that is in the change (${open.note.slice(0, 120)}); unconfirmed isn't clean` };
+  return { state: "passed", detail: `the reviewer (${r.model.split("/").pop()}) named no risk${r.notes.length ? ` (${r.notes.length} other note${r.notes.length > 1 ? "s" : ""})` : ""}` };
 }
 
 /** What a required piece of evidence means for autopilot: land, wait for it, or leave it to the owner. */
@@ -136,6 +138,58 @@ export interface Recovery {
   // When a release that touched stored data didn't ship: the release candidate rebuilt from production's code, so its
   // data never keeps a shape production didn't have.
   candidateReset?: { ok: boolean; detail: string; at: number };
+  // What the rehearsal compared, fact by fact (see compatibilityVerdict).
+  coverage?: CompatibilityCoverage;
+  // A release that went out although its rollback wasn't shown safe, on a person's authority: who, and over what.
+  override?: string;
+}
+
+// ---- Rollback compatibility: what the rehearsal compared, and what that establishes ----------------------------------
+//
+// Each stateful fact that was canon before the release is one comparison: its fixture written by this release's code,
+// then read (GET steps only) by the previous code, beside a control fixture the previous code wrote itself. A fact is
+// compared (old code reads both), incompatible (it reads its own but not the new one), inconclusive (a fixture couldn't
+// be written, or old code can't read even its own), unsupported (it writes state and has no read step), or not
+// applicable (it leaves no state). Missing evidence is never a pass: unsupported or inconclusive is unavailable, and so
+// is a rehearsal that compared nothing, unless the app demonstrably keeps no data (no storage bindings in its config).
+
+export interface CompatibilityCoverage {
+  compared: string[];
+  incompatible: Array<{ id: string; detail: string }>;
+  inconclusive: Array<{ id: string; why: string }>;
+  unsupported: Array<{ id: string; why: string }>;
+  notApplicable: Array<{ id: string; why: string }>;
+  storage: string; // what the app's config says about stored data ("bindings: durable_objects", "no storage bindings", "unknown: ...")
+}
+
+export function compatibilityVerdict(c: CompatibilityCoverage, stateless: boolean): { state: "passed" | "failed" | "unavailable"; detail: string } {
+  const counts = `${c.compared.length} compared, ${c.incompatible.length} incompatible, ${c.inconclusive.length} inconclusive, ${c.unsupported.length} unsupported, ${c.notApplicable.length} not applicable`;
+  if (c.incompatible.length) {
+    const x = c.incompatible[0];
+    return { state: "failed", detail: `the previous version can't read what this release wrote for “${x.id}” (it reads what it wrote itself): ${x.detail} [${counts}]` };
+  }
+  if (c.unsupported.length) {
+    const x = c.unsupported[0];
+    return { state: "unavailable", detail: `rollback compatibility couldn't be compared for “${x.id}”: ${x.why}. Add a GET step that reads back what it writes, or declare "fixture": "none" if it leaves nothing to read [${counts}]` };
+  }
+  if (c.inconclusive.length) {
+    const x = c.inconclusive[0];
+    return { state: "unavailable", detail: `rollback compatibility was inconclusive for “${x.id}”: ${x.why} [${counts}]` };
+  }
+  if (!c.compared.length) {
+    return stateless
+      ? { state: "passed", detail: `nothing to compare, and none needed: the app keeps no stored data (${c.storage}) [${counts}]` }
+      : { state: "unavailable", detail: `no fact read back what this release wrote, so compatibility with stored data is unknown (${c.storage}); a stateful fact with a GET step would establish it [${counts}]` };
+  }
+  return { state: "passed", detail: `the previous version read back what this release wrote in every comparison [${counts}]` };
+}
+
+/** Storage bindings in a Wrangler config (JSON, JSONC or TOML text). null config: unknown, which is never "stateless". */
+export function storageBindings(config: string | null): { known: boolean; bindings: string[] } {
+  if (config === null) return { known: false, bindings: [] };
+  const kinds = ["durable_objects", "d1_databases", "kv_namespaces", "r2_buckets", "hyperdrive", "vectorize", "queues", "workflows"];
+  const text = config.replace(/^\s*(\/\/|#).*$/gm, "");
+  return { known: true, bindings: kinds.filter((k) => new RegExp(`(^|[^\\w])${k}([^\\w]|$)`, "m").test(text)) };
 }
 
 /** How a release of this change recovers, given what the judge found (undefined: it couldn't look at all). */

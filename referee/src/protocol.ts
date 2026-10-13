@@ -118,6 +118,9 @@ export interface ProbeCheck {
   // false: send the requests exactly as a visitor would, without the x-canon-run header, so the app
   // cannot tell the referee from real traffic. Only for facts that need no state of their own.
   isolate?: boolean;
+  // The rollback rehearsal reads back what a fact wrote with its GET steps (see PROTOCOL.md, fixture contract). "none":
+  // its owner declares the fact leaves no state a later read depends on, so there is nothing to compare across versions.
+  fixture?: "none";
 }
 
 export type VarSpec = { int: [number, number] } | { oneOf: unknown[] };

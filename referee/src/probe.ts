@@ -51,12 +51,7 @@ async function runSamples(check: ProbeCheck, origin: string, seed: string, extra
 async function runOnce(check: ProbeCheck, origin: string, inputs: Record<string, unknown>, extra: Record<string, string>): Promise<StepFailure | null> {
   // An isolated run gets state of its own through the x-canon-run header; a visitor run sends no Canon header.
   const run = check.isolate === false ? null : crypto.randomUUID();
-  const vars: Record<string, unknown> = { ...inputs };
-  for (const [i, step] of check.steps.entries()) {
-    const failure = await runStep(step, origin, run, vars, extra);
-    if (failure) return { ...failure, message: `step ${i + 1}: ${failure.message}` };
-  }
-  return null;
+  return runSteps(check.steps, origin, run, { ...inputs }, extra);
 }
 
 async function runStep(
@@ -266,18 +261,113 @@ function evaluate(expr: string, vars: Record<string, unknown>): unknown {
   return sum;
 }
 
-/** The input names a check's templates use ("{{qa * a.cents}}" uses qa and a), so a check can be validated. */
 /**
- * A probe's read-only half, for reading back a fixture without touching it: its GET steps with expectations, one
- * sample. Null when no read stands on its own (no GET step, or one that needs a value an earlier write saved).
+ * A fixture: the state one full run of a fact's probe wrote under a run identity, and everything a later read needs to
+ * find exactly that state again (its drawn inputs and every value a step saved, such as a generated id).
  */
-export function readOnlyCheck(c: ProbeCheck): ProbeCheck | null {
-  const saved = new Set(c.steps.filter((st) => (st.method ?? "GET") !== "GET").flatMap((st) => Object.keys(st.save ?? {})));
-  const reads = c.steps.filter((st) => (st.method ?? "GET") === "GET" && st.expect && !st.repeat && !st.concurrent);
-  if (!reads.length || reads.some((st) => templateNames([st.path, st.expect]).some((n) => saved.has(n)))) return null;
-  return { ...c, samples: 1, steps: reads };
+export interface Fixture {
+  ok: boolean;
+  vars: Record<string, unknown>;
+  detail: string;
 }
 
+/**
+ * How a fact's state is read back across versions (the rollback rehearsal's fixture contract):
+ * - "read": its GET steps, run on top of a fixture's values, never writing.
+ * - "not-applicable": it leaves no state to read back, either because every write it makes is expected to be refused
+ *   (a 4xx), or because its owner declared it (`"fixture": "none"`).
+ * - "unsupported": it writes state but has no plain GET step to read that state with; compatibility can't be compared,
+ *   and a rehearsal that needs it is unavailable, never a pass.
+ */
+export type FixtureContract =
+  | { kind: "read"; check: ProbeCheck }
+  | { kind: "not-applicable"; why: string }
+  | { kind: "unsupported"; why: string };
+
+export function fixtureContract(c: ProbeCheck): FixtureContract {
+  if (c.fixture === "none") return { kind: "not-applicable", why: "its owner declared that it leaves no state a later read depends on" };
+  const isRead = (st: ProbeStep) => (st.method ?? "GET") === "GET" && !st.repeat && !st.concurrent && (!!st.expect || !!st.save);
+  const reads = c.steps.filter(isRead);
+  if (reads.length) return { kind: "read", check: { ...c, samples: 1, steps: reads } };
+  const writes = c.steps.filter((st) => (st.method ?? "GET") !== "GET");
+  const refused = (st: ProbeStep) => {
+    const want = st.expect?.status === undefined ? [] : [st.expect.status].flat();
+    return want.length > 0 && want.every((s) => s >= 400 && s < 500) && !st.expect?.statusCounts;
+  };
+  if (writes.length && writes.every(refused)) return { kind: "not-applicable", why: "every write it makes is expected to be refused, so it leaves no state to read back" };
+  return { kind: "unsupported", why: writes.length ? "it writes state but has no GET step that reads it back" : "it has no GET step with an expectation to read with" };
+}
+
+/**
+ * Writes a fixture: the fact's whole probe, once, with one draw of its inputs from `seed`, under the run identity in
+ * `extra` (x-canon-run). Returns what a read needs later: the inputs and every saved value.
+ */
+export async function writeFixture(check: ProbeCheck, origin: string, seed: string, extra: Record<string, string>): Promise<Fixture> {
+  for (let retry = 0; ; retry++) {
+    const vars: Record<string, unknown> = draw(check.vars, random(seed));
+    const failure = await runSteps(check.steps, origin, check.isolate === false ? null : crypto.randomUUID(), vars, extra);
+    if (!failure) return { ok: true, vars, detail: "ok" };
+    if (!failure.transient || retry >= TRANSIENT_RETRIES) return { ok: false, vars, detail: failure.message };
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+  }
+}
+
+/**
+ * Reads a fixture back: the contract's GET steps on top of the fixture's values (the same inputs, the ids it saved).
+ * Nothing here writes, so a retry (a transient failure only) reads the same fixture again.
+ */
+export async function readFixture(read: ProbeCheck, origin: string, fixture: Fixture, extra: Record<string, string>): Promise<CheckResult> {
+  const started = Date.now();
+  if (read.steps.some((st) => (st.method ?? "GET") !== "GET")) return { held: false, detail: "a fixture read may only GET", ms: 0 };
+  for (let retry = 0; ; retry++) {
+    const failure = await runSteps(read.steps, origin, null, { ...fixture.vars }, extra);
+    if (!failure) return { held: true, detail: "ok", ms: Date.now() - started };
+    if (!failure.transient || retry >= TRANSIENT_RETRIES) return { held: false, detail: failure.message, ms: Date.now() - started };
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+  }
+}
+
+/**
+ * One fact's comparison across versions, run on the previous version: its own-identity fixtures (exactly the state each
+ * version wrote: `<reh>:<id>` by the new code, `<ctl>:<id>` by the old), plus the shared identity's (`<reh>`, `<ctl>`)
+ * when both versions wrote that one too. The old code must read its own control first, or the comparison says nothing
+ * (inconclusive, never a pass); then it must read what the new code wrote. A failed read of the new fixture is read once
+ * more (reads only, so it is the same fixture) before it counts as incompatible.
+ */
+export async function compareFixtures(
+  origin: string,
+  read: ProbeCheck,
+  runs: { reh: string; ctl: string; id: string },
+  mine?: { own: Fixture; shared: Fixture },
+  theirs?: { own: Fixture; shared: Fixture },
+): Promise<{ kind: "compared" | "incompatible" | "inconclusive"; detail: string }> {
+  if (!mine?.own.ok) return { kind: "inconclusive", detail: `this release's code couldn't write its fixture (${mine?.own.detail ?? "it never ran"})` };
+  if (!theirs?.own.ok) return { kind: "inconclusive", detail: `the previous code couldn't write its own control fixture (${theirs?.own.detail ?? "it never ran"})` };
+  const pairs: Array<["own" | "shared", Fixture, Fixture]> = [["own", mine.own, theirs.own]];
+  if (mine.shared.ok && theirs.shared.ok) pairs.push(["shared", mine.shared, theirs.shared]);
+  const identity = (run: string, label: "own" | "shared") => (label === "own" ? `${run}:${runs.id}` : run);
+  for (const [label, onNew, onOld] of pairs) {
+    const ctl = await readFixture(read, origin, onOld, { "x-canon-run": identity(runs.ctl, label) });
+    if (!ctl.held) {
+      if (label === "own") return { kind: "inconclusive", detail: `the previous version can't read back even what it wrote itself (${ctl.detail})` };
+      continue; // the shared identity is extra evidence; its control failing leaves the own-identity comparison standing
+    }
+    let got = await readFixture(read, origin, onNew, { "x-canon-run": identity(runs.reh, label) });
+    if (!got.held) got = await readFixture(read, origin, onNew, { "x-canon-run": identity(runs.reh, label) });
+    if (!got.held) return { kind: "incompatible", detail: got.detail };
+  }
+  return { kind: "compared", detail: "ok" };
+}
+
+async function runSteps(steps: ProbeStep[], origin: string, run: string | null, vars: Record<string, unknown>, extra: Record<string, string>): Promise<StepFailure | null> {
+  for (const [i, step] of steps.entries()) {
+    const failure = await runStep(step, origin, run, vars, extra);
+    if (failure) return { ...failure, message: `step ${i + 1}: ${failure.message}` };
+  }
+  return null;
+}
+
+/** The input names a check's templates use ("{{qa * a.cents}}" uses qa and a), so a check can be validated. */
 export function templateNames(value: unknown): string[] {
   if (typeof value === "string") {
     return [...value.matchAll(/\{\{([^{}]+)\}\}/g)].flatMap(([, expr]) =>

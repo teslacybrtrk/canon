@@ -1,6 +1,7 @@
 // The reviewer's pure parts: which lines a change added, and that only notes quoting real code survive.
 import assert from "node:assert/strict";
-import { addedLines, changedLines, fileBlock, ground, judgeAnswer, parseAnswer, rankNotes, reviewBatches, reviewPrompt, specialistsFor } from "../referee/src/review.ts";
+import { reviewEvidence } from "../referee/src/evidence.ts";
+import { addedLines, changedLines, DIFF_MAX_CELLS, fileBlock, ground, judgeAnswer, parseAnswer, rankNotes, reviewBatches, reviewPrompt, specialistsFor } from "../referee/src/review.ts";
 
 const ok = (name: string) => console.log(`ok   ${name}`);
 const base = "a\nb\nreturn x;\n";
@@ -28,7 +29,7 @@ assert.equal(g.dropped, 3); // the invented quote, the wrong file and the bad ki
 ok("a note survives only if its quote is in the file, at the nearest matching line");
 
 assert.equal(g.droppedRisk, true);
-assert.deepEqual(ground("not json", files), { notes: [], dropped: 0, droppedRisk: false });
+assert.deepEqual(ground("not json", files), { notes: [], dropped: 0, droppedRisk: false, unresolved: [] });
 ok("a malformed answer yields no notes");
 
 const p = reviewPrompt("A stall cannot be double-booked", ["The market page lists every stall"], ["removed the guard in src/index.ts:2"], files);
@@ -43,7 +44,7 @@ assert.equal(parseAnswer("no json here"), null);
 ok("answers parse from an object, a JSON string, or JSON inside prose");
 
 // Only a complete answer in the notes format is a review; anything else is an error, never "no risk".
-assert.deepEqual(judgeAnswer('{"notes": []}', "stop", files), { ok: true, notes: [], dropped: 0 });
+assert.deepEqual(judgeAnswer('{"notes": []}', "stop", files), { ok: true, notes: [], dropped: 0, unresolved: [] });
 ok("an empty list of notes is a finding: nothing to flag");
 for (const [answer, finish, why] of [
   ["", "stop", "an empty answer"],
@@ -58,8 +59,10 @@ for (const [answer, finish, why] of [
 }
 ok("empty, prose-only, wrong-shape, cut-off or missing answers are errors (unavailable), not passes");
 const invented = judgeAnswer({ notes: [{ file: "src/index.ts", line: 2, quote: "db.delete(everything)", kind: "risk", note: "made up" }] }, "stop", files);
-assert.equal(invented.ok, false);
-ok("a risk the model can't quote from the code makes the review unusable, not clean");
+assert.ok(invented.ok && invented.unresolved.length === 1 && invented.unresolved[0].kind === "risk");
+const reviewOf = (j: typeof invented, notes = j.ok ? j.notes : []) => ({ status: "done" as const, model: "m/kimi", notes, dropped: 0, unresolved: j.ok ? j.unresolved : [], at: 0, coverage: { files: 1, reviewed: 1, compact: [], passes: 1, specialists: ["general" as const] } });
+assert.equal(reviewEvidence(true, true, reviewOf(invented), 0).state, "unavailable");
+ok("a risk the model can't quote from the code is unresolved: required review evidence is unavailable, not clean");
 const many = ground({ notes: [1, 2, 3].map(() => ({ file: "src/index.ts", line: 4, quote: "return x;", kind: "untested", note: "n" })).concat([{ file: "src/index.ts", line: 2, quote: "if (!x) return 400;", kind: "risk", note: "r" }]) }, files);
 assert.equal(many.notes.length, 3);
 assert.equal(many.notes[0].kind, "risk");
@@ -127,3 +130,61 @@ const across = [...[1, 2, 3].map((i) => note("general", "untested", i)), ...[4, 
 const kept = rankNotes(across);
 assert.ok(kept.some((n) => n.kind === "intent" && n.by === "security"));
 ok("across passes, the security pass's intent finding is kept ahead of six untested notes (the display cap never drops it)");
+
+// Unresolved intent: a well-formed intent finding that quotes code that isn't in the change. Not a confirmed violation,
+// but not a clean review: with intentRisk on, the evidence is unavailable (the owner decides), never passed.
+{
+  const answer = { notes: [
+    { file: "src/index.ts", line: 3, quote: "sendMarketingEmail(user)", kind: "intent", note: "it also emails every user, which the fact doesn't ask for" },
+    { file: "src/index.ts", line: 2, quote: "if (!x) return 400;", kind: "untested", note: "no fact checks the 400" },
+  ] };
+  const j = judgeAnswer(answer, "stop", files);
+  assert.ok(j.ok);
+  assert.equal(j.ok && j.unresolved[0]?.kind, "intent");
+  const r = reviewOf(j);
+  assert.equal(reviewEvidence(true, true, r, 0, true).state, "unavailable");
+  ok("an ungrounded intent finding can't produce passed intent evidence (and a valid untested note doesn't hide it)");
+  assert.equal(reviewEvidence(true, true, r, 0, false).state, "passed");
+  assert.equal(reviewEvidence(false, true, r, 0, true).state, "not-required");
+  ok("where policy doesn't count intent (or doesn't require review), the review stays advisory");
+  const clean = judgeAnswer('{"notes": []}', "stop", files);
+  assert.equal(reviewEvidence(true, true, reviewOf(clean), 0, true).state, "passed");
+  ok("a genuinely empty, valid review still passes");
+}
+
+// Order-sensitive diffs in large files: validation moved from before a storage write to after it, in a 4,002-line
+// file. Same lines, same counts: a multiset diff saw nothing; the review must show the move.
+{
+  const filler = (from: number, n: number) => Array.from({ length: n }, (_, i) => `  const v${from + i} = ${from + i};`);
+  const before = [...filler(0, 2000), "  if (!valid(input)) return new Response(\"bad\", { status: 400 });", "  await this.ctx.storage.put(key, input);", ...filler(2000, 2000)];
+  const after = [...filler(0, 2000), "  await this.ctx.storage.put(key, input);", "  if (!valid(input)) return new Response(\"bad\", { status: 400 });", ...filler(2000, 2000)];
+  assert.equal(before.length, 4002);
+  const moved = changedLines(before.join("\n"), after.join("\n"));
+  assert.ok(moved.complete);
+  assert.equal(moved.added.length + moved.removed.length, 2, JSON.stringify(moved));
+  const block = fileBlock({ path: "src/store.ts", base: before.join("\n"), head: after.join("\n") }, 14_000);
+  assert.ok(block.represented && block.compact);
+  assert.match(block.text, /ADDED OR CHANGED LINES:\n\d+: .*(valid|storage)/);
+  assert.match(block.text, /REMOVED LINES[\s\S]*(valid|storage)/);
+  assert.match(block.text, /storage\.put[\s\S]*valid\(input\)/, "the new file around the change shows the write before the validation");
+  ok("a 4,002-line file with validation moved after the write: the review shows the move (a removal and an addition)");
+
+  // Repeated identical lines: the same "}" and "return;" lines everywhere, and one guard moved among them.
+  const rep = (guardAt: number) => Array.from({ length: 3000 }, (_, i) => (i === guardAt ? "  if (!user) return deny();" : i % 2 ? "  }" : "  return;")).join("\n");
+  const r2 = changedLines(rep(1200), rep(1210));
+  assert.ok(r2.complete && r2.added.some((a) => a.text.includes("deny")) && r2.removed.some((x) => x.text.includes("deny")));
+  ok("repeated identical lines don't hide a guard moved among them");
+
+  // Excessive change: the changed region is too large to diff, so the file isn't represented; coverage says so.
+  const side = Math.ceil(Math.sqrt(DIFF_MAX_CELLS)) + 10;
+  const x = Array.from({ length: side }, (_, i) => `a${i}`).join("\n"), y = Array.from({ length: side }, (_, i) => `b${i}`).join("\n");
+  assert.equal(changedLines(x, y).complete, false);
+  const over = reviewBatches([{ path: "src/rewrite.ts", base: x, head: y }, ...small.slice(0, 1)]);
+  assert.deepEqual(over.tooBig, ["src/rewrite.ts"]);
+  assert.deepEqual(over.batches.flat().map((f) => f.path), ["src/a.ts"]);
+  const partial = { status: "done" as const, model: "m/kimi", notes: [], dropped: 0, at: 0, coverage: { files: 2, reviewed: 1, compact: [], omitted: over.tooBig, passes: 1, specialists: ["general" as const] } };
+  const pe = reviewEvidence(true, true, partial, 0);
+  assert.equal(pe.state, "unavailable");
+  assert.match(pe.detail, /1 of 2 .*src\/rewrite\.ts/);
+  ok("too much change to represent: that file is left out and named, the rest still reviewed, and the evidence is unavailable");
+}

@@ -91,3 +91,31 @@ assert.equal(policyVersion('{"a":1}'), policyVersion('{"a":1}'));
 assert.notEqual(policyVersion('{"a":1}'), policyVersion('{"a":2}'));
 assert.match(policyVersion(""), /^[0-9a-f]{8}$/);
 ok("a policy version names the exact charter");
+
+// Rollback compatibility: what the rehearsal compared decides what it establishes; missing evidence is never a pass.
+{
+  const { compatibilityVerdict, storageBindings } = await import("../referee/src/evidence.ts");
+  const cov = (over: Partial<Parameters<typeof compatibilityVerdict>[0]>) => ({ compared: [], incompatible: [], inconclusive: [], unsupported: [], notApplicable: [], storage: "storage bindings: durable_objects", ...over });
+  assert.equal(compatibilityVerdict(cov({ compared: ["a"], incompatible: [{ id: "profile", detail: "GET /profiles/p1 returned 500" }] }), false).state, "failed");
+  ok("old code that reads its own control but not the new fixture: the rehearsal fails, so autopilot holds the release");
+  const unsupported = compatibilityVerdict(cov({ compared: ["a"], unsupported: [{ id: "booking", why: "it writes state but has no GET step that reads it back" }] }), false);
+  assert.equal(unsupported.state, "unavailable");
+  assert.match(unsupported.detail, /Add a GET step/);
+  ok("a required comparison that can't be made is unavailable, and says what evidence would establish it");
+  assert.equal(compatibilityVerdict(cov({ compared: ["a"], inconclusive: [{ id: "b", why: "the previous version can't read back even what it wrote itself" }] }), false).state, "unavailable");
+  ok("a failed control read is inconclusive, never counted as compatibility");
+  assert.equal(compatibilityVerdict(cov({ notApplicable: [{ id: "refused", why: "every write is refused" }] }), false).state, "unavailable");
+  assert.equal(compatibilityVerdict(cov({ storage: "unknown: no Wrangler config found" }), false).state, "unavailable");
+  ok("zero comparisons on an app that keeps data (or might) is unavailable, not a pass");
+  const stateless = compatibilityVerdict(cov({ storage: "no storage bindings" }), true);
+  assert.equal(stateless.state, "passed");
+  assert.match(stateless.detail, /keeps no stored data/);
+  ok("an app whose config has no storage bindings needs no stateful comparison: established from its config, not assumed");
+  assert.equal(compatibilityVerdict(cov({ compared: ["a", "b"], notApplicable: [{ id: "c", why: "x" }] }), false).state, "passed");
+  ok("compatible fixtures pass, with the coverage counted");
+  assert.deepEqual(storageBindings('{\n  // a stateless Worker\n  "name": "x"\n}').bindings, []);
+  assert.deepEqual(storageBindings('{ "durable_objects": { "bindings": [] } }').bindings, ["durable_objects"]);
+  assert.deepEqual(storageBindings('[[d1_databases]]\nbinding = "DB"').bindings, ["d1_databases"]);
+  assert.equal(storageBindings(null).known, false);
+  ok("storage bindings are read from the Wrangler config (JSON, JSONC or TOML); no config is unknown, never stateless");
+}

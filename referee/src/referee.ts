@@ -3,7 +3,7 @@ import type { CiParams, CloudflareArtifacts } from "@cloudflare/ci";
 import type { Env } from "./env";
 import type { Novelty } from "./commands";
 import { compareLedger } from "./ledger";
-import { progress, readOnlyCheck, runCheck, templateNames } from "./probe";
+import { compareFixtures, fixtureContract, progress, runCheck, templateNames, writeFixture, type Fixture } from "./probe";
 import {
   ProtocolError,
   errorStatus,
@@ -33,11 +33,11 @@ import { edgeFailure, platformFailure } from "./platform";
 import { addedText, callsInto, changedSymbols } from "./symbols";
 import { fileFromAnswer, parseConflicts, repairPrompt, validResolution } from "./repair";
 import { SCHEMA, UPGRADES } from "./schema";
-import { holdsLease, leaseDecision, RELEASE_LEASE_MS, type Lease } from "./release";
+import { deploymentOwner, holdsLease, leaseDecision, RELEASE_LEASE_MS, RELEASE_START_MS, type Lease } from "./release";
 import { ACCOUNT_SLOTS } from "./slots";
 import { canaryVerdict, versionTraffic } from "./telemetry";
-import { dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence, type DataChanges, type Evidence } from "./evidence";
-import { changedLines, judgeAnswer, rankNotes, REVIEW_SCHEMA, reviewBatches, reviewPrompt, specialistsFor, type Review, type ReviewFile, type ReviewNote, type Specialist } from "./review";
+import { compatibilityVerdict, dataChanges, dataEvidence, dataFiles, gate, mutationEvidence, policyVersion, recoveryFor, reviewEvidence, storageBindings, type CompatibilityCoverage, type DataChanges, type Evidence } from "./evidence";
+import { changedLines, judgeAnswer, rankNotes, REVIEW_SCHEMA, reviewBatches, reviewPrompt, specialistsFor, type Review, type ReviewFile, type ReviewNote, type Specialist, type UnresolvedNote } from "./review";
 
 // The advisory reviewer: a different model from the agents' (they are Claude or Grok), on Workers AI.
 const REVIEW_MODELS = ["@cf/moonshotai/kimi-k2.7-code", "@cf/moonshotai/kimi-k2.6"];
@@ -753,7 +753,30 @@ export class Referee extends DurableObject<Env> {
     // Releasing while its run holds the lease; before the run has taken it, for 20 minutes (the run is starting).
     const l = this.lease();
     if (l && l.seq === row.seq) return !l.ended && l.until > Date.now() ? (row.seq as number) : null;
-    return Date.now() - Number(row.at) < 20 * 60_000 ? (row.seq as number) : null;
+    return Date.now() - Number(row.at) < RELEASE_START_MS ? (row.seq as number) : null;
+  }
+
+  /**
+   * Who owns production's deployment (see deploymentOwner): the one rule every write outside a release run obeys. A
+   * republish holds a lease on a canon that is already released, so ownership comes from the lease, not the canon row.
+   */
+  private productionOwner(): string | null {
+    const row = this.rows(`SELECT seq, at FROM canon WHERE accepted_fact IS NOT NULL AND deployed = 0 AND reverts IS NULL ORDER BY seq DESC LIMIT 1`)[0];
+    return deploymentOwner(this.lease(), row ? { seq: row.seq as number, at: Number(row.at) } : null, Date.now());
+  }
+
+  // The judge's own deployment write in flight (reconciliation, rollback): a release run's first write waits for it to
+  // land, so the two never cross on the wire.
+  private judgeWriting: Promise<unknown> | null = null;
+
+  private async judgeWrite(api: string, init: RequestInit): Promise<Response> {
+    const p = fetch(api, { ...init, signal: AbortSignal.timeout(20_000) });
+    this.judgeWriting = p.catch(() => null);
+    try {
+      return await p;
+    } finally {
+      this.judgeWriting = null;
+    }
   }
 
   async promoted(seq: number, ok: boolean, versionId: string | null = null, holder?: string) {
@@ -1159,6 +1182,7 @@ export class Referee extends DurableObject<Env> {
     const FENCED = "fenced out: this run no longer holds the release, so it makes no deployment write (the judge reconciles production)";
     class Fenced extends Error {}
     const write = async (versions: Array<{ version_id: string; percentage: number }>, message: string) => {
+      while (this.judgeWriting) await this.judgeWriting; // a judge write already on the wire lands first
       if (holder !== undefined && !this.holds(seq, holder)) throw new Fenced();
       const res = await fetch(api, { method: "POST", headers, body: JSON.stringify({ strategy: "percentage", versions, annotations: { "workers/message": message.slice(0, 100) } }) });
       if (!res.ok) throw new Error(`deployments API returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -1166,6 +1190,7 @@ export class Referee extends DurableObject<Env> {
     const liveNow = async () =>
       (await (await fetch(api, { headers })).json<{ result?: { deployments?: Array<{ versions: Array<{ version_id: string; percentage: number }> }> } }>()).result?.deployments?.[0]?.versions ?? [];
     try {
+      while (this.judgeWriting) await this.judgeWriting; // read the deployment after any judge write in flight lands
       const live = await liveNow();
       const current = (live.find((v) => v.percentage === 100) ?? live[0])?.version_id;
       if (!smoke || !current || current === versionId) {
@@ -1315,7 +1340,7 @@ export class Referee extends DurableObject<Env> {
    * it is now. At most once every five minutes.
    */
   private async reconcileProduction() {
-    if (this.releasing() !== null) return;
+    if (this.productionOwner() !== null) return;
     const last = Number(this.meta("reconciledAt") ?? 0);
     if (Date.now() - last < 5 * 60_000) return;
     this.setMeta("reconciledAt", String(Date.now()));
@@ -1336,10 +1361,10 @@ export class Referee extends DurableObject<Env> {
     const cur = this.rows(`SELECT * FROM canon WHERE deployed = 1 AND version_id IS NOT NULL ORDER BY seq DESC LIMIT 1`)[0];
     if (!cur) return;
     const api = `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${project}/deployments`;
-    // Authority is rechecked in the same turn as the write, with no await between: a release that took the lease while
-    // this was waiting on the network owns production now, and this backs off (reconciliation runs again later).
-    if (this.releasing() !== null) return;
-    const res = await fetch(api, {
+    // Authority is rechecked in the same turn as the write, with no await between: a release or republish that took the
+    // lease while this was waiting on the network owns production now, and this backs off (reconciliation runs again).
+    if (this.productionOwner() !== null) return;
+    const res = await this.judgeWrite(api, {
       method: "POST",
       headers: { authorization: `Bearer ${this.env.CF_TOKEN}`, "content-type": "application/json" },
       body: JSON.stringify({ strategy: "percentage", versions: [{ percentage: 100, version_id: cur.version_id }], annotations: { "workers/message": `Canon: back to canon #${cur.seq}: ${why}`.slice(0, 100) } }),
@@ -1366,8 +1391,9 @@ export class Referee extends DurableObject<Env> {
       }
       if (!version) throw new Error("no earlier version to roll back to");
       // Same rule as every other production write: not while a release holds the lease (rechecked in this turn).
-      if (this.releasing() !== null) throw new Error("a release took the lease first; it decides what production runs");
-      const res = await fetch(api, {
+      const owner = this.productionOwner();
+      if (owner !== null) throw new Error(`${owner} owns production's deployment; it decides what production runs`);
+      const res = await this.judgeWrite(api, {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -2027,12 +2053,14 @@ export class Referee extends DurableObject<Env> {
       const canon = this.rows(`SELECT * FROM facts WHERE status = 'canon'`).map(toFact).map((f) => f.sentence);
       // Coverage first: every changed file is shown whole or around every change, in as many passes as that takes. A
       // file too big even that way can't be reviewed, and a review of part of a change is not a review of it.
+      // A file that can't be shown is left out and named: the other files are still reviewed (the notes stay useful
+      // as advice), but coverage says the change wasn't reviewed whole, which required review evidence won't pass.
       const { batches, compact, tooBig } = reviewBatches(files);
-      if (tooBig.length) throw new Error(`${tooBig.join(", ")} changed too much to review in one pass, even around each change`);
       const d = verdict.data;
       const reviewGlobs = this.charter()?.review ?? [];
+      const shown = files.filter((f) => !tooBig.includes(f.path));
       const specialists = specialistsFor(
-        files.map((f) => { const c = changedLines(f.base, f.head); return { path: f.path, added: [...c.added, ...c.removed].map((x) => x.text) }; }),
+        shown.map((f) => { const c = changedLines(f.base, f.head); return { path: f.path, added: [...c.added, ...c.removed].map((x) => x.text) }; }),
         !d || !d.complete || d.destructive.length + d.additive.length + (d.writes?.length ?? 0) > 0,
         (p) => reviewGlobs.length > 0 && inScope(reviewGlobs, [p]),
       );
@@ -2046,6 +2074,7 @@ export class Referee extends DurableObject<Env> {
           temperature: 0.2,
         } as never) as Promise<Answer>;
       const notes: ReviewNote[] = [];
+      const unresolved: UnresolvedNote[] = [];
       let dropped = 0;
       let model = REVIEW_MODELS[0];
       for (const who of specialists) {
@@ -2067,13 +2096,14 @@ export class Referee extends DurableObject<Env> {
           const judged = judgeAnswer(answer, out.choices?.[0]?.finish_reason, batch);
           if (!judged.ok) throw new Error(`${model.split("/").pop()} (${who} pass, ${batch.map((f) => f.path).join(", ")}): ${judged.detail}`);
           notes.push(...judged.notes.map((n) => ({ ...n, by: who })));
+          unresolved.push(...judged.unresolved.map((n) => ({ ...n, by: who })));
           dropped += judged.dropped;
         }
       }
       // Every risk and intent finding is kept (they decide acceptance); only "untested" notes are capped for display.
       const ranked = rankNotes(notes);
-      const coverage = { files: files.length, reviewed: files.length, compact, passes: specialists.length * batches.length, specialists };
-      put({ status: "done", ...base, model, notes: ranked, dropped, at: Date.now(), coverage });
+      const coverage = { files: files.length, reviewed: files.length - tooBig.length, compact, ...(tooBig.length ? { omitted: tooBig } : {}), passes: specialists.length * batches.length, specialists };
+      put({ status: "done", ...base, model, notes: ranked, dropped, ...(unresolved.length ? { unresolved } : {}), at: Date.now(), coverage });
     } catch (err) {
       put({ status: "error", ...base, detail: String(err instanceof Error ? err.message : err).slice(0, 200), at: Date.now() });
     }
@@ -2680,38 +2710,42 @@ export class Referee extends DurableObject<Env> {
         const broke = await this.factsOn(seq, url, {}, undefined, true, before);
         if (broke.length) this.setRehearsal(seq, "failed", `the previous version broke “${broke[0].fact.sentence}” on data this release wrote: ${broke[0].detail}`);
         else {
-          // State continuity: the release's code wrote state under reh-<seq> (candidateCheck). The previous code now
-          // does the same writes under ctl-<seq>, then reads each fact back under both. A fact that holds on the state
-          // it wrote itself but not on the state the new version wrote is a rollback that breaks it.
+          // State continuity: the release's code wrote a fixture per fact under reh-<seq> (candidateCheck). The previous
+          // code now writes its own control under ctl-<seq>, then reads both back with GET steps only, each from the
+          // values its own writer saved (inputs, generated ids). Every fact gets an explicit outcome (compatibilityVerdict).
           await this.continuityRun(seq, url, `ctl-${seq}`);
-          const shared = this.continuityFacts(seq).before;
-          let compared = 0;
-          let incompatible: { fact: Fact; detail: string } | null = null;
-          for (const f of shared) {
-            // Old code inspects what was written (by the new code under reh-, by itself under ctl-), with reads only.
-            const check = this.readOnly(f);
-            if (!check) continue;
-            const read = async (run: string) => runCheck(check, url, `cont:${seq}:${f.id}`, { "x-canon-run": run });
-            for (const suffix of [`:${f.id}`, ""]) {
-              let [onNew, onOld] = [await read(`reh-${seq}${suffix}`), await read(`ctl-${seq}${suffix}`)];
-              if (onOld.held && !onNew.held) [onNew, onOld] = [await read(`reh-${seq}${suffix}`), await read(`ctl-${seq}${suffix}`)];
-              if (!onOld.held) continue; // the old code can't read back even what it wrote itself: inconclusive, not counted
-              compared++;
-              if (!onNew.held) {
-                incompatible = { fact: f, detail: onNew.detail };
-                break;
-              }
+          const written = this.fixtures(seq, `reh-${seq}`);
+          const control = this.fixtures(seq, `ctl-${seq}`);
+          const coverage: CompatibilityCoverage = { compared: [], incompatible: [], inconclusive: [], unsupported: [], notApplicable: [], storage: "" };
+          const config = await this.wranglerConfig(record.attemptId, record.sha);
+          const storage = storageBindings(config);
+          coverage.storage = !storage.known ? "unknown: no Wrangler config found" : storage.bindings.length ? `storage bindings: ${storage.bindings.join(", ")}` : "no storage bindings";
+          for (const f of this.continuityFacts(seq).before) {
+            const contract = fixtureContract(f.check as ProbeCheck);
+            if (contract.kind === "not-applicable") coverage.notApplicable.push({ id: f.id, why: contract.why });
+            else if (contract.kind === "unsupported") coverage.unsupported.push({ id: f.id, why: contract.why });
+            else {
+              const outcome = await compareFixtures(url, contract.check, { reh: `reh-${seq}`, ctl: `ctl-${seq}`, id: f.id }, written[f.id], control[f.id]);
+              if (outcome.kind === "compared") coverage.compared.push(f.id);
+              else if (outcome.kind === "incompatible") coverage.incompatible.push({ id: f.id, detail: outcome.detail });
+              else coverage.inconclusive.push({ id: f.id, why: outcome.detail });
             }
-            if (incompatible) break;
           }
           const fresh = before.filter((f) => f.check.kind === "probe").length;
-          if (incompatible) this.setRehearsal(seq, "failed", `the previous version broke “${incompatible.fact.sentence}” on state this release wrote (it holds on state the previous version wrote itself): ${incompatible.detail}`);
-          else this.setRehearsal(seq, "passed", `the previous version kept all ${fresh} of its facts, and read back what this release wrote in ${compared} comparison${compared === 1 ? "" : "s"} (reads only, against what it wrote itself)`);
+          const v = compatibilityVerdict(coverage, storage.known && !storage.bindings.length);
+          this.setRehearsal(seq, v.state, v.state === "passed" ? `the previous version kept all ${fresh} of its facts; ${v.detail}` : v.detail, coverage);
         }
       }
     } else this.setRehearsal(seq, "unavailable", `the previous version couldn't be deployed onto the release candidate: ${detail.replace(/\s+/g, " ").slice(0, 160)}`);
     const after = this.acceptance(seq)!;
-    if (after.recovery.rollbackSafe || after.authorizedBy.startsWith("the owner")) return true;
+    for (const run of [`reh-${seq}`, `ctl-${seq}`]) this.sql.exec(`DELETE FROM meta WHERE key = ?`, `fixtures:${run}`);
+    if (after.recovery.rollbackSafe) return true;
+    if (after.authorizedBy.startsWith("the owner")) {
+      // A person's accept still goes out without a safe rollback; the record says so, and over what.
+      const override = `released on ${after.authorizedBy.split(",")[0]}'s authority although its rollback rehearsal ${after.recovery.rehearsal?.state ?? "didn't run"}${after.recovery.rehearsal ? ` (${after.recovery.rehearsal.detail.slice(0, 160)})` : ""}`;
+      this.sql.exec(`UPDATE acceptances SET json = ? WHERE seq = ?`, JSON.stringify({ ...after, recovery: { ...after.recovery, override } }), seq);
+      return true;
+    }
     const what = `its rollback rehearsal ${after.recovery.rehearsal?.state} (${after.recovery.rehearsal?.detail}), and autopilot doesn't release what it can't take back`;
     this.sql.exec(`UPDATE canon SET health = 'held', health_detail = ? WHERE seq = ?`, `${what}. Held back: production never served it.`, seq);
     this.broadcast();
@@ -2772,35 +2806,41 @@ export class Referee extends DurableObject<Env> {
   }
 
   /**
-   * Creates the fixture: every continuity fact runs once, in full (its writes included), in order, under one shared run
-   * identity, with one sample and a fixed seed per fact, so a later read knows exactly what was written.
+   * Writes the fixtures: every continuity fact's whole probe runs once, with one draw of its inputs from a fixed seed,
+   * under a run identity of its own (so a read later sees exactly its own writes), and once more under one shared
+   * identity (so old facts also run on state the new facts wrote, side by side). What each run saved (its inputs, the
+   * ids it was given) is kept, because the read needs it to find the same state again.
    */
   private async continuityRun(seq: number, url: string, run: string) {
     const { landing, before } = this.continuityFacts(seq);
-    // Twice: under the shared identity (so old facts later read what the new facts wrote, side by side) and under one
-    // of its own per fact (so its read sees exactly its own writes, nothing else's).
+    const out: Record<string, { own: Fixture; shared: Fixture }> = {};
     for (const f of [...landing, ...before]) {
       const check = { ...(f.check as ProbeCheck), samples: 1 };
-      await runCheck(check, url, `cont:${seq}:${f.id}`, { "x-canon-run": run }).catch(() => null);
-      await runCheck(check, url, `cont:${seq}:${f.id}`, { "x-canon-run": `${run}:${f.id}` }).catch(() => null);
+      const write = (identity: string) => writeFixture(check, url, `cont:${seq}:${f.id}`, { "x-canon-run": identity }).catch((err): Fixture => ({ ok: false, vars: {}, detail: String(err).slice(0, 160) }));
+      const shared = await write(run);
+      out[f.id] = { own: await write(`${run}:${f.id}`), shared };
     }
+    this.setMeta(`fixtures:${run}`, JSON.stringify(out));
   }
 
-  /**
-   * A fact's read-only half: its GET steps, with the same seed (so the same inputs, and the same expected values) as
-   * the run that wrote the fixture. Reading never repairs, replaces or clears what it reads, and a retry reads the same
-   * fixture again. Null when the fact has no read that stands on its own (no GET step, or one that needs a value an
-   * earlier write saved): such a fact can't be compared this way.
-   */
-  private readOnly(f: Fact): ProbeCheck | null {
-    return readOnlyCheck(f.check as ProbeCheck);
+  private fixtures(seq: number, run: string): Record<string, { own: Fixture; shared: Fixture } | undefined> {
+    return JSON.parse(this.meta(`fixtures:${run}`) ?? "{}");
   }
 
-  private setRehearsal(seq: number, state: "passed" | "failed" | "unavailable", detail: string) {
+  /** The release's Wrangler config, as accepted: what establishes whether the app keeps stored data at all. */
+  private async wranglerConfig(repo: string, sha: string): Promise<string | null> {
+    for (const path of ["wrangler.jsonc", "wrangler.json", "wrangler.toml"]) {
+      const text = await this.fileAtStrict(repo, sha, path).catch(() => null);
+      if (text !== null) return text;
+    }
+    return null;
+  }
+
+  private setRehearsal(seq: number, state: "passed" | "failed" | "unavailable", detail: string, coverage?: CompatibilityCoverage) {
     const record = this.acceptance(seq);
     if (!record) return;
     const rehearsal = { state, detail, at: Date.now() };
-    const recovery = { ...record.recovery, rehearsal, rollbackSafe: state === "passed", how: state === "passed" ? `rehearsed: ${detail}` : record.recovery.how };
+    const recovery = { ...record.recovery, rehearsal, ...(coverage ? { coverage } : {}), rollbackSafe: state === "passed", how: state === "passed" ? `rehearsed: ${detail}` : record.recovery.how };
     this.sql.exec(`UPDATE acceptances SET json = ? WHERE seq = ?`, JSON.stringify({ ...record, recovery }), seq);
   }
 
@@ -3293,6 +3333,7 @@ function validateCheck(check: Check) {
   if (!check.steps.some((s) => s.expect)) throw new ProtocolError(400, "a check with no expectations cannot fail");
   if (check.samples !== undefined && (!Number.isInteger(check.samples) || check.samples < 1 || check.samples > 10)) throw new ProtocolError(400, "samples must be 1-10");
   if (check.isolate !== undefined && typeof check.isolate !== "boolean") throw new ProtocolError(400, "isolate must be true or false");
+  if (check.fixture !== undefined && check.fixture !== "none") throw new ProtocolError(400, `fixture can only be "none" (the fact leaves no state a later read depends on)`);
   for (const [name, spec] of Object.entries(check.vars ?? {})) {
     const s = typeof spec === "object" && spec !== null ? (spec as Record<string, unknown>) : {};
     const int = Array.isArray(s.int) && s.int.length === 2 && s.int.every(Number.isInteger) && s.int[0] <= s.int[1];

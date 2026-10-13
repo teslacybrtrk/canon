@@ -16,3 +16,18 @@ export function leaseDecision(l: Lease | null, seq: number, holder: string, now:
 export function holdsLease(l: Lease | null, seq: number, holder: string, now: number): boolean {
   return !!l && l.seq === seq && l.holder === holder && !l.ended && l.until > now;
 }
+
+/** How long an accepted release may take to start its run (take the lease) before it stops counting as the owner. */
+export const RELEASE_START_MS = 20 * 60_000;
+
+/**
+ * Who owns production's deployment right now, for every path that writes it (reconciliation, rollback, restoring after
+ * a stale run): any live lease, a release's or a republish's, whatever its canon row says; or a release accepted but
+ * not yet started (its run hasn't taken the lease), for a while. null: nobody does, and the judge may correct it.
+ */
+export function deploymentOwner(l: Lease | null, pending: { seq: number; at: number } | null, now: number): string | null {
+  if (l && !l.ended && l.until > now) return `${/-r[0-9a-z]+$/.test(l.holder) ? "a republish" : "the release"} of canon #${l.seq} (${l.holder})`;
+  if (!pending) return null;
+  if (l && l.seq === pending.seq) return null; // its run took the lease, and that lease has ended or run out
+  return now - pending.at < RELEASE_START_MS ? `canon #${pending.seq}'s release, starting` : null;
+}

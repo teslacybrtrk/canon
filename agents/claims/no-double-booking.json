@@ -4,6 +4,7 @@
   "check": { "kind": "probe", "steps": [
     { "method": "POST", "path": "/api/reservations", "body": { "stallId": 1, "date": "2026-11-07", "name": "Ada" }, "expect": { "status": 201 } },
     { "method": "POST", "path": "/api/reservations", "body": { "stallId": 1, "date": "2026-11-07", "name": "Bo" }, "expect": { "status": 409 } },
-    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 2, "date": "2026-11-14", "name": "shopper-{{i}}" }, "concurrent": 6, "expect": { "status": [201, 409], "statusCounts": { "201": 1, "409": 5 } } }
+    { "method": "POST", "path": "/api/reservations", "body": { "stallId": 2, "date": "2026-11-14", "name": "shopper-{{i}}" }, "concurrent": 6, "expect": { "status": [201, 409], "statusCounts": { "201": 1, "409": 5 } } },
+    { "path": "/api/reservations?stallId=1&date=2026-11-07", "expect": { "status": 200, "bodyIncludes": "Ada" } }
   ] }
 }
