@@ -783,31 +783,62 @@ export class Referee extends DurableObject<Env> {
     return deploymentOwner(this.lease(), row ? { seq: row.seq as number, at: Number(row.at) } : null, Date.now());
   }
 
-  // The judge's own deployment write (reconciliation, restore, rollback) and every release run's production write are
-  // ordered by one barrier, kept in storage (it survives an eviction): armed before the judge's request goes out,
-  // lifted when the API answers, and held for a quarantine when the outcome is unknown (see writeBarrier). The release
-  // run's fence and the gate's writes wait for it, so no release or republish write, direct deploys included, can be
-  // overtaken by a judge write that was already on the wire.
-  private async judgeWrite(api: string, init: RequestInit): Promise<Response> {
-    this.setMeta("judgeWriteUntil", String(writeBarrier("sending", Date.now())));
+  // The judge's own deployment writes (reconciliation, restore, rollback) and every release run's production write are
+  // ordered through durable per-write accounting in the judge's storage (it survives an eviction or a restart):
+  // - Judge writes are serialized: a new one waits until no earlier judge write is outstanding, then, in the same turn
+  //   and with no await between, rechecks who owns production, registers itself and sends. A release or republish that
+  //   took the lease during the wait owns production, and the judge backs off.
+  // - Each write is registered under its own id. Its response settles only that write; an unknown outcome (a timeout,
+  //   a lost connection) keeps only that write's quarantine. One write never clears another's protection.
+  // - The release run's fence and the gate's writes wait until no judge write is outstanding, so no release or
+  //   republish write, direct deploys included, can be overtaken by a judge write already on the wire.
+  // The quarantine after an unknown outcome is a bounded-risk policy, not proof of settlement: a client timeout isn't a
+  // cancellation, and Cloudflare documents no completion bound for a deployments API request, so after
+  // UNKNOWN_WRITE_QUARANTINE_MS a write that never answered is presumed not to land. Only an answer settles a write.
+  private judgeWrites(now = Date.now()): Record<string, number> {
+    const all = JSON.parse(this.meta("judgeWrites") ?? "{}") as Record<string, number>;
+    const legacy = Number(this.meta("judgeWriteUntil") ?? 0); // the single barrier an earlier version kept
+    if (legacy > now) all.legacy = legacy;
+    return Object.fromEntries(Object.entries(all).filter(([, until]) => until > now));
+  }
+
+  private setJudgeWrite(id: string, until: number | null) {
+    const all = JSON.parse(this.meta("judgeWrites") ?? "{}") as Record<string, number>;
+    if (until === null) delete all[id];
+    else all[id] = until;
+    this.setMeta("judgeWrites", JSON.stringify(all));
+  }
+
+  /** Waits until no judge deployment write is outstanding (answered, or its quarantine ran out). */
+  private async judgeWriteSettled() {
+    for (;;) {
+      const now = Date.now();
+      const left = Math.min(...Object.values(this.judgeWrites(now)).map((until) => until - now));
+      if (!Number.isFinite(left) || left <= 0) return;
+      await new Promise((r) => setTimeout(r, Math.min(1_000, left)));
+    }
+  }
+
+  /**
+   * One judge deployment write (see above). `owner` is the authority check, made after any wait and right before the
+   * request goes out. Returns null when someone else owns production by then (nothing was sent).
+   */
+  private async judgeWrite(api: string, init: RequestInit, owner: () => string | null): Promise<Response | null> {
+    await this.judgeWriteSettled();
+    // From here to fetch() there is no await: the check, the registration and the send happen in one turn.
+    if (Object.keys(this.judgeWrites()).length) return this.judgeWrite(api, init, owner);
+    if (owner() !== null) return null;
+    const id = crypto.randomUUID();
+    this.setJudgeWrite(id, writeBarrier("sending", Date.now()));
     let res: Response;
     try {
       res = await fetch(api, { ...init, signal: AbortSignal.timeout(JUDGE_WRITE_MS) });
     } catch (err) {
-      this.setMeta("judgeWriteUntil", String(writeBarrier("unknown", Date.now())));
+      this.setJudgeWrite(id, writeBarrier("unknown", Date.now()));
       throw err;
     }
-    this.setMeta("judgeWriteUntil", String(writeBarrier("answered", Date.now())));
+    this.setJudgeWrite(id, null);
     return res;
-  }
-
-  /** Waits until no judge deployment write can still land (see judgeWrite). */
-  private async judgeWriteSettled() {
-    for (;;) {
-      const left = Number(this.meta("judgeWriteUntil") ?? 0) - Date.now();
-      if (left <= 0) return;
-      await new Promise((r) => setTimeout(r, Math.min(1_000, left)));
-    }
   }
 
   async promoted(seq: number, ok: boolean, versionId: string | null = null, holder?: string) {
@@ -1392,14 +1423,15 @@ export class Referee extends DurableObject<Env> {
     const cur = this.rows(`SELECT * FROM canon WHERE deployed = 1 AND version_id IS NOT NULL ORDER BY seq DESC LIMIT 1`)[0];
     if (!cur) return;
     const api = `https://api.cloudflare.com/client/v4/accounts/${this.env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${project}/deployments`;
-    // Authority is rechecked in the same turn as the write, with no await between: a release or republish that took the
-    // lease while this was waiting on the network owns production now, and this backs off (reconciliation runs again).
+    // Authority is rechecked inside judgeWrite, after any wait and in the same turn as the request: a release or
+    // republish that took the lease meanwhile owns production now, and this backs off (reconciliation runs again).
     if (this.productionOwner() !== null) return;
     const res = await this.judgeWrite(api, {
       method: "POST",
       headers: { authorization: `Bearer ${this.env.CF_TOKEN}`, "content-type": "application/json" },
       body: JSON.stringify({ strategy: "percentage", versions: [{ percentage: 100, version_id: cur.version_id }], annotations: { "workers/message": `Canon: back to canon #${cur.seq}: ${why}`.slice(0, 100) } }),
-    });
+    }, () => this.productionOwner());
+    if (!res) return;
     if (!res.ok) throw new Error(`deployments API returned ${res.status}`);
     this.sql.exec(`UPDATE canon SET health_detail = ? WHERE seq = ?`, `production restored to this canon: ${why}`, cur.seq);
   }
@@ -1421,9 +1453,8 @@ export class Referee extends DurableObject<Env> {
         version = list.result?.deployments?.find((d) => d.versions[0]?.version_id !== live.version_id)?.versions[0]?.version_id ?? null;
       }
       if (!version) throw new Error("no earlier version to roll back to");
-      // Same rule as every other production write: not while a release holds the lease (rechecked in this turn).
-      const owner = this.productionOwner();
-      if (owner !== null) throw new Error(`${owner} owns production's deployment; it decides what production runs`);
+      // Same rule as every other production write: not while a release holds the lease (rechecked in judgeWrite, after
+      // any wait and in the same turn as the request).
       const res = await this.judgeWrite(api, {
         method: "POST",
         headers,
@@ -1432,7 +1463,8 @@ export class Referee extends DurableObject<Env> {
           versions: [{ percentage: 100, version_id: version }],
           annotations: { "workers/message": `Canon rolled back: canon #${live.seq} ${what}`.slice(0, 100) },
         }),
-      });
+      }, () => this.productionOwner());
+      if (!res) throw new Error(`${this.productionOwner() ?? "a release"} owns production's deployment; it decides what production runs`);
       if (!res.ok) throw new Error(`deployments API returned ${res.status}`);
       const to = healthy ? `canon #${healthy.seq}` : "the version before it";
       this.sql.exec(`UPDATE canon SET health = 'rolled-back', health_detail = ? WHERE seq = ?`, `${what}. Production rolled back to ${to}.`, live.seq);

@@ -395,12 +395,17 @@ is already released (whose canon row says "deployed", so a pending row alone wou
 that was accepted but hasn't started its run. The judge's own writes (reconciliation, an automatic rollback, undoing a
 fenced-out run's change) recheck that nobody owns production, in the same turn as the request and with no await
 between: a release or republish that took the lease while the judge was waiting on the network owns production, and
-the judge backs off. Writes are ordered by one barrier kept in the judge's storage: it's armed before a judge write
-goes out, lifted when the deployments API answers, and held for a two-minute quarantine when the outcome is unknown
-(a timeout or a lost connection is not a cancelled write: it may still land). Every production-changing step of a
-release or republish run passes the fence first, and the fence waits for the barrier; so do the gate's own writes. That
-covers the direct-deploy paths too (a Durable Object class change, a project's first release), so none of them can be
-overtaken by a judge write already on the wire. Every wrangler call that
+the judge backs off. Writes are ordered through per-write records in the judge's storage. Judge writes are serialized:
+a new one waits until no earlier judge write is outstanding, then, in the same turn as it registers and sends, rechecks
+who owns production. Each write's record is settled only by its own answer; when its outcome is unknown (a timeout, a
+lost connection, the judge evicted mid-request), that record is held for a two-minute quarantine, and no other write's
+answer can clear it. Every production-changing step of a release or republish run passes the fence first, and the
+fence waits until no judge write is outstanding; so do the gate's own writes. That covers the direct-deploy paths too
+(a Durable Object class change, a project's first release). The quarantine is a bounded-risk policy, not proof: a
+client timeout isn't a cancellation, and Cloudflare documents no completion bound for a deployments request, so after
+two minutes a write that never answered is presumed not to land. Only an answer counts as confirmed settlement.
+Method-level tests drive the real write, fence and gate methods with hand-answered requests
+(`scripts/test-judge-writes.ts`). Every wrangler call that
 changes a Worker recomputes the time left on the lease's absolute deadline right before it runs, refuses to start with
 less than a minute left, and runs under `timeout` to it, even inside a script that first clones and installs. The release Workflow consumes the record, and holds the release as a lease. Its first step asks
 whether this exact commit is what canon #seq authorized and whether #seq is still the latest canon; a stale or

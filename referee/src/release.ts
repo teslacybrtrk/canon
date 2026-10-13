@@ -38,10 +38,11 @@ export const JUDGE_WRITE_MS = 20_000;
 export const UNKNOWN_WRITE_QUARANTINE_MS = 120_000;
 
 /**
- * The production-write barrier after a judge deployment write: it lifts when the API answered (the write's outcome is
- * known), and otherwise only after a quarantine, because a request the client gave up on may still land remotely. A
- * timeout is never taken for a cancelled write. Before the request it's armed for the whole window (judge evicted mid-
- * write: the outcome is unknown too).
+ * One judge deployment write's protection window (each write has its own; see Referee.judgeWrite): settled when the API
+ * answered, otherwise held for a quarantine, because a request the client gave up on may still land remotely. Before
+ * the request it's armed for the whole window (a judge evicted mid-write never records an answer). The quarantine is a
+ * bounded-risk policy, not proof of settlement: Cloudflare documents no completion bound for a deployments request, so
+ * once it runs out, a write that never answered is presumed not to land. Only an answer is confirmed settlement.
  */
 export function writeBarrier(phase: "sending" | "answered" | "unknown", now: number): number {
   if (phase === "answered") return 0;
