@@ -1,0 +1,58 @@
+diff --git a/src/cart.ts b/src/cart.ts
+index 040f5bd..2e9e238 100644
+--- a/src/cart.ts
++++ b/src/cart.ts
+@@ -4,21 +4,34 @@ import { type Quote, quote } from "./pricing";
+ 
+ export type Added = { ok: true } | { ok: false; status: number; error: string };
+ 
+-// One shopper's basket, kept in Durable Object storage under "lines" as { productId: qty }.
++// A basket line: how many, and a gift note if the shopper wrote one.
++interface Line {
++  qty: number;
++  note?: string;
++}
++
++// One shopper's basket, kept in Durable Object storage under "lines" as { productId: line }.
+ export class Cart extends DurableObject {
+-  async add(id: string, qty: number): Promise<Added> {
++  // Baskets saved before gift notes hold a bare quantity per product: those read as lines too.
++  private async read(): Promise<Record<string, Line>> {
++    const saved = (await this.ctx.storage.get<Record<string, Line | number>>("lines")) ?? {};
++    return Object.fromEntries(Object.entries(saved).map(([id, v]) => [id, typeof v === "number" ? { qty: v } : v]));
++  }
++
++  async add(id: string, qty: number, note?: string): Promise<Added> {
+     const product = findProduct(id);
+     if (!product) return { ok: false, status: 400, error: `unknown product ${id}` };
+-    const lines = (await this.ctx.storage.get<Record<string, number>>("lines")) ?? {};
+-    const next = (lines[id] ?? 0) + qty;
++    const lines = await this.read();
++    const next = (lines[id]?.qty ?? 0) + qty;
+     if (!Number.isInteger(qty) || qty < 1) return { ok: false, status: 400, error: "qty must be a whole number, 1 or more" };
+-    lines[id] = next;
++    lines[id] = { qty: next, note: note ?? lines[id]?.note };
+     await this.ctx.storage.put("lines", lines);
+     return { ok: true };
+   }
+ 
+   async view(): Promise<Quote> {
+-    const lines = (await this.ctx.storage.get<Record<string, number>>("lines")) ?? {};
+-    return quote(Object.entries(lines).map(([id, qty]) => ({ id, qty })));
++    const lines = await this.read();
++    const q = quote(Object.entries(lines).map(([id, l]) => ({ id, qty: l.qty })));
++    return { ...q, lines: q.lines.map((l) => ({ ...l, note: lines[l.id].note ?? null })) };
+   }
+ }
+diff --git a/src/index.ts b/src/index.ts
+index c712f7f..5642aa2 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -42,6 +42,6 @@ async function addToCart(request: Request, cart: DurableObjectStub<Cart>): Promi
+   const body = await request.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+   const id = String(body.id ?? "");
+   const qty = body.qty === undefined ? 1 : Number(body.qty);
+-  const added = await cart.add(id, qty);
++  const added = await cart.add(id, qty, typeof body.note === "string" ? body.note : undefined);
+   return added.ok ? Response.json(await cart.view()) : Response.json({ error: added.error }, { status: added.status });
+ }

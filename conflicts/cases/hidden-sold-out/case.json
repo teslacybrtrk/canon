@@ -1,0 +1,23 @@
+{
+  "id": "hidden-sold-out",
+  "title": "A function's meaning changes under a new caller",
+  "class": "API producer and caller disagree across files",
+  "kind": "conflict",
+  "seeded": true,
+  "story": "A changes products() in catalog.ts to list only what's in stock, and the callers it knows about (the shop page, the product list) now hide sold-out products, as A meant. B adds a product page in index.ts that looks products up with findProduct(), which goes through products(): on B's base that finds every product. Together, the page for a sold-out product is a 404. The types are unchanged, so the type-checker has nothing to say.",
+  "a": {
+    "agent": "agent-a",
+    "why": "stop listing products that are sold out",
+    "files": ["src/catalog.ts"],
+    "fact": { "id": "sold-out-not-listed", "sentence": "Sold-out products aren't listed", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/products", "expect": { "status": 200, "json": { "length": 4 } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "give each product an API page",
+    "files": ["src/index.ts"],
+    "fact": { "id": "product-page", "sentence": "Each product has an API page that says whether it's in stock", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/products/honey", "expect": { "status": 200, "json": { "id": "honey", "inStock": false } } }, { "path": "/api/products/eggs", "expect": { "status": 200, "json": { "id": "eggs", "inStock": true } } }, { "path": "/api/products/turnip", "expect": { "status": 404 } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": ["product-page"] },
+  "resolution": "catalog.ts gains catalogEntry(id), a lookup in the whole catalog, and the product page uses it; products() keeps A's meaning."
+}

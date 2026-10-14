@@ -1,0 +1,22 @@
+{
+  "id": "control-threshold",
+  "title": "Control: the shared setting changes, and a module that means the same thing",
+  "class": "Control for a config change against a dependent module",
+  "kind": "control",
+  "seeded": true,
+  "story": "A is shared-threshold's A: LOW_STOCK goes from 5 to 10. B flags low stock in the product API by the same LOW_STOCK, meaning what the shop page means by it. Together, both hold: the product with 8 left is flagged on the page and in the API alike.",
+  "a": {
+    "agent": "agent-a",
+    "why": "warn shoppers when ten or fewer are left",
+    "files": ["src/config.ts"],
+    "fact": { "id": "warn-at-ten", "sentence": "The shop page warns when ten or fewer of a product are left", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/", "expect": { "status": 200, "bodyIncludes": "only 8 left" } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "flag low stock in the product API",
+    "files": ["src/index.ts"],
+    "fact": { "id": "low-stock-flag", "sentence": "The product API flags products that are low on stock", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/products", "expect": { "status": 200, "json": { "0.low": false, "3.low": true } } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": [] }
+}

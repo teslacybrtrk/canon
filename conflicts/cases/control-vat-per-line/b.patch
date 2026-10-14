@@ -1,0 +1,39 @@
+diff --git a/src/pricing.ts b/src/pricing.ts
+index bf77aff..57c1198 100644
+--- a/src/pricing.ts
++++ b/src/pricing.ts
+@@ -1,5 +1,5 @@
+ import { findProduct, type Product } from "./catalog";
+-import { vatCents } from "./tax";
++import { lineVat } from "./tax";
+ 
+ export interface Line {
+   id: string;
+@@ -15,10 +15,11 @@ export function lineCents(product: Product, qty: number): number {
+ export function quote(lines: Line[]) {
+   const priced = lines.map((l) => {
+     const product = findProduct(l.id)!;
+-    return { id: l.id, name: product.name, qty: l.qty, cents: lineCents(product, l.qty) };
++    const cents = lineCents(product, l.qty);
++    return { id: l.id, name: product.name, qty: l.qty, cents, vat: lineVat(cents) };
+   });
+   const subtotal = priced.reduce((sum, l) => sum + l.cents, 0);
+-  const vat = vatCents(subtotal);
++  const vat = priced.reduce((sum, l) => sum + l.vat, 0);
+   return { lines: priced, subtotal, vat, total: subtotal + vat };
+ }
+ 
+diff --git a/src/tax.ts b/src/tax.ts
+index 64fd3e0..54b9faf 100644
+--- a/src/tax.ts
++++ b/src/tax.ts
+@@ -1,6 +1,7 @@
+ // VAT, charged on the price of the goods.
+ export const VAT_RATE = 0.25;
+ 
+-export function vatCents(subtotal: number): number {
+-  return Math.round(subtotal * VAT_RATE);
++// The VAT on one line of goods, so a quote can show it line by line.
++export function lineVat(cents: number): number {
++  return Math.round(cents * VAT_RATE);
+ }

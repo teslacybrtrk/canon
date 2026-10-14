@@ -1,0 +1,23 @@
+diff --git a/src/index.ts b/src/index.ts
+index c712f7f..3fa1b82 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -21,6 +21,8 @@ export default {
+ 
+     if (route === "GET /") return shopPage(products(), await cart.view());
+     if (route === "GET /api/products") return Response.json(products());
++    const one = url.pathname.match(/^\/api\/products\/([\w-]+)$/);
++    if (request.method === "GET" && one) return productPage(one[1]);
+     if (route === "GET /api/quote") return quoteFor(url);
+     if (route === "GET /api/cart") return Response.json(await cart.view());
+     if (route === "POST /api/cart") return addToCart(request, cart);
+@@ -45,3 +47,9 @@ async function addToCart(request: Request, cart: DurableObjectStub<Cart>): Promi
+   const added = await cart.add(id, qty);
+   return added.ok ? Response.json(await cart.view()) : Response.json({ error: added.error }, { status: added.status });
+ }
++
++// GET /api/products/:id: one product, and whether it's in stock.
++function productPage(id: string): Response {
++  const product = findProduct(id);
++  return product ? Response.json({ ...product, inStock: product.stock > 0 }) : Response.json({ error: "not found" }, { status: 404 });
++}

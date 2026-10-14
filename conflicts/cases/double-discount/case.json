@@ -1,0 +1,23 @@
+{
+  "id": "double-discount",
+  "title": "The same requirement built twice, in two places",
+  "class": "Duplicate implementation applied twice",
+  "kind": "conflict",
+  "seeded": true,
+  "story": "A and B both build the bulk discount, for the same requirement. A puts it in lineCents() in pricing.ts; B applies it where the quote is served, in index.ts. Each alone is right. Together, a quote for ten takes 10% off twice.",
+  "a": {
+    "agent": "agent-a",
+    "why": "ten or more of an item take 10% off",
+    "files": ["src/pricing.ts"],
+    "fact": { "id": "bulk-discount", "sentence": "Ten or more of an item take 10% off the line, before VAT is added", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/quote?item=eggs&qty=10", "expect": { "status": 200, "json": { "subtotal": 3600, "vat": 900, "total": 4500 } } }, { "path": "/api/quote?item=eggs&qty=9", "expect": { "status": 200, "json": { "subtotal": 3600 } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "ten or more of an item take 10% off (my own take)",
+    "files": ["src/index.ts"],
+    "join": "bulk-discount"
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": ["bulk-discount"] },
+  "resolution": "Keep one implementation: B's discount in the route is removed."
+}

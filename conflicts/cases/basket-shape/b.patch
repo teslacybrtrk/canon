@@ -1,0 +1,43 @@
+diff --git a/src/cart.ts b/src/cart.ts
+index 040f5bd..adda9b3 100644
+--- a/src/cart.ts
++++ b/src/cart.ts
+@@ -17,6 +17,16 @@ export class Cart extends DurableObject {
+     return { ok: true };
+   }
+ 
++  // Takes one of a product back out of the basket; the line goes when none are left.
++  async takeOne(id: string): Promise<boolean> {
++    const lines = (await this.ctx.storage.get<Record<string, number>>("lines")) ?? {};
++    if (!lines[id]) return false;
++    if (lines[id] > 1) lines[id] -= 1;
++    else delete lines[id];
++    await this.ctx.storage.put("lines", lines);
++    return true;
++  }
++
+   async view(): Promise<Quote> {
+     const lines = (await this.ctx.storage.get<Record<string, number>>("lines")) ?? {};
+     return quote(Object.entries(lines).map(([id, qty]) => ({ id, qty })));
+diff --git a/src/index.ts b/src/index.ts
+index c712f7f..04eb22c 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -23,6 +23,8 @@ export default {
+     if (route === "GET /api/products") return Response.json(products());
+     if (route === "GET /api/quote") return quoteFor(url);
+     if (route === "GET /api/cart") return Response.json(await cart.view());
++    const line = url.pathname.match(/^\/api\/cart\/([\w-]+)\/take-one$/);
++    if (request.method === "POST" && line) return takeOneOut(line[1], cart);
+     if (route === "POST /api/cart") return addToCart(request, cart);
+     return Response.json({ error: "not found" }, { status: 404 });
+   },
+@@ -45,3 +47,8 @@ async function addToCart(request: Request, cart: DurableObjectStub<Cart>): Promi
+   const added = await cart.add(id, qty);
+   return added.ok ? Response.json(await cart.view()) : Response.json({ error: added.error }, { status: added.status });
+ }
++
++// POST /api/cart/:id/take-one: one fewer of that product in the basket.
++async function takeOneOut(id: string, cart: DurableObjectStub<Cart>): Promise<Response> {
++  return (await cart.takeOne(id)) ? Response.json(await cart.view()) : Response.json({ error: "not in the basket" }, { status: 404 });
++}

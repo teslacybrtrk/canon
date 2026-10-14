@@ -1,0 +1,22 @@
+{
+  "id": "control-basket-shape",
+  "title": "Control: the basket changes shape, and a writer that doesn't care",
+  "class": "Control for persistent-state compatibility",
+  "kind": "control",
+  "seeded": true,
+  "story": "A is basket-shape's A: the stored basket becomes { productId: { qty, note } }. B lets a shopper empty the basket, in the same Durable Object, by deleting the stored key, which works whatever its shape. Together, both hold.",
+  "a": {
+    "agent": "agent-a",
+    "why": "let a basket line carry a gift note",
+    "files": ["src/cart.ts", "src/index.ts"],
+    "fact": { "id": "gift-note", "sentence": "A basket line can carry a gift note", "check": { "kind": "probe", "steps": [{ "method": "POST", "path": "/api/cart", "body": { "id": "eggs", "qty": 2, "note": "For Ada" }, "expect": { "status": 200 } }, { "path": "/api/cart", "expect": { "status": 200, "json": { "lines.0.qty": 2, "lines.0.note": "For Ada" } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "let a shopper empty the basket",
+    "files": ["src/cart.ts", "src/index.ts"],
+    "fact": { "id": "empty-basket", "sentence": "A shopper can empty the basket", "check": { "kind": "probe", "steps": [{ "method": "POST", "path": "/api/cart", "body": { "id": "eggs", "qty": 2 }, "expect": { "status": 200 } }, { "method": "DELETE", "path": "/api/cart", "expect": { "status": 200 } }, { "path": "/api/cart", "expect": { "status": 200, "json": { "lines.length": 0 } } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": [] }
+}

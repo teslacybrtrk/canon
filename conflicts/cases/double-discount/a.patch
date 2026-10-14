@@ -1,0 +1,17 @@
+diff --git a/src/pricing.ts b/src/pricing.ts
+index bf77aff..66153a8 100644
+--- a/src/pricing.ts
++++ b/src/pricing.ts
+@@ -6,9 +6,10 @@ export interface Line {
+   qty: number;
+ }
+ 
+-// What one line of goods costs, before VAT.
++// What one line of goods costs, before VAT. Ten or more of an item take 10% off the line.
+ export function lineCents(product: Product, qty: number): number {
+-  return product.price * qty;
++  const cents = product.price * qty;
++  return qty >= 10 ? Math.round(cents * 0.9) : cents;
+ }
+ 
+ // A quote for some lines: what each line costs, the subtotal, VAT and the total, all in cents.

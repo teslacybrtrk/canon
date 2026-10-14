@@ -1,0 +1,32 @@
+diff --git a/src/catalog.ts b/src/catalog.ts
+index 55fd406..07400b3 100644
+--- a/src/catalog.ts
++++ b/src/catalog.ts
+@@ -23,3 +23,8 @@ export function products(): Product[] {
+ export function findProduct(id: string): Product | undefined {
+   return products().find((p) => p.id === id);
+ }
++
++// Any product in the catalog, sold out or not.
++export function catalogEntry(id: string): Product | undefined {
++  return CATALOG.find((p) => p.id === id);
++}
+diff --git a/src/index.ts b/src/index.ts
+index 3fa1b82..8e23924 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,5 +1,5 @@
+ import { Cart } from "./cart";
+-import { findProduct, products } from "./catalog";
++import { catalogEntry, findProduct, products } from "./catalog";
+ import { shopPage } from "./page";
+ import { quote } from "./pricing";
+ 
+@@ -50,6 +50,6 @@ async function addToCart(request: Request, cart: DurableObjectStub<Cart>): Promi
+ 
+ // GET /api/products/:id: one product, and whether it's in stock.
+ function productPage(id: string): Response {
+-  const product = findProduct(id);
++  const product = catalogEntry(id);
+   return product ? Response.json({ ...product, inStock: product.stock > 0 }) : Response.json({ error: "not found" }, { status: 404 });
+ }

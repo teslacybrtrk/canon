@@ -1,0 +1,34 @@
+diff --git a/src/index.ts b/src/index.ts
+index c712f7f..5fcaae9 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -2,6 +2,7 @@ import { Cart } from "./cart";
+ import { findProduct, products } from "./catalog";
+ import { shopPage } from "./page";
+ import { quote } from "./pricing";
++import { priceList } from "./till";
+ 
+ // Corner Larder: a small shop the designed conflict cases change (docs/conflicts.md). Each module is one concern:
+ // catalog, pricing, tax, money (formatting), config, the basket (a Durable Object) and the shop page.
+@@ -21,6 +22,7 @@ export default {
+ 
+     if (route === "GET /") return shopPage(products(), await cart.view());
+     if (route === "GET /api/products") return Response.json(products());
++    if (route === "GET /till") return priceList();
+     if (route === "GET /api/quote") return quoteFor(url);
+     if (route === "GET /api/cart") return Response.json(await cart.view());
+     if (route === "POST /api/cart") return addToCart(request, cart);
+diff --git a/src/till.ts b/src/till.ts
+new file mode 100644
+index 0000000..0af7591
+--- /dev/null
++++ b/src/till.ts
+@@ -0,0 +1,8 @@
++import { products } from "./catalog";
++import { money } from "./money";
++
++// The till's price list: one line per product, for the printer by the register.
++export function priceList(): Response {
++  const lines = products().map((p) => `${p.id} ${money(p.price)}`);
++  return new Response(`${lines.join("\n")}\n`, { headers: { "content-type": "text/plain; charset=utf-8" } });
++}

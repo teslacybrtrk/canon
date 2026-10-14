@@ -1,0 +1,5092 @@
+{
+ "revision": "b571d04c4729",
+ "dirty": true,
+ "date": "2026-10-14T03:02:39.006Z",
+ "seconds": 62.1,
+ "conditions": {
+  "machine": "darwin 27.0.0, Apple M3",
+  "node": "v26.7.0",
+  "wrangler": "4.147.0",
+  "git": "2.54.0 (Apple Git-157)",
+  "runs": "one check run at a time (sequential), local wrangler dev"
+ },
+ "base": {
+  "startMs": 969,
+  "results": {
+   "code-typechecks": {
+    "held": true,
+    "detail": "ok",
+    "ms": 534
+   },
+   "code-lints": {
+    "held": true,
+    "detail": "ok",
+    "ms": 287
+   },
+   "shop-page-lists-prices": {
+    "held": true,
+    "detail": "ok",
+    "ms": 4
+   },
+   "one-unit-at-list-price": {
+    "held": true,
+    "detail": "ok",
+    "ms": 7
+   },
+   "vat-is-a-quarter": {
+    "held": true,
+    "detail": "ok",
+    "ms": 15
+   },
+   "unknown-item-refused": {
+    "held": true,
+    "detail": "ok",
+    "ms": 3
+   },
+   "cart-starts-empty": {
+    "held": true,
+    "detail": "ok",
+    "ms": 3
+   },
+   "cart-keeps-lines": {
+    "held": true,
+    "detail": "ok",
+    "ms": 8
+   },
+   "unknown-product-refused": {
+    "held": true,
+    "detail": "ok",
+    "ms": 4
+   },
+   "bulk-discount": {
+    "held": false,
+    "detail": "step 1: subtotal is 4000, expected 3600",
+    "ms": 1
+   },
+   "vat-per-line": {
+    "held": false,
+    "detail": "step 1: lines.0.vat is undefined, expected 240",
+    "ms": 1
+   },
+   "sold-out-not-listed": {
+    "held": false,
+    "detail": "step 1: length is 5, expected 4",
+    "ms": 1
+   },
+   "product-page": {
+    "held": false,
+    "detail": "step 1: GET /api/products/honey returned 404, expected 200",
+    "ms": 1
+   },
+   "line-limit": {
+    "held": false,
+    "detail": "step 1: POST /api/cart returned 200, expected 400",
+    "ms": 3
+   },
+   "stock-limit": {
+    "held": false,
+    "detail": "step 1: POST /api/cart returned 200, expected 400",
+    "ms": 3
+   },
+   "gift-note": {
+    "held": false,
+    "detail": "step 2: lines.0.note is undefined, expected \"For Ada\"",
+    "ms": 4
+   },
+   "take-one-out": {
+    "held": false,
+    "detail": "step 2: POST /api/cart/eggs/take-one returned 404, expected 200",
+    "ms": 5
+   },
+   "prices-in-dollars": {
+    "held": false,
+    "detail": "step 1: 0.price is 400, expected 4",
+    "ms": 1
+   },
+   "till-price-list": {
+    "held": false,
+    "detail": "step 1: GET /till returned 404, expected 200",
+    "ms": 2
+   },
+   "warn-at-ten": {
+    "held": false,
+    "detail": "step 1: GET / body does not include \"only 8 left\"",
+    "ms": 1
+   },
+   "restock-list": {
+    "held": false,
+    "detail": "step 1: GET /api/restock returned 404, expected 200",
+    "ms": 1
+   },
+   "no-unknown-fields": {
+    "held": false,
+    "detail": "step 1: POST /api/cart returned 200, expected 400",
+    "ms": 3
+   },
+   "substitutes": {
+    "held": false,
+    "detail": "step 2: lines.0.substitute is undefined, expected true",
+    "ms": 4
+   },
+   "empty-basket": {
+    "held": false,
+    "detail": "step 2: DELETE /api/cart returned 404, expected 200",
+    "ms": 4
+   },
+   "low-stock-flag": {
+    "held": false,
+    "detail": "step 1: 0.low is undefined, expected false",
+    "ms": 1
+   }
+  }
+ },
+ "cases": [
+  {
+   "id": "vat-on-list-price",
+   "title": "A bulk discount and VAT shown line by line",
+   "class": "Pricing and tax interaction across files",
+   "kind": "conflict",
+   "seeded": true,
+   "story": "A takes 10% off a line of ten or more, in pricing.ts. B shows the VAT on each line, and in tax.ts works it out from the product's price times the quantity, which is what a line cost on B's base. Together, a discounted line is taxed on its price before the discount.",
+   "a": {
+    "agent": "agent-a",
+    "why": "ten or more of an item take 10% off",
+    "files": [
+     "src/pricing.ts"
+    ],
+    "fact": {
+     "id": "bulk-discount",
+     "sentence": "Ten or more of an item take 10% off the line, before VAT is added",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=eggs&qty=10",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600,
+          "vat": 900,
+          "total": 4500
+         }
+        }
+       },
+       {
+        "path": "/api/quote?item=eggs&qty=9",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "show the VAT on each line of a quote",
+    "files": [
+     "src/tax.ts",
+     "src/pricing.ts"
+    ],
+    "fact": {
+     "id": "vat-per-line",
+     "sentence": "A quote shows the VAT on each line",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=kale&qty=3",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.vat": 240,
+          "vat": 240
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.023
+   },
+   "expect": {
+    "combinedFails": [
+     "bulk-discount"
+    ]
+   },
+   "resolution": "tax.ts takes the line's price as charged (lineVat(cents)), and pricing.ts passes it the discounted line.",
+   "hasResolution": true,
+   "facts": {
+    "a": {
+     "id": "bulk-discount",
+     "sentence": "Ten or more of an item take 10% off the line, before VAT is added",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=eggs&qty=10",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600,
+          "vat": 900,
+          "total": 4500
+         }
+        }
+       },
+       {
+        "path": "/api/quote?item=eggs&qty=9",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "vat-per-line",
+     "sentence": "A quote shows the VAT on each line",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=kale&qty=3",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.vat": 240,
+          "vat": 240
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 3,
+     "removed": 2
+    },
+    "b": {
+     "added": 8,
+     "removed": 5
+    },
+    "resolution": {
+     "added": 4,
+     "removed": 5
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "c4ea58b4952b",
+     "startMs": 761,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 211
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 198
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-per-line": {
+       "held": false,
+       "detail": "step 1: lines.0.vat is undefined, expected 240",
+       "ms": 1
+      }
+     }
+    },
+    "b": {
+     "sha": "ce5eb224bee1",
+     "startMs": 762,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 224
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 196
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": false,
+       "detail": "step 1: subtotal is 4000, expected 3600",
+       "ms": 1
+      },
+      "vat-per-line": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      }
+     }
+    },
+    "combined": {
+     "sha": "7789203fcd68",
+     "startMs": 804,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 223
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 210
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": false,
+       "detail": "sample 1, step 2: vat is 2000, expected 1800 (with qty = 20, item = eggs)",
+       "ms": 3
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": false,
+       "detail": "step 1: vat is 1000, expected 900",
+       "ms": 2
+      },
+      "vat-per-line": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      }
+     }
+    },
+    "resolved": {
+     "sha": "fb3cab31c3eb",
+     "startMs": 802,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 237
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 231
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "vat-per-line": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [
+    {
+     "id": "vat-is-a-quarter",
+     "detail": "sample 1, step 2: vat is 2000, expected 1800 (with qty = 20, item = eggs)"
+    },
+    {
+     "id": "bulk-discount",
+     "detail": "step 1: vat is 1000, expected 900"
+    }
+   ],
+   "resolved": [],
+   "cross": {
+    "vat-per-line on A": {
+     "held": false,
+     "detail": "step 1: lines.0.vat is undefined, expected 240",
+     "ms": 1
+    },
+    "bulk-discount on B": {
+     "held": false,
+     "detail": "step 1: subtotal is 4000, expected 3600",
+     "ms": 1
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [
+     "vat-is-a-quarter",
+     "bulk-discount"
+    ],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.2,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.3,
+     "failing": [
+      {
+       "id": "vat-is-a-quarter",
+       "detail": "sample 1, step 2: vat is 2000, expected 1800 (with qty = 20, item = eggs)"
+      },
+      {
+       "id": "bulk-discount",
+       "detail": "step 1: vat is 1000, expected 900"
+      }
+     ],
+     "landed": false
+    },
+    "bounces": [
+     {
+      "why": "failed vat-is-a-quarter, bulk-discount",
+      "seconds": 1.3
+     }
+    ],
+    "fix": {
+     "seconds": 1.3,
+     "failing": [],
+     "landed": true
+    },
+    "detectSeconds": 1.3,
+    "resolveSeconds": 1.3,
+    "delivered": "the resolution",
+    "broken": [],
+    "interventions": 1
+   },
+   "seconds": 5.7
+  },
+  {
+   "id": "hidden-sold-out",
+   "title": "A function's meaning changes under a new caller",
+   "class": "API producer and caller disagree across files",
+   "kind": "conflict",
+   "seeded": true,
+   "story": "A changes products() in catalog.ts to list only what's in stock, and the callers it knows about (the shop page, the product list) now hide sold-out products, as A meant. B adds a product page in index.ts that looks products up with findProduct(), which goes through products(): on B's base that finds every product. Together, the page for a sold-out product is a 404. The types are unchanged, so the type-checker has nothing to say.",
+   "a": {
+    "agent": "agent-a",
+    "why": "stop listing products that are sold out",
+    "files": [
+     "src/catalog.ts"
+    ],
+    "fact": {
+     "id": "sold-out-not-listed",
+     "sentence": "Sold-out products aren't listed",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/products",
+        "expect": {
+         "status": 200,
+         "json": {
+          "length": 4
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "give each product an API page",
+    "files": [
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "product-page",
+     "sentence": "Each product has an API page that says whether it's in stock",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/products/honey",
+        "expect": {
+         "status": 200,
+         "json": {
+          "id": "honey",
+          "inStock": false
+         }
+        }
+       },
+       {
+        "path": "/api/products/eggs",
+        "expect": {
+         "status": 200,
+         "json": {
+          "id": "eggs",
+          "inStock": true
+         }
+        }
+       },
+       {
+        "path": "/api/products/turnip",
+        "expect": {
+         "status": 404
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.022
+   },
+   "expect": {
+    "combinedFails": [
+     "product-page"
+    ]
+   },
+   "resolution": "catalog.ts gains catalogEntry(id), a lookup in the whole catalog, and the product page uses it; products() keeps A's meaning.",
+   "hasResolution": true,
+   "facts": {
+    "a": {
+     "id": "sold-out-not-listed",
+     "sentence": "Sold-out products aren't listed",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/products",
+        "expect": {
+         "status": 200,
+         "json": {
+          "length": 4
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "product-page",
+     "sentence": "Each product has an API page that says whether it's in stock",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/products/honey",
+        "expect": {
+         "status": 200,
+         "json": {
+          "id": "honey",
+          "inStock": false
+         }
+        }
+       },
+       {
+        "path": "/api/products/eggs",
+        "expect": {
+         "status": 200,
+         "json": {
+          "id": "eggs",
+          "inStock": true
+         }
+        }
+       },
+       {
+        "path": "/api/products/turnip",
+        "expect": {
+         "status": 404
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 2,
+     "removed": 2
+    },
+    "b": {
+     "added": 8,
+     "removed": 0
+    },
+    "resolution": {
+     "added": 7,
+     "removed": 2
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "ca7c55914c84",
+     "startMs": 1016,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 224
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 197
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 8
+      },
+      "sold-out-not-listed": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "product-page": {
+       "held": false,
+       "detail": "step 1: GET /api/products/honey returned 404, expected 200",
+       "ms": 3
+      }
+     }
+    },
+    "b": {
+     "sha": "05cb71d7155f",
+     "startMs": 1127,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 575
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 219
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "sold-out-not-listed": {
+       "held": false,
+       "detail": "step 1: length is 5, expected 4",
+       "ms": 1
+      },
+      "product-page": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      }
+     }
+    },
+    "combined": {
+     "sha": "c3f7400c5f00",
+     "startMs": 760,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 227
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 197
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 13
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "sold-out-not-listed": {
+       "held": true,
+       "detail": "ok",
+       "ms": 0
+      },
+      "product-page": {
+       "held": false,
+       "detail": "step 1: GET /api/products/honey returned 404, expected 200",
+       "ms": 1
+      }
+     }
+    },
+    "resolved": {
+     "sha": "e76d6303e4ba",
+     "startMs": 836,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 222
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 197
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 12
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 0
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "sold-out-not-listed": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "product-page": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [
+    {
+     "id": "product-page",
+     "detail": "step 1: GET /api/products/honey returned 404, expected 200"
+    }
+   ],
+   "resolved": [],
+   "cross": {
+    "product-page on A": {
+     "held": false,
+     "detail": "step 1: GET /api/products/honey returned 404, expected 200",
+     "ms": 3
+    },
+    "sold-out-not-listed on B": {
+     "held": false,
+     "detail": "step 1: length is 5, expected 4",
+     "ms": 1
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [
+     "product-page"
+    ],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.5,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.2,
+     "failing": [
+      {
+       "id": "product-page",
+       "detail": "step 1: GET /api/products/honey returned 404, expected 200"
+      }
+     ],
+     "landed": false
+    },
+    "bounces": [
+     {
+      "why": "failed product-page",
+      "seconds": 1.2
+     }
+    ],
+    "fix": {
+     "seconds": 1.3,
+     "failing": [],
+     "landed": true
+    },
+    "detectSeconds": 1.2,
+    "resolveSeconds": 1.3,
+    "delivered": "the resolution",
+    "broken": [],
+    "interventions": 1
+   },
+   "seconds": 6.7
+  },
+  {
+   "id": "limit-lost-in-repair",
+   "title": "Two limits on the same line, and a repair that keeps one",
+   "class": "Functionality lost during repair",
+   "kind": "conflict",
+   "seeded": true,
+   "story": "A caps a basket line at 99; B caps it at what's in stock. Both rewrite the same validation line in cart.ts, so Git stops at a text conflict. The seeded repair keeps one side of the conflicting line (git merge -X theirs: B's), which compiles, reads plausibly and passes B's check, and silently drops A's cap. It stands in for a hurried resolution or a repair that picks a side; it is not Canon's repair model, which the deployed run uses.",
+   "a": {
+    "agent": "agent-a",
+    "why": "a basket line holds at most 99",
+    "files": [
+     "src/cart.ts"
+    ],
+    "fact": {
+     "id": "line-limit",
+     "sentence": "A basket line holds at most 99 of a product",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 100
+        },
+        "expect": {
+         "status": 400
+        }
+       },
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 99
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 99
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "never sell more than is in stock",
+    "files": [
+     "src/cart.ts"
+    ],
+    "fact": {
+     "id": "stock-limit",
+     "sentence": "The basket can't hold more of a product than is in stock",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "comb",
+         "qty": 6
+        },
+        "expect": {
+         "status": 400
+        }
+       },
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "comb",
+         "qty": 5
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 5
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": false,
+    "conflicted": [
+     "src/cart.ts"
+    ],
+    "seconds": 0.04,
+    "repaired": "seeded lossy repair: git merge -X theirs (B's side of each conflicting hunk)"
+   },
+   "repair": {
+    "strategy": "theirs",
+    "label": "seeded lossy repair: git merge -X theirs (B's side of each conflicting hunk)"
+   },
+   "expect": {
+    "combinedFails": [
+     "line-limit"
+    ]
+   },
+   "resolution": "Both limits, one check each: at most 99 per line, and no more than is in stock.",
+   "hasResolution": true,
+   "facts": {
+    "a": {
+     "id": "line-limit",
+     "sentence": "A basket line holds at most 99 of a product",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 100
+        },
+        "expect": {
+         "status": 400
+        }
+       },
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 99
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 99
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "stock-limit",
+     "sentence": "The basket can't hold more of a product than is in stock",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "comb",
+         "qty": 6
+        },
+        "expect": {
+         "status": 400
+        }
+       },
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "comb",
+         "qty": 5
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 5
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 1,
+     "removed": 1
+    },
+    "b": {
+     "added": 1,
+     "removed": 1
+    },
+    "resolution": {
+     "added": 2,
+     "removed": 1
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "7da000717fed",
+     "startMs": 806,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 224
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 200
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 9
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 8
+      },
+      "line-limit": {
+       "held": true,
+       "detail": "ok",
+       "ms": 8
+      },
+      "stock-limit": {
+       "held": false,
+       "detail": "step 1: POST /api/cart returned 200, expected 400",
+       "ms": 4
+      }
+     }
+    },
+    "b": {
+     "sha": "76cae3900770",
+     "startMs": 774,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 238
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 202
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "line-limit": {
+       "held": false,
+       "detail": "step 1: POST /api/cart returned 200, expected 400",
+       "ms": 4
+      },
+      "stock-limit": {
+       "held": true,
+       "detail": "ok",
+       "ms": 9
+      }
+     }
+    },
+    "combined": {
+     "sha": "a525c0771d00",
+     "startMs": 772,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 225
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 213
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 9
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "line-limit": {
+       "held": false,
+       "detail": "step 1: POST /api/cart returned 200, expected 400",
+       "ms": 4
+      },
+      "stock-limit": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      }
+     }
+    },
+    "resolved": {
+     "sha": "796687cdbf20",
+     "startMs": 760,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 225
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 203
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "line-limit": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "stock-limit": {
+       "held": true,
+       "detail": "ok",
+       "ms": 8
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [
+    {
+     "id": "line-limit",
+     "detail": "step 1: POST /api/cart returned 200, expected 400"
+    }
+   ],
+   "resolved": [],
+   "cross": {
+    "stock-limit on A": {
+     "held": false,
+     "detail": "step 1: POST /api/cart returned 200, expected 400",
+     "ms": 4
+    },
+    "line-limit on B": {
+     "held": false,
+     "detail": "step 1: POST /api/cart returned 200, expected 400",
+     "ms": 4
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": false,
+    "conflicted": [
+     "src/cart.ts"
+    ],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [
+     "line-limit"
+    ],
+    "interventions": 1
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.3,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.3,
+     "failing": [
+      {
+       "id": "line-limit",
+       "detail": "step 1: POST /api/cart returned 200, expected 400"
+      }
+     ],
+     "landed": false
+    },
+    "bounces": [
+     {
+      "why": "text conflict in src/cart.ts",
+      "seconds": 0
+     },
+     {
+      "why": "failed line-limit",
+      "seconds": 1.3
+     }
+    ],
+    "fix": {
+     "seconds": 1.2,
+     "failing": [],
+     "landed": true
+    },
+    "detectSeconds": 1.3,
+    "resolveSeconds": 1.2,
+    "delivered": "the resolution",
+    "broken": [],
+    "interventions": 2
+   },
+   "seconds": 5.8
+  },
+  {
+   "id": "basket-shape",
+   "title": "A stored basket changes shape under a new writer",
+   "class": "Persistent-state compatibility (Durable Object storage)",
+   "kind": "conflict",
+   "seeded": true,
+   "story": "A lets a basket line carry a gift note, so the Cart Durable Object now stores { productId: { qty, note } } instead of { productId: qty }, and reads baskets saved in the old shape too. B adds 'take one back out', written against the old shape: it reads lines[id] as a number and writes it back. Together, taking one egg out deletes the whole line from storage (an object compared with 1 is never greater). Each method names its own storage type, so the type-checker can't see the mismatch.",
+   "a": {
+    "agent": "agent-a",
+    "why": "let a basket line carry a gift note",
+    "files": [
+     "src/cart.ts",
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "gift-note",
+     "sentence": "A basket line can carry a gift note",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 2,
+         "note": "For Ada"
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 2,
+          "lines.0.note": "For Ada"
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "let a shopper take one back out",
+    "files": [
+     "src/cart.ts",
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "take-one-out",
+     "sentence": "A shopper can take one of a product back out of the basket",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 3
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "method": "POST",
+        "path": "/api/cart/eggs/take-one",
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 2
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.024
+   },
+   "expect": {
+    "combinedFails": [
+     "take-one-out"
+    ]
+   },
+   "resolution": "takeOne() reads the basket through A's read() and changes the line's qty, so it works on both stored shapes.",
+   "hasResolution": true,
+   "facts": {
+    "a": {
+     "id": "gift-note",
+     "sentence": "A basket line can carry a gift note",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 2,
+         "note": "For Ada"
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 2,
+          "lines.0.note": "For Ada"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "take-one-out",
+     "sentence": "A shopper can take one of a product back out of the basket",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 3
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "method": "POST",
+        "path": "/api/cart/eggs/take-one",
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 2
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 21,
+     "removed": 8
+    },
+    "b": {
+     "added": 17,
+     "removed": 0
+    },
+    "resolution": {
+     "added": 4,
+     "removed": 3
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "75d69285b55e",
+     "startMs": 760,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 221
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 199
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "gift-note": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "take-one-out": {
+       "held": false,
+       "detail": "step 2: POST /api/cart/eggs/take-one returned 404, expected 200",
+       "ms": 5
+      }
+     }
+    },
+    "b": {
+     "sha": "a2e553305842",
+     "startMs": 761,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 228
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 200
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "gift-note": {
+       "held": false,
+       "detail": "step 2: lines.0.note is undefined, expected \"For Ada\"",
+       "ms": 4
+      },
+      "take-one-out": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      }
+     }
+    },
+    "combined": {
+     "sha": "9a9aa7878a7b",
+     "startMs": 759,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 221
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 199
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 13
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "gift-note": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "take-one-out": {
+       "held": false,
+       "detail": "step 3: lines.0.qty is undefined, expected 2",
+       "ms": 6
+      }
+     }
+    },
+    "resolved": {
+     "sha": "8f2453adfc53",
+     "startMs": 760,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 227
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 198
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 0
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "gift-note": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "take-one-out": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [
+    {
+     "id": "take-one-out",
+     "detail": "step 3: lines.0.qty is undefined, expected 2"
+    }
+   ],
+   "resolved": [],
+   "cross": {
+    "take-one-out on A": {
+     "held": false,
+     "detail": "step 2: POST /api/cart/eggs/take-one returned 404, expected 200",
+     "ms": 5
+    },
+    "gift-note on B": {
+     "held": false,
+     "detail": "step 2: lines.0.note is undefined, expected \"For Ada\"",
+     "ms": 4
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [
+     "take-one-out"
+    ],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.2,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.2,
+     "failing": [
+      {
+       "id": "take-one-out",
+       "detail": "step 3: lines.0.qty is undefined, expected 2"
+      }
+     ],
+     "landed": false
+    },
+    "bounces": [
+     {
+      "why": "failed take-one-out",
+      "seconds": 1.2
+     }
+    ],
+    "fix": {
+     "seconds": 1.2,
+     "failing": [],
+     "landed": true
+    },
+    "detectSeconds": 1.2,
+    "resolveSeconds": 1.2,
+    "delivered": "the resolution",
+    "broken": [],
+    "interventions": 1
+   },
+   "seconds": 5.6
+  },
+  {
+   "id": "dollars-and-cents",
+   "title": "Prices move from cents to dollars under a new reader",
+   "class": "Units mismatch",
+   "kind": "conflict",
+   "seeded": true,
+   "story": "A stores catalog prices in dollars (the product API gives dollars) and converts with cents() everywhere it found a price: pricing and the shop page. B adds a price list for the till, written when price meant cents, so it formats p.price as cents. Together, the till says eggs cost $0.04. Both are numbers, so the type-checker can't tell.",
+   "a": {
+    "agent": "agent-a",
+    "why": "the product API should give prices in dollars",
+    "files": [
+     "src/catalog.ts",
+     "src/pricing.ts",
+     "src/page.ts"
+    ],
+    "fact": {
+     "id": "prices-in-dollars",
+     "sentence": "The product API gives prices in dollars",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/products",
+        "expect": {
+         "status": 200,
+         "json": {
+          "0.id": "eggs",
+          "0.price": 4,
+          "2.price": 3.2
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "print a price list for the till",
+    "files": [
+     "src/till.ts",
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "till-price-list",
+     "sentence": "The till prints a price list with every product's price",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/till",
+        "expect": {
+         "status": 200,
+         "bodyIncludes": "eggs $4.00"
+        }
+       },
+       {
+        "path": "/till",
+        "expect": {
+         "status": 200,
+         "bodyIncludes": "kale $3.20"
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.022
+   },
+   "expect": {
+    "combinedFails": [
+     "till-price-list"
+    ]
+   },
+   "resolution": "The till formats cents(p), A's conversion, instead of p.price.",
+   "hasResolution": true,
+   "facts": {
+    "a": {
+     "id": "prices-in-dollars",
+     "sentence": "The product API gives prices in dollars",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/products",
+        "expect": {
+         "status": 200,
+         "json": {
+          "0.id": "eggs",
+          "0.price": 4,
+          "2.price": 3.2
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "till-price-list",
+     "sentence": "The till prints a price list with every product's price",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/till",
+        "expect": {
+         "status": 200,
+         "bodyIncludes": "eggs $4.00"
+        }
+       },
+       {
+        "path": "/till",
+        "expect": {
+         "status": 200,
+         "bodyIncludes": "kale $3.20"
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 15,
+     "removed": 10
+    },
+    "b": {
+     "added": 10,
+     "removed": 0
+    },
+    "resolution": {
+     "added": 2,
+     "removed": 2
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "867e466693b6",
+     "startMs": 863,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 218
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 203
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 13
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "prices-in-dollars": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "till-price-list": {
+       "held": false,
+       "detail": "step 1: GET /till returned 404, expected 200",
+       "ms": 1
+      }
+     }
+    },
+    "b": {
+     "sha": "ab79597dd3e3",
+     "startMs": 785,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 259
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 218
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "prices-in-dollars": {
+       "held": false,
+       "detail": "step 1: 0.price is 400, expected 4",
+       "ms": 1
+      },
+      "till-price-list": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      }
+     }
+    },
+    "combined": {
+     "sha": "6edcc1efd1d2",
+     "startMs": 800,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 227
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 206
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "prices-in-dollars": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "till-price-list": {
+       "held": false,
+       "detail": "step 1: GET /till body does not include \"eggs $4.00\"",
+       "ms": 1
+      }
+     }
+    },
+    "resolved": {
+     "sha": "ac40f533d081",
+     "startMs": 776,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 227
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 207
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 9
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "prices-in-dollars": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "till-price-list": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [
+    {
+     "id": "till-price-list",
+     "detail": "step 1: GET /till body does not include \"eggs $4.00\""
+    }
+   ],
+   "resolved": [],
+   "cross": {
+    "till-price-list on A": {
+     "held": false,
+     "detail": "step 1: GET /till returned 404, expected 200",
+     "ms": 1
+    },
+    "prices-in-dollars on B": {
+     "held": false,
+     "detail": "step 1: 0.price is 400, expected 4",
+     "ms": 1
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [
+     "till-price-list"
+    ],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.3,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.3,
+     "failing": [
+      {
+       "id": "till-price-list",
+       "detail": "step 1: GET /till body does not include \"eggs $4.00\""
+      }
+     ],
+     "landed": false
+    },
+    "bounces": [
+     {
+      "why": "failed till-price-list",
+      "seconds": 1.3
+     }
+    ],
+    "fix": {
+     "seconds": 1.2,
+     "failing": [],
+     "landed": true
+    },
+    "detectSeconds": 1.3,
+    "resolveSeconds": 1.2,
+    "delivered": "the resolution",
+    "broken": [],
+    "interventions": 1
+   },
+   "seconds": 5.8
+  },
+  {
+   "id": "shared-threshold",
+   "title": "A shared setting changes under a module that relies on its old value",
+   "class": "Config or default change against a dependent module",
+   "kind": "conflict",
+   "seeded": true,
+   "story": "A raises LOW_STOCK in config.ts from 5 to 10, so the shop page warns shoppers earlier. B adds a restock list in index.ts that names the products at or below LOW_STOCK, which is 5 on B's base and exactly what B's requirement says. Together, the restock list also names a product with 8 left.",
+   "a": {
+    "agent": "agent-a",
+    "why": "warn shoppers when ten or fewer are left",
+    "files": [
+     "src/config.ts"
+    ],
+    "fact": {
+     "id": "warn-at-ten",
+     "sentence": "The shop page warns when ten or fewer of a product are left",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/",
+        "expect": {
+         "status": 200,
+         "bodyIncludes": "only 8 left"
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "a restock list for the stock room",
+    "files": [
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "restock-list",
+     "sentence": "The restock list names the products with five or fewer left",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/restock",
+        "expect": {
+         "status": 200,
+         "json": {
+          "0": "honey",
+          "1": "comb",
+          "length": 2
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.022
+   },
+   "expect": {
+    "combinedFails": [
+     "restock-list"
+    ]
+   },
+   "resolution": "config.ts gains RESTOCK_AT = 5 for the restock list; LOW_STOCK stays the shop page's warning level.",
+   "hasResolution": true,
+   "facts": {
+    "a": {
+     "id": "warn-at-ten",
+     "sentence": "The shop page warns when ten or fewer of a product are left",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/",
+        "expect": {
+         "status": 200,
+         "bodyIncludes": "only 8 left"
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "restock-list",
+     "sentence": "The restock list names the products with five or fewer left",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/restock",
+        "expect": {
+         "status": 200,
+         "json": {
+          "0": "honey",
+          "1": "comb",
+          "length": 2
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 1,
+     "removed": 1
+    },
+    "b": {
+     "added": 2,
+     "removed": 0
+    },
+    "resolution": {
+     "added": 5,
+     "removed": 2
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "e895642e7a33",
+     "startMs": 762,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 219
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 197
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "warn-at-ten": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "restock-list": {
+       "held": false,
+       "detail": "step 1: GET /api/restock returned 404, expected 200",
+       "ms": 1
+      }
+     }
+    },
+    "b": {
+     "sha": "ab9903b996e9",
+     "startMs": 818,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 238
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 205
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 13
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "warn-at-ten": {
+       "held": false,
+       "detail": "step 1: GET / body does not include \"only 8 left\"",
+       "ms": 1
+      },
+      "restock-list": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      }
+     }
+    },
+    "combined": {
+     "sha": "88160f626aa4",
+     "startMs": 760,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 230
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 218
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "warn-at-ten": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "restock-list": {
+       "held": false,
+       "detail": "step 1: length is 3, expected 2",
+       "ms": 1
+      }
+     }
+    },
+    "resolved": {
+     "sha": "4e0f3b98e169",
+     "startMs": 764,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 224
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 204
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "warn-at-ten": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "restock-list": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [
+    {
+     "id": "restock-list",
+     "detail": "step 1: length is 3, expected 2"
+    }
+   ],
+   "resolved": [],
+   "cross": {
+    "restock-list on A": {
+     "held": false,
+     "detail": "step 1: GET /api/restock returned 404, expected 200",
+     "ms": 1
+    },
+    "warn-at-ten on B": {
+     "held": false,
+     "detail": "step 1: GET / body does not include \"only 8 left\"",
+     "ms": 1
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [
+     "restock-list"
+    ],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.2,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.3,
+     "failing": [
+      {
+       "id": "restock-list",
+       "detail": "step 1: length is 3, expected 2"
+      }
+     ],
+     "landed": false
+    },
+    "bounces": [
+     {
+      "why": "failed restock-list",
+      "seconds": 1.3
+     }
+    ],
+    "fix": {
+     "seconds": 1.2,
+     "failing": [],
+     "landed": true
+    },
+    "detectSeconds": 1.3,
+    "resolveSeconds": 1.2,
+    "delivered": "the resolution",
+    "broken": [],
+    "interventions": 1
+   },
+   "seconds": 5.7
+  },
+  {
+   "id": "strict-fields",
+   "title": "Stricter validation against a caller that sends a new field",
+   "class": "Validation added against a caller that now sends rejected input",
+   "kind": "conflict",
+   "seeded": true,
+   "story": "A hardens POST /api/cart: a body may only hold id and qty, so a client can't send its own price. B lets a shopper say a substitute is fine for a line, sent as a new substitute field on the same request. Together, every request B's client sends is refused with 400.",
+   "a": {
+    "agent": "agent-a",
+    "why": "refuse fields a basket line doesn't have",
+    "files": [
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "no-unknown-fields",
+     "sentence": "The basket refuses fields it doesn't know, so a client can't set its own price",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 1,
+         "price": 1
+        },
+        "expect": {
+         "status": 400
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.length": 0
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "let a shopper accept a substitute",
+    "files": [
+     "src/index.ts",
+     "src/cart.ts"
+    ],
+    "fact": {
+     "id": "substitutes",
+     "sentence": "A shopper can say a substitute is fine for a basket line",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "kale",
+         "qty": 2,
+         "substitute": true
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.substitute": true
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.024
+   },
+   "expect": {
+    "combinedFails": [
+     "substitutes"
+    ]
+   },
+   "resolution": "The allowed fields are id, qty and substitute.",
+   "hasResolution": true,
+   "facts": {
+    "a": {
+     "id": "no-unknown-fields",
+     "sentence": "The basket refuses fields it doesn't know, so a client can't set its own price",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 1,
+         "price": 1
+        },
+        "expect": {
+         "status": 400
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.length": 0
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "substitutes",
+     "sentence": "A shopper can say a substitute is fine for a basket line",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "kale",
+         "qty": 2,
+         "substitute": true
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.substitute": true
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 3,
+     "removed": 0
+    },
+    "b": {
+     "added": 9,
+     "removed": 3
+    },
+    "resolution": {
+     "added": 2,
+     "removed": 2
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "f820ea055f34",
+     "startMs": 759,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 222
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 199
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 0
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "no-unknown-fields": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "substitutes": {
+       "held": false,
+       "detail": "step 1: POST /api/cart returned 400, expected 200",
+       "ms": 1
+      }
+     }
+    },
+    "b": {
+     "sha": "d8d2d6b3343a",
+     "startMs": 768,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 233
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 204
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 12
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "no-unknown-fields": {
+       "held": false,
+       "detail": "step 1: POST /api/cart returned 200, expected 400",
+       "ms": 2
+      },
+      "substitutes": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      }
+     }
+    },
+    "combined": {
+     "sha": "b3ad1d049239",
+     "startMs": 758,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 224
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 203
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "no-unknown-fields": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "substitutes": {
+       "held": false,
+       "detail": "step 1: POST /api/cart returned 400, expected 200",
+       "ms": 1
+      }
+     }
+    },
+    "resolved": {
+     "sha": "e226aef16c93",
+     "startMs": 761,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 228
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 202
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "no-unknown-fields": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "substitutes": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [
+    {
+     "id": "substitutes",
+     "detail": "step 1: POST /api/cart returned 400, expected 200"
+    }
+   ],
+   "resolved": [],
+   "cross": {
+    "substitutes on A": {
+     "held": false,
+     "detail": "step 1: POST /api/cart returned 400, expected 200",
+     "ms": 1
+    },
+    "no-unknown-fields on B": {
+     "held": false,
+     "detail": "step 1: POST /api/cart returned 200, expected 400",
+     "ms": 2
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [
+     "substitutes"
+    ],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.2,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.2,
+     "failing": [
+      {
+       "id": "substitutes",
+       "detail": "step 1: POST /api/cart returned 400, expected 200"
+      }
+     ],
+     "landed": false
+    },
+    "bounces": [
+     {
+      "why": "failed substitutes",
+      "seconds": 1.2
+     }
+    ],
+    "fix": {
+     "seconds": 1.2,
+     "failing": [],
+     "landed": true
+    },
+    "detectSeconds": 1.2,
+    "resolveSeconds": 1.2,
+    "delivered": "the resolution",
+    "broken": [],
+    "interventions": 1
+   },
+   "seconds": 5.6
+  },
+  {
+   "id": "double-discount",
+   "title": "The same requirement built twice, in two places",
+   "class": "Duplicate implementation applied twice",
+   "kind": "conflict",
+   "seeded": true,
+   "story": "A and B both build the bulk discount, for the same requirement. A puts it in lineCents() in pricing.ts; B applies it where the quote is served, in index.ts. Each alone is right. Together, a quote for ten takes 10% off twice.",
+   "a": {
+    "agent": "agent-a",
+    "why": "ten or more of an item take 10% off",
+    "files": [
+     "src/pricing.ts"
+    ],
+    "fact": {
+     "id": "bulk-discount",
+     "sentence": "Ten or more of an item take 10% off the line, before VAT is added",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=eggs&qty=10",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600,
+          "vat": 900,
+          "total": 4500
+         }
+        }
+       },
+       {
+        "path": "/api/quote?item=eggs&qty=9",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "ten or more of an item take 10% off (my own take)",
+    "files": [
+     "src/index.ts"
+    ],
+    "join": "bulk-discount"
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.022
+   },
+   "expect": {
+    "combinedFails": [
+     "bulk-discount"
+    ]
+   },
+   "resolution": "Keep one implementation: B's discount in the route is removed.",
+   "hasResolution": true,
+   "facts": {
+    "a": {
+     "id": "bulk-discount",
+     "sentence": "Ten or more of an item take 10% off the line, before VAT is added",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=eggs&qty=10",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600,
+          "vat": 900,
+          "total": 4500
+         }
+        }
+       },
+       {
+        "path": "/api/quote?item=eggs&qty=9",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "bulk-discount",
+     "sentence": "Ten or more of an item take 10% off the line, before VAT is added",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=eggs&qty=10",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600,
+          "vat": 900,
+          "total": 4500
+         }
+        }
+       },
+       {
+        "path": "/api/quote?item=eggs&qty=9",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 3,
+     "removed": 2
+    },
+    "b": {
+     "added": 7,
+     "removed": 1
+    },
+    "resolution": {
+     "added": 1,
+     "removed": 7
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "4ff8578b117b",
+     "startMs": 761,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 220
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 203
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      }
+     }
+    },
+    "b": {
+     "sha": "745259b7595b",
+     "startMs": 761,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 229
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 201
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      }
+     }
+    },
+    "combined": {
+     "sha": "533a5fa24940",
+     "startMs": 1013,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 235
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 209
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": false,
+       "detail": "sample 3, step 2: vat is 1069, expected 1069.25 (with qty = 11, item = greens)",
+       "ms": 8
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": false,
+       "detail": "step 1: subtotal is 3240, expected 3600",
+       "ms": 1
+      }
+     }
+    },
+    "resolved": {
+     "sha": "6be079344c1d",
+     "startMs": 781,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 236
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 199
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [
+    {
+     "id": "vat-is-a-quarter",
+     "detail": "sample 3, step 2: vat is 1069, expected 1069.25 (with qty = 11, item = greens)"
+    },
+    {
+     "id": "bulk-discount",
+     "detail": "step 1: subtotal is 3240, expected 3600"
+    }
+   ],
+   "resolved": [],
+   "cross": {
+    "bulk-discount on A": {
+     "held": true,
+     "detail": "ok",
+     "ms": 2
+    },
+    "bulk-discount on B": {
+     "held": true,
+     "detail": "ok",
+     "ms": 2
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [
+     "vat-is-a-quarter",
+     "bulk-discount"
+    ],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.2,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.5,
+     "failing": [
+      {
+       "id": "vat-is-a-quarter",
+       "detail": "sample 3, step 2: vat is 1069, expected 1069.25 (with qty = 11, item = greens)"
+      },
+      {
+       "id": "bulk-discount",
+       "detail": "step 1: subtotal is 3240, expected 3600"
+      }
+     ],
+     "landed": false
+    },
+    "bounces": [
+     {
+      "why": "failed vat-is-a-quarter, bulk-discount",
+      "seconds": 1.5
+     }
+    ],
+    "fix": {
+     "seconds": 1.2,
+     "failing": [],
+     "landed": true
+    },
+    "detectSeconds": 1.5,
+    "resolveSeconds": 1.2,
+    "delivered": "the resolution",
+    "broken": [],
+    "interventions": 1
+   },
+   "seconds": 5.9
+  },
+  {
+   "id": "control-vat-per-line",
+   "title": "Control: the discount and per-line VAT, written to compose",
+   "class": "Control for pricing and tax across files",
+   "kind": "control",
+   "seeded": true,
+   "story": "The same two features as vat-on-list-price, touching the same files and functions, except that B takes each line's VAT from the line's price as charged. Together, both hold: the combination is legitimate and should be accepted.",
+   "a": {
+    "agent": "agent-a",
+    "why": "ten or more of an item take 10% off",
+    "files": [
+     "src/pricing.ts"
+    ],
+    "fact": {
+     "id": "bulk-discount",
+     "sentence": "Ten or more of an item take 10% off the line, before VAT is added",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=eggs&qty=10",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600,
+          "vat": 900,
+          "total": 4500
+         }
+        }
+       },
+       {
+        "path": "/api/quote?item=eggs&qty=9",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "show the VAT on each line of a quote",
+    "files": [
+     "src/tax.ts",
+     "src/pricing.ts"
+    ],
+    "fact": {
+     "id": "vat-per-line",
+     "sentence": "A quote shows the VAT on each line",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=kale&qty=3",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.vat": 240,
+          "vat": 240
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.024
+   },
+   "expect": {
+    "combinedFails": []
+   },
+   "hasResolution": false,
+   "facts": {
+    "a": {
+     "id": "bulk-discount",
+     "sentence": "Ten or more of an item take 10% off the line, before VAT is added",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=eggs&qty=10",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600,
+          "vat": 900,
+          "total": 4500
+         }
+        }
+       },
+       {
+        "path": "/api/quote?item=eggs&qty=9",
+        "expect": {
+         "status": 200,
+         "json": {
+          "subtotal": 3600
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "vat-per-line",
+     "sentence": "A quote shows the VAT on each line",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/quote?item=kale&qty=3",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.vat": 240,
+          "vat": 240
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 3,
+     "removed": 2
+    },
+    "b": {
+     "added": 7,
+     "removed": 5
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "b41fbb89758c",
+     "startMs": 772,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 221
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 197
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 9
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "vat-per-line": {
+       "held": false,
+       "detail": "step 1: lines.0.vat is undefined, expected 240",
+       "ms": 1
+      }
+     }
+    },
+    "b": {
+     "sha": "e19bc7adc2fd",
+     "startMs": 770,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 240
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 205
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 0
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": false,
+       "detail": "step 1: subtotal is 4000, expected 3600",
+       "ms": 1
+      },
+      "vat-per-line": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      }
+     }
+    },
+    "combined": {
+     "sha": "cbfd2ad3f16d",
+     "startMs": 764,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 221
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 199
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 17
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "vat-per-line": {
+       "held": true,
+       "detail": "ok",
+       "ms": 0
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [],
+   "resolved": [],
+   "cross": {
+    "vat-per-line on A": {
+     "held": false,
+     "detail": "step 1: lines.0.vat is undefined, expected 240",
+     "ms": 1
+    },
+    "bulk-discount on B": {
+     "held": false,
+     "detail": "step 1: subtotal is 4000, expected 3600",
+     "ms": 1
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.2,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.2,
+     "failing": [],
+     "landed": true
+    },
+    "bounces": [],
+    "fix": null,
+    "detectSeconds": null,
+    "resolveSeconds": null,
+    "delivered": "A and B",
+    "broken": [],
+    "interventions": 0
+   },
+   "seconds": 4.2
+  },
+  {
+   "id": "control-basket-shape",
+   "title": "Control: the basket changes shape, and a writer that doesn't care",
+   "class": "Control for persistent-state compatibility",
+   "kind": "control",
+   "seeded": true,
+   "story": "A is basket-shape's A: the stored basket becomes { productId: { qty, note } }. B lets a shopper empty the basket, in the same Durable Object, by deleting the stored key, which works whatever its shape. Together, both hold.",
+   "a": {
+    "agent": "agent-a",
+    "why": "let a basket line carry a gift note",
+    "files": [
+     "src/cart.ts",
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "gift-note",
+     "sentence": "A basket line can carry a gift note",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 2,
+         "note": "For Ada"
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 2,
+          "lines.0.note": "For Ada"
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "let a shopper empty the basket",
+    "files": [
+     "src/cart.ts",
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "empty-basket",
+     "sentence": "A shopper can empty the basket",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 2
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "method": "DELETE",
+        "path": "/api/cart",
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.length": 0
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.022
+   },
+   "expect": {
+    "combinedFails": []
+   },
+   "hasResolution": false,
+   "facts": {
+    "a": {
+     "id": "gift-note",
+     "sentence": "A basket line can carry a gift note",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 2,
+         "note": "For Ada"
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.0.qty": 2,
+          "lines.0.note": "For Ada"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "empty-basket",
+     "sentence": "A shopper can empty the basket",
+     "check": {
+      "kind": "probe",
+      "steps": [
+       {
+        "method": "POST",
+        "path": "/api/cart",
+        "body": {
+         "id": "eggs",
+         "qty": 2
+        },
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "method": "DELETE",
+        "path": "/api/cart",
+        "expect": {
+         "status": 200
+        }
+       },
+       {
+        "path": "/api/cart",
+        "expect": {
+         "status": 200,
+         "json": {
+          "lines.length": 0
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 21,
+     "removed": 8
+    },
+    "b": {
+     "added": 12,
+     "removed": 0
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "d16abaf534b1",
+     "startMs": 1012,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 214
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 223
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 12
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "gift-note": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "empty-basket": {
+       "held": false,
+       "detail": "step 2: DELETE /api/cart returned 404, expected 200",
+       "ms": 5
+      }
+     }
+    },
+    "b": {
+     "sha": "6d49134f8e8e",
+     "startMs": 760,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 218
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 197
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 13
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "gift-note": {
+       "held": false,
+       "detail": "step 2: lines.0.note is undefined, expected \"For Ada\"",
+       "ms": 4
+      },
+      "empty-basket": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      }
+     }
+    },
+    "combined": {
+     "sha": "cd323174a763",
+     "startMs": 761,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 222
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 195
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 12
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 8
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "gift-note": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "empty-basket": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [],
+   "resolved": [],
+   "cross": {
+    "empty-basket on A": {
+     "held": false,
+     "detail": "step 2: DELETE /api/cart returned 404, expected 200",
+     "ms": 5
+    },
+    "gift-note on B": {
+     "held": false,
+     "detail": "step 2: lines.0.note is undefined, expected \"For Ada\"",
+     "ms": 4
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.5,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.3,
+     "failing": [],
+     "landed": true
+    },
+    "bounces": [],
+    "fix": null,
+    "detectSeconds": null,
+    "resolveSeconds": null,
+    "delivered": "A and B",
+    "broken": [],
+    "interventions": 0
+   },
+   "seconds": 4.5
+  },
+  {
+   "id": "control-threshold",
+   "title": "Control: the shared setting changes, and a module that means the same thing",
+   "class": "Control for a config change against a dependent module",
+   "kind": "control",
+   "seeded": true,
+   "story": "A is shared-threshold's A: LOW_STOCK goes from 5 to 10. B flags low stock in the product API by the same LOW_STOCK, meaning what the shop page means by it. Together, both hold: the product with 8 left is flagged on the page and in the API alike.",
+   "a": {
+    "agent": "agent-a",
+    "why": "warn shoppers when ten or fewer are left",
+    "files": [
+     "src/config.ts"
+    ],
+    "fact": {
+     "id": "warn-at-ten",
+     "sentence": "The shop page warns when ten or fewer of a product are left",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/",
+        "expect": {
+         "status": 200,
+         "bodyIncludes": "only 8 left"
+        }
+       }
+      ]
+     }
+    }
+   },
+   "b": {
+    "agent": "agent-b",
+    "why": "flag low stock in the product API",
+    "files": [
+     "src/index.ts"
+    ],
+    "fact": {
+     "id": "low-stock-flag",
+     "sentence": "The product API flags products that are low on stock",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/products",
+        "expect": {
+         "status": 200,
+         "json": {
+          "0.low": false,
+          "3.low": true
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "merge": {
+    "clean": true,
+    "conflicted": [],
+    "seconds": 0.021
+   },
+   "expect": {
+    "combinedFails": []
+   },
+   "hasResolution": false,
+   "facts": {
+    "a": {
+     "id": "warn-at-ten",
+     "sentence": "The shop page warns when ten or fewer of a product are left",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/",
+        "expect": {
+         "status": 200,
+         "bodyIncludes": "only 8 left"
+        }
+       }
+      ]
+     }
+    },
+    "b": {
+     "id": "low-stock-flag",
+     "sentence": "The product API flags products that are low on stock",
+     "check": {
+      "kind": "probe",
+      "isolate": false,
+      "steps": [
+       {
+        "path": "/api/products",
+        "expect": {
+         "status": 200,
+         "json": {
+          "0.low": false,
+          "3.low": true
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "size": {
+    "a": {
+     "added": 1,
+     "removed": 1
+    },
+    "b": {
+     "added": 2,
+     "removed": 1
+    }
+   },
+   "trees": {
+    "a": {
+     "sha": "501fc95afb21",
+     "startMs": 759,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 215
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 204
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 9
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 8
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "warn-at-ten": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "low-stock-flag": {
+       "held": false,
+       "detail": "step 1: 0.low is undefined, expected false",
+       "ms": 1
+      }
+     }
+    },
+    "b": {
+     "sha": "30c0b6915ae9",
+     "startMs": 759,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 219
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 198
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 9
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "warn-at-ten": {
+       "held": false,
+       "detail": "step 1: GET / body does not include \"only 8 left\"",
+       "ms": 1
+      },
+      "low-stock-flag": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      }
+     }
+    },
+    "combined": {
+     "sha": "078f3cd709b8",
+     "startMs": 761,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 221
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 195
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 9
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "warn-at-ten": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "low-stock-flag": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      }
+     }
+    }
+   },
+   "vacuous": [],
+   "aAlone": [],
+   "bAlone": [],
+   "combined": [],
+   "resolved": [],
+   "cross": {
+    "low-stock-flag on A": {
+     "held": false,
+     "detail": "step 1: 0.low is undefined, expected false",
+     "ms": 1
+    },
+    "warn-at-ten on B": {
+     "held": false,
+     "detail": "step 1: GET / body does not include \"only 8 left\"",
+     "ms": 1
+    }
+   },
+   "notes": [],
+   "deviations": [],
+   "asDesigned": true,
+   "plain": {
+    "textMerge": true,
+    "conflicted": [],
+    "mergeSeconds": 0,
+    "delivered": true,
+    "broken": [],
+    "interventions": 0
+   },
+   "queue": {
+    "a": {
+     "seconds": 1.2,
+     "landed": true
+    },
+    "b": {
+     "seconds": 1.2,
+     "failing": [],
+     "landed": true
+    },
+    "bounces": [],
+    "fix": null,
+    "detectSeconds": null,
+    "resolveSeconds": null,
+    "delivered": "A and B",
+    "broken": [],
+    "interventions": 0
+   },
+   "seconds": 4.1
+  }
+ ]
+}

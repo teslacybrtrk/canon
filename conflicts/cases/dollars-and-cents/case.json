@@ -1,0 +1,23 @@
+{
+  "id": "dollars-and-cents",
+  "title": "Prices move from cents to dollars under a new reader",
+  "class": "Units mismatch",
+  "kind": "conflict",
+  "seeded": true,
+  "story": "A stores catalog prices in dollars (the product API gives dollars) and converts with cents() everywhere it found a price: pricing and the shop page. B adds a price list for the till, written when price meant cents, so it formats p.price as cents. Together, the till says eggs cost $0.04. Both are numbers, so the type-checker can't tell.",
+  "a": {
+    "agent": "agent-a",
+    "why": "the product API should give prices in dollars",
+    "files": ["src/catalog.ts", "src/pricing.ts", "src/page.ts"],
+    "fact": { "id": "prices-in-dollars", "sentence": "The product API gives prices in dollars", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/products", "expect": { "status": 200, "json": { "0.id": "eggs", "0.price": 4, "2.price": 3.2 } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "print a price list for the till",
+    "files": ["src/till.ts", "src/index.ts"],
+    "fact": { "id": "till-price-list", "sentence": "The till prints a price list with every product's price", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/till", "expect": { "status": 200, "bodyIncludes": "eggs $4.00" } }, { "path": "/till", "expect": { "status": 200, "bodyIncludes": "kale $3.20" } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": ["till-price-list"] },
+  "resolution": "The till formats cents(p), A's conversion, instead of p.price."
+}

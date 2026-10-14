@@ -1,0 +1,15 @@
+diff --git a/src/index.ts b/src/index.ts
+index 902655d..4bd4464 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -40,8 +40,8 @@ function quoteFor(url: URL): Response {
+ // POST /api/cart {"id": "eggs", "qty": 2}: adds a line to the basket.
+ async function addToCart(request: Request, cart: DurableObjectStub<Cart>): Promise<Response> {
+   const body = await request.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+-  // A line has an id and a quantity, nothing else: a client can't send its own price.
+-  const extra = Object.keys(body).find((k) => !["id", "qty"].includes(k));
++  // A line has an id, a quantity and whether a substitute is fine, nothing else: a client can't send its own price.
++  const extra = Object.keys(body).find((k) => !["id", "qty", "substitute"].includes(k));
+   if (extra) return Response.json({ error: `unknown field ${extra}` }, { status: 400 });
+   const id = String(body.id ?? "");
+   const qty = body.qty === undefined ? 1 : Number(body.qty);

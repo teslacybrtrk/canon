@@ -1,0 +1,23 @@
+{
+  "id": "vat-on-list-price",
+  "title": "A bulk discount and VAT shown line by line",
+  "class": "Pricing and tax interaction across files",
+  "kind": "conflict",
+  "seeded": true,
+  "story": "A takes 10% off a line of ten or more, in pricing.ts. B shows the VAT on each line, and in tax.ts works it out from the product's price times the quantity, which is what a line cost on B's base. Together, a discounted line is taxed on its price before the discount.",
+  "a": {
+    "agent": "agent-a",
+    "why": "ten or more of an item take 10% off",
+    "files": ["src/pricing.ts"],
+    "fact": { "id": "bulk-discount", "sentence": "Ten or more of an item take 10% off the line, before VAT is added", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/quote?item=eggs&qty=10", "expect": { "status": 200, "json": { "subtotal": 3600, "vat": 900, "total": 4500 } } }, { "path": "/api/quote?item=eggs&qty=9", "expect": { "status": 200, "json": { "subtotal": 3600 } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "show the VAT on each line of a quote",
+    "files": ["src/tax.ts", "src/pricing.ts"],
+    "fact": { "id": "vat-per-line", "sentence": "A quote shows the VAT on each line", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/quote?item=kale&qty=3", "expect": { "status": 200, "json": { "lines.0.vat": 240, "vat": 240 } } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": ["bulk-discount"] },
+  "resolution": "tax.ts takes the line's price as charged (lineVat(cents)), and pricing.ts passes it the discounted line."
+}

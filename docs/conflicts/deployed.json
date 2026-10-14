@@ -1,0 +1,214 @@
+{
+  "date": "2026-10-14",
+  "judge": "00c761d1, deployed from dcac7ae",
+  "setup": "One project per case on canon.rodeo, genesis from conflicts/app, both features in its backlog on autopilot (no person accepts anything). A and B are scripted agents pushing the case's seeded patches together with plain Git; the judge decides what lands, re-applies the other side on the new canon by itself, and judges the combined code. When that fails, the case's reference resolution is pushed the way an agent fixes it (canon refresh, the fix, git push): the one intervention counted. Run by scripts/conflicts-deployed.mjs.",
+  "notes": "Run Oct 13, 20:59 to 21:23 PDT, the eleven projects in parallel (csbasketshape and the rest, left up). Of the 8 conflict cases, 6 broke on the combined code and were caught there; in the other two nothing broke on Canon: double-discount's second implementation of the same fact was superseded, never combined, and in limit-lost-in-repair the judge's repair model kept both limits when it resolved the text conflict. In every case the first change landed while the second was being judged, so the second's first verdict came back behind and the judge re-applied it by itself: detection is on that re-applied, combined code, and its diagnosis label reads 'the code' rather than 'a combination' (the earlier verdict was behind, not Ready). Times come from the runner's clock and the judge's records: detection runs from the first landing until the runner saw the failure on the combined code (it polls every 10 s); resolution from the fix's push to its Ready verdict. The basket-shape fix, and control-basket-shape's A, were then held at release by the rollback rehearsal (the previous version can't read the new basket shape): the release check, not the combination.",
+  "cases": {
+    "basket-shape": {
+      "outcome": "A held alone (judged as the other landed); B held alone. Canon #2: “A shopper can take one of a product back out of the basket” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “A shopper can take one of a product back out of the basket”: step 3: lines.0.qty is undefined, expected 2. The fix (the case's reference resolution, pushed the way an agent would) held every fact. Canon #3 was held before production: its rollback rehearsal failed (the previous version can't read what this release wrote for “cart-keeps-lines” (it reads what it wrote itself): step 1: subtotal is null, expected 1120.",
+      "reapplied": "clean",
+      "detected": true,
+      "delivered": false,
+      "resolved": true,
+      "interventions": 1,
+      "detectSeconds": 112,
+      "resolveSeconds": 125,
+      "releases": [
+        "released: Canon #2 released as Worker version 9a0387a1; rollback rehearsal passed",
+        "held: Canon #3 held back before production: its rollback rehearsal failed (the previous version can't read"
+      ],
+      "records": [
+        "https://canon.rodeo/p/csbasketshape/attempts/csbasketshape-9a0wav/verdict",
+        "https://canon.rodeo/p/csbasketshape/canon/2/acceptance",
+        "https://canon.rodeo/p/csbasketshape/canon/3/acceptance"
+      ]
+    },
+    "control-basket-shape": {
+      "outcome": "A held alone (then its release was held: see below); B held alone (judged as the other landed). Canon #2 was held before production: its rollback rehearsal failed (the previous version can't read what this release wrote for “cart-keeps-lines” (it reads what it wrote itself): step 1: subtotal is null, expected 1120. That is the release check, not the combination: A changes the stored basket's shape, which the previous version can't read back, so a rollback wouldn't be safe and autopilot doesn't release it (an owner's accept would, and its record would name the override). B landed and shipped on its own.",
+      "reapplied": "clean",
+      "detected": false,
+      "delivered": false,
+      "accepted": false,
+      "resolved": true,
+      "interventions": 0,
+      "detectSeconds": null,
+      "resolveSeconds": null,
+      "releases": [
+        "held: Canon #2 held back before production: its rollback rehearsal failed (the previous version can't read",
+        "released: Canon #4 released as Worker version 6f807d22; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/csctlbasketshape/canon/2/acceptance",
+        "https://canon.rodeo/p/csctlbasketshape/canon/4/acceptance"
+      ]
+    },
+    "control-threshold": {
+      "outcome": "A held alone; B held alone (judged as the other landed). Both landed: the judge re-applied the second on the first, and every fact held on the combined code.",
+      "reapplied": "clean",
+      "detected": false,
+      "delivered": false,
+      "accepted": true,
+      "resolved": true,
+      "interventions": 0,
+      "detectSeconds": null,
+      "resolveSeconds": null,
+      "releases": [
+        "released: Canon #2 released as Worker version 437d1244; rollback rehearsal passed",
+        "released: Canon #3 released as Worker version 5d74494c; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/csctlthreshold/canon/2/acceptance",
+        "https://canon.rodeo/p/csctlthreshold/canon/3/acceptance"
+      ]
+    },
+    "control-vat-per-line": {
+      "outcome": "A held alone; B held alone (judged as the other landed). Both landed: the judge re-applied the second on the first, and every fact held on the combined code.",
+      "reapplied": "clean",
+      "detected": false,
+      "delivered": false,
+      "accepted": true,
+      "resolved": true,
+      "interventions": 0,
+      "detectSeconds": null,
+      "resolveSeconds": null,
+      "releases": [
+        "released: Canon #2 released as Worker version f53ea65c; rollback rehearsal passed",
+        "released: Canon #3 released as Worker version f73d792b; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/csctlvatperline/canon/2/acceptance",
+        "https://canon.rodeo/p/csctlvatperline/canon/3/acceptance"
+      ]
+    },
+    "dollars-and-cents": {
+      "outcome": "A held alone (judged as the other landed); B held alone. Canon #2: “The till prints a price list with every product's price” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “The till prints a price list with every product's price”: step 1: GET /till body does not include \"eggs $4.00\". The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "reapplied": "clean",
+      "detected": true,
+      "delivered": false,
+      "resolved": true,
+      "interventions": 1,
+      "detectSeconds": 115,
+      "resolveSeconds": 59,
+      "releases": [
+        "released: Canon #2 released as Worker version d355d5ac; rollback rehearsal passed",
+        "released: Canon #3 released as Worker version 2a0ca967; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/csdollarsandcent/attempts/csdollarsandcent-3cc0ta/verdict",
+        "https://canon.rodeo/p/csdollarsandcent/canon/2/acceptance",
+        "https://canon.rodeo/p/csdollarsandcent/canon/3/acceptance"
+      ]
+    },
+    "double-discount": {
+      "outcome": "Both built the same fact: the first Ready one landed, the other was superseded, never combined (one implementation per fact).",
+      "reapplied": "not re-applied",
+      "detected": false,
+      "delivered": false,
+      "resolved": false,
+      "interventions": 0,
+      "detectSeconds": null,
+      "resolveSeconds": null,
+      "releases": [
+        "released: Canon #2 released as Worker version 49d95ff2; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/csdoublediscount/canon/2/acceptance"
+      ]
+    },
+    "hidden-sold-out": {
+      "outcome": "A held alone (judged as the other landed); B held alone. Canon #2: “Each product has an API page that says whether it's in stock” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “Each product has an API page that says whether it's in stock”: step 1: GET /api/products/honey returned 404, expected 200. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "reapplied": "clean",
+      "detected": true,
+      "delivered": false,
+      "resolved": true,
+      "interventions": 1,
+      "detectSeconds": 120,
+      "resolveSeconds": 74,
+      "releases": [
+        "released: Canon #2 released as Worker version 644f1651; rollback rehearsal passed",
+        "released: Canon #3 released as Worker version 2c478b13; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/cshiddensoldout/attempts/cshiddensoldout-klbd00/verdict",
+        "https://canon.rodeo/p/cshiddensoldout/canon/2/acceptance",
+        "https://canon.rodeo/p/cshiddensoldout/canon/3/acceptance"
+      ]
+    },
+    "limit-lost-in-repair": {
+      "outcome": "A held alone; B held alone (judged as the other landed). The re-apply hit the text conflict; the judge's repair model resolved it, keeping both sides, and every fact held on its result: both limits are in the code, nothing was lost, and both landed. (Locally, the seeded hurried resolution drops A's cap; Canon's repair didn't.)",
+      "reapplied": "conflict, repaired",
+      "repair": "the re-apply hit the text conflict; the judge's repair model resolved it, keeping both sides, and every fact held on its result",
+      "detected": false,
+      "delivered": false,
+      "resolved": true,
+      "interventions": 0,
+      "detectSeconds": null,
+      "resolveSeconds": null,
+      "releases": [
+        "released: Canon #2 released as Worker version 6f14471a; rollback rehearsal passed",
+        "released: Canon #3 released as Worker version 5fe87e0a; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/cslimitlostinrep/canon/2/acceptance",
+        "https://canon.rodeo/p/cslimitlostinrep/canon/3/acceptance"
+      ]
+    },
+    "shared-threshold": {
+      "outcome": "A held alone; B held alone (judged as the other landed). Canon #2: “The shop page warns when ten or fewer of a product are left” landed first; the judge re-applied the other on top by itself, and on the combined code: its own fact doesn't hold: step 1: length is 3, expected 2. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "reapplied": "clean",
+      "detected": true,
+      "delivered": false,
+      "resolved": true,
+      "interventions": 1,
+      "detectSeconds": 166,
+      "resolveSeconds": 51,
+      "releases": [
+        "released: Canon #2 released as Worker version a767fa27; rollback rehearsal passed",
+        "released: Canon #3 released as Worker version bcf98634; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/cssharedthreshol/attempts/cssharedthreshol-2kur2v/verdict",
+        "https://canon.rodeo/p/cssharedthreshol/canon/2/acceptance",
+        "https://canon.rodeo/p/cssharedthreshol/canon/3/acceptance"
+      ]
+    },
+    "strict-fields": {
+      "outcome": "A held alone; B held alone (judged as the other landed). Canon #2: “The basket refuses fields it doesn't know, so a client can't set its own price” landed first; the judge re-applied the other on top by itself, and on the combined code: its own fact doesn't hold: step 1: POST /api/cart returned 400, expected 200. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "reapplied": "clean",
+      "detected": true,
+      "delivered": false,
+      "resolved": true,
+      "interventions": 1,
+      "detectSeconds": 191,
+      "resolveSeconds": 58,
+      "releases": [
+        "released: Canon #2 released as Worker version 7f0e7dcc; rollback rehearsal passed",
+        "released: Canon #3 released as Worker version 1e3ce3ab; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/csstrictfields/attempts/csstrictfields-qckqsb/verdict",
+        "https://canon.rodeo/p/csstrictfields/canon/2/acceptance",
+        "https://canon.rodeo/p/csstrictfields/canon/3/acceptance"
+      ]
+    },
+    "vat-on-list-price": {
+      "outcome": "A held alone; B held alone (judged as the other landed). Canon #2: “Ten or more of an item take 10% off the line, before VAT is added” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “VAT is 25% of the subtotal, and the total is the subtotal plus VAT”: sample 2, step 2: vat is 1320, expected 1188 (with qty = 11, item = greens). The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "reapplied": "clean",
+      "detected": true,
+      "delivered": false,
+      "resolved": true,
+      "interventions": 1,
+      "detectSeconds": 165,
+      "resolveSeconds": 61,
+      "releases": [
+        "released: Canon #2 released as Worker version 5a58a2ea; rollback rehearsal passed",
+        "released: Canon #3 released as Worker version 0b4f763e; rollback rehearsal passed"
+      ],
+      "records": [
+        "https://canon.rodeo/p/csvatonlistprice/attempts/csvatonlistprice-ca2txl/verdict",
+        "https://canon.rodeo/p/csvatonlistprice/canon/2/acceptance",
+        "https://canon.rodeo/p/csvatonlistprice/canon/3/acceptance"
+      ]
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "strict-fields",
+  "title": "Stricter validation against a caller that sends a new field",
+  "class": "Validation added against a caller that now sends rejected input",
+  "kind": "conflict",
+  "seeded": true,
+  "story": "A hardens POST /api/cart: a body may only hold id and qty, so a client can't send its own price. B lets a shopper say a substitute is fine for a line, sent as a new substitute field on the same request. Together, every request B's client sends is refused with 400.",
+  "a": {
+    "agent": "agent-a",
+    "why": "refuse fields a basket line doesn't have",
+    "files": ["src/index.ts"],
+    "fact": { "id": "no-unknown-fields", "sentence": "The basket refuses fields it doesn't know, so a client can't set its own price", "check": { "kind": "probe", "steps": [{ "method": "POST", "path": "/api/cart", "body": { "id": "eggs", "qty": 1, "price": 1 }, "expect": { "status": 400 } }, { "path": "/api/cart", "expect": { "status": 200, "json": { "lines.length": 0 } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "let a shopper accept a substitute",
+    "files": ["src/index.ts", "src/cart.ts"],
+    "fact": { "id": "substitutes", "sentence": "A shopper can say a substitute is fine for a basket line", "check": { "kind": "probe", "steps": [{ "method": "POST", "path": "/api/cart", "body": { "id": "kale", "qty": 2, "substitute": true }, "expect": { "status": 200 } }, { "path": "/api/cart", "expect": { "status": 200, "json": { "lines.0.substitute": true } } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": ["substitutes"] },
+  "resolution": "The allowed fields are id, qty and substitute."
+}

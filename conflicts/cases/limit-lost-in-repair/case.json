@@ -1,0 +1,24 @@
+{
+  "id": "limit-lost-in-repair",
+  "title": "Two limits on the same line, and a repair that keeps one",
+  "class": "Functionality lost during repair",
+  "kind": "conflict",
+  "seeded": true,
+  "story": "A caps a basket line at 99; B caps it at what's in stock. Both rewrite the same validation line in cart.ts, so Git stops at a text conflict. The seeded repair keeps one side of the conflicting line (git merge -X theirs: B's), which compiles, reads plausibly and passes B's check, and silently drops A's cap. It stands in for a hurried resolution or a repair that picks a side; it is not Canon's repair model, which the deployed run uses.",
+  "a": {
+    "agent": "agent-a",
+    "why": "a basket line holds at most 99",
+    "files": ["src/cart.ts"],
+    "fact": { "id": "line-limit", "sentence": "A basket line holds at most 99 of a product", "check": { "kind": "probe", "steps": [{ "method": "POST", "path": "/api/cart", "body": { "id": "eggs", "qty": 100 }, "expect": { "status": 400 } }, { "method": "POST", "path": "/api/cart", "body": { "id": "eggs", "qty": 99 }, "expect": { "status": 200 } }, { "path": "/api/cart", "expect": { "status": 200, "json": { "lines.0.qty": 99 } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "never sell more than is in stock",
+    "files": ["src/cart.ts"],
+    "fact": { "id": "stock-limit", "sentence": "The basket can't hold more of a product than is in stock", "check": { "kind": "probe", "steps": [{ "method": "POST", "path": "/api/cart", "body": { "id": "comb", "qty": 6 }, "expect": { "status": 400 } }, { "method": "POST", "path": "/api/cart", "body": { "id": "comb", "qty": 5 }, "expect": { "status": 200 } }, { "path": "/api/cart", "expect": { "status": 200, "json": { "lines.0.qty": 5 } } }] } }
+  },
+  "merge": "conflict",
+  "repair": { "strategy": "theirs", "label": "seeded lossy repair: git merge -X theirs (B's side of each conflicting hunk)" },
+  "expect": { "combinedFails": ["line-limit"] },
+  "resolution": "Both limits, one check each: at most 99 per line, and no more than is in stock."
+}

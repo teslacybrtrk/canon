@@ -1,0 +1,74 @@
+diff --git a/src/catalog.ts b/src/catalog.ts
+index ec44e8f..a132d93 100644
+--- a/src/catalog.ts
++++ b/src/catalog.ts
+@@ -1,4 +1,4 @@
+-// The catalog: what the shop sells. Prices are in cents.
++// The catalog: what the shop sells. Prices are in dollars.
+ 
+ export interface Product {
+   id: string;
+@@ -8,11 +8,11 @@ export interface Product {
+ }
+ 
+ const CATALOG: Product[] = [
+-  { id: "eggs", name: "Dozen eggs", price: 400, stock: 500 },
+-  { id: "honey", name: "Wildflower honey", price: 1200, stock: 0 },
+-  { id: "kale", name: "Kale bunch", price: 320, stock: 40 },
+-  { id: "comb", name: "Honeycomb", price: 1600, stock: 5 },
+-  { id: "greens", name: "Salad greens", price: 480, stock: 8 },
++  { id: "eggs", name: "Dozen eggs", price: 4, stock: 500 },
++  { id: "honey", name: "Wildflower honey", price: 12, stock: 0 },
++  { id: "kale", name: "Kale bunch", price: 3.2, stock: 40 },
++  { id: "comb", name: "Honeycomb", price: 16, stock: 5 },
++  { id: "greens", name: "Salad greens", price: 4.8, stock: 8 },
+ ];
+ 
+ // The products the shop sells, sold out or not.
+@@ -23,3 +23,8 @@ export function products(): Product[] {
+ export function findProduct(id: string): Product | undefined {
+   return products().find((p) => p.id === id);
+ }
++
++// A product's price in cents, for arithmetic.
++export function cents(p: Product): number {
++  return Math.round(p.price * 100);
++}
+diff --git a/src/page.ts b/src/page.ts
+index d21fe2f..bbdefcd 100644
+--- a/src/page.ts
++++ b/src/page.ts
+@@ -1,4 +1,4 @@
+-import type { Product } from "./catalog";
++import { cents, type Product } from "./catalog";
+ import { LOW_STOCK, SHOP_NAME } from "./config";
+ import { money } from "./money";
+ import type { Quote } from "./pricing";
+@@ -9,7 +9,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+ 
+ function row(p: Product): string {
+   const left = p.stock === 0 ? "sold out" : p.stock <= LOW_STOCK ? `only ${p.stock} left` : "in stock";
+-  return `<li>${esc(p.name)}: ${money(p.price)} <small>${left}</small></li>`;
++  return `<li>${esc(p.name)}: ${money(cents(p))} <small>${left}</small></li>`;
+ }
+ 
+ export function shopPage(products: Product[], basket: Quote): Response {
+diff --git a/src/pricing.ts b/src/pricing.ts
+index bf77aff..e65082e 100644
+--- a/src/pricing.ts
++++ b/src/pricing.ts
+@@ -1,4 +1,4 @@
+-import { findProduct, type Product } from "./catalog";
++import { cents, findProduct, type Product } from "./catalog";
+ import { vatCents } from "./tax";
+ 
+ export interface Line {
+@@ -8,7 +8,7 @@ export interface Line {
+ 
+ // What one line of goods costs, before VAT.
+ export function lineCents(product: Product, qty: number): number {
+-  return product.price * qty;
++  return cents(product) * qty;
+ }
+ 
+ // A quote for some lines: what each line costs, the subtotal, VAT and the total, all in cents.

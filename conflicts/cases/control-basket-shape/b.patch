@@ -1,0 +1,38 @@
+diff --git a/src/cart.ts b/src/cart.ts
+index 040f5bd..0cf070a 100644
+--- a/src/cart.ts
++++ b/src/cart.ts
+@@ -17,6 +17,11 @@ export class Cart extends DurableObject {
+     return { ok: true };
+   }
+ 
++  // Empties the basket.
++  async empty(): Promise<void> {
++    await this.ctx.storage.delete("lines");
++  }
++
+   async view(): Promise<Quote> {
+     const lines = (await this.ctx.storage.get<Record<string, number>>("lines")) ?? {};
+     return quote(Object.entries(lines).map(([id, qty]) => ({ id, qty })));
+diff --git a/src/index.ts b/src/index.ts
+index c712f7f..8ff89e2 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -23,6 +23,7 @@ export default {
+     if (route === "GET /api/products") return Response.json(products());
+     if (route === "GET /api/quote") return quoteFor(url);
+     if (route === "GET /api/cart") return Response.json(await cart.view());
++    if (route === "DELETE /api/cart") return emptyCart(cart);
+     if (route === "POST /api/cart") return addToCart(request, cart);
+     return Response.json({ error: "not found" }, { status: 404 });
+   },
+@@ -45,3 +46,9 @@ async function addToCart(request: Request, cart: DurableObjectStub<Cart>): Promi
+   const added = await cart.add(id, qty);
+   return added.ok ? Response.json(await cart.view()) : Response.json({ error: added.error }, { status: added.status });
+ }
++
++// DELETE /api/cart: an empty basket.
++async function emptyCart(cart: DurableObjectStub<Cart>): Promise<Response> {
++  await cart.empty();
++  return Response.json(await cart.view());
++}

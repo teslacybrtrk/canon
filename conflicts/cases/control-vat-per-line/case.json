@@ -1,0 +1,22 @@
+{
+  "id": "control-vat-per-line",
+  "title": "Control: the discount and per-line VAT, written to compose",
+  "class": "Control for pricing and tax across files",
+  "kind": "control",
+  "seeded": true,
+  "story": "The same two features as vat-on-list-price, touching the same files and functions, except that B takes each line's VAT from the line's price as charged. Together, both hold: the combination is legitimate and should be accepted.",
+  "a": {
+    "agent": "agent-a",
+    "why": "ten or more of an item take 10% off",
+    "files": ["src/pricing.ts"],
+    "fact": { "id": "bulk-discount", "sentence": "Ten or more of an item take 10% off the line, before VAT is added", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/quote?item=eggs&qty=10", "expect": { "status": 200, "json": { "subtotal": 3600, "vat": 900, "total": 4500 } } }, { "path": "/api/quote?item=eggs&qty=9", "expect": { "status": 200, "json": { "subtotal": 3600 } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "show the VAT on each line of a quote",
+    "files": ["src/tax.ts", "src/pricing.ts"],
+    "fact": { "id": "vat-per-line", "sentence": "A quote shows the VAT on each line", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/quote?item=kale&qty=3", "expect": { "status": 200, "json": { "lines.0.vat": 240, "vat": 240 } } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": [] }
+}

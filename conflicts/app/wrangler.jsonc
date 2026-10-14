@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "checkout",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // The app the designed conflict cases change (docs/conflicts.md). No account here: CI and the scripts pass
+  // CLOUDFLARE_ACCOUNT_ID. Previews stay on workers.dev, where the judge's Worker can fetch them.
+  "workers_dev": true,
+  "preview_urls": true,
+  // Each shopper's basket is a Durable Object (src/cart.ts): the persistent state the storage cases change.
+  "durable_objects": { "bindings": [{ "name": "CART", "class_name": "Cart" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Cart"] }],
+  // Each Preview gets its own Durable Object namespace; the binding is repeated because the code reads it from env.
+  "previews": {
+    "durable_objects": { "bindings": [{ "name": "CART", "class_name": "Cart" }] }
+  }
+}

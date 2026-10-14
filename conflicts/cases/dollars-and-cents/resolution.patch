@@ -1,0 +1,15 @@
+diff --git a/src/till.ts b/src/till.ts
+index 0af7591..c56731a 100644
+--- a/src/till.ts
++++ b/src/till.ts
+@@ -1,8 +1,8 @@
+-import { products } from "./catalog";
++import { cents, products } from "./catalog";
+ import { money } from "./money";
+ 
+ // The till's price list: one line per product, for the printer by the register.
+ export function priceList(): Response {
+-  const lines = products().map((p) => `${p.id} ${money(p.price)}`);
++  const lines = products().map((p) => `${p.id} ${money(cents(p))}`);
+   return new Response(`${lines.join("\n")}\n`, { headers: { "content-type": "text/plain; charset=utf-8" } });
+ }

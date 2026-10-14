@@ -1,0 +1,10 @@
+diff --git a/src/config.ts b/src/config.ts
+index fb9b17e..2c44b56 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -2,4 +2,4 @@
+ export const SHOP_NAME = "Corner Larder";
+ 
+ // Stock at or below this is low.
+-export const LOW_STOCK = 5;
++export const LOW_STOCK = 10;

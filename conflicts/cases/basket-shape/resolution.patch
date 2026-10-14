@@ -1,0 +1,18 @@
+diff --git a/src/cart.ts b/src/cart.ts
+index 6d3db35..39ba7e7 100644
+--- a/src/cart.ts
++++ b/src/cart.ts
+@@ -31,9 +31,10 @@ export class Cart extends DurableObject {
+ 
+   // Takes one of a product back out of the basket; the line goes when none are left.
+   async takeOne(id: string): Promise<boolean> {
+-    const lines = (await this.ctx.storage.get<Record<string, number>>("lines")) ?? {};
+-    if (!lines[id]) return false;
+-    if (lines[id] > 1) lines[id] -= 1;
++    const lines = await this.read();
++    const line = lines[id];
++    if (!line) return false;
++    if (line.qty > 1) line.qty -= 1;
+     else delete lines[id];
+     await this.ctx.storage.put("lines", lines);
+     return true;

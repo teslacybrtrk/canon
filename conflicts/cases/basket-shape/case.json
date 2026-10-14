@@ -1,0 +1,23 @@
+{
+  "id": "basket-shape",
+  "title": "A stored basket changes shape under a new writer",
+  "class": "Persistent-state compatibility (Durable Object storage)",
+  "kind": "conflict",
+  "seeded": true,
+  "story": "A lets a basket line carry a gift note, so the Cart Durable Object now stores { productId: { qty, note } } instead of { productId: qty }, and reads baskets saved in the old shape too. B adds 'take one back out', written against the old shape: it reads lines[id] as a number and writes it back. Together, taking one egg out deletes the whole line from storage (an object compared with 1 is never greater). Each method names its own storage type, so the type-checker can't see the mismatch.",
+  "a": {
+    "agent": "agent-a",
+    "why": "let a basket line carry a gift note",
+    "files": ["src/cart.ts", "src/index.ts"],
+    "fact": { "id": "gift-note", "sentence": "A basket line can carry a gift note", "check": { "kind": "probe", "steps": [{ "method": "POST", "path": "/api/cart", "body": { "id": "eggs", "qty": 2, "note": "For Ada" }, "expect": { "status": 200 } }, { "path": "/api/cart", "expect": { "status": 200, "json": { "lines.0.qty": 2, "lines.0.note": "For Ada" } } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "let a shopper take one back out",
+    "files": ["src/cart.ts", "src/index.ts"],
+    "fact": { "id": "take-one-out", "sentence": "A shopper can take one of a product back out of the basket", "check": { "kind": "probe", "steps": [{ "method": "POST", "path": "/api/cart", "body": { "id": "eggs", "qty": 3 }, "expect": { "status": 200 } }, { "method": "POST", "path": "/api/cart/eggs/take-one", "expect": { "status": 200 } }, { "path": "/api/cart", "expect": { "status": 200, "json": { "lines.0.qty": 2 } } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": ["take-one-out"] },
+  "resolution": "takeOne() reads the basket through A's read() and changes the line's qty, so it works on both stored shapes."
+}

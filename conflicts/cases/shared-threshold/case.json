@@ -1,0 +1,23 @@
+{
+  "id": "shared-threshold",
+  "title": "A shared setting changes under a module that relies on its old value",
+  "class": "Config or default change against a dependent module",
+  "kind": "conflict",
+  "seeded": true,
+  "story": "A raises LOW_STOCK in config.ts from 5 to 10, so the shop page warns shoppers earlier. B adds a restock list in index.ts that names the products at or below LOW_STOCK, which is 5 on B's base and exactly what B's requirement says. Together, the restock list also names a product with 8 left.",
+  "a": {
+    "agent": "agent-a",
+    "why": "warn shoppers when ten or fewer are left",
+    "files": ["src/config.ts"],
+    "fact": { "id": "warn-at-ten", "sentence": "The shop page warns when ten or fewer of a product are left", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/", "expect": { "status": 200, "bodyIncludes": "only 8 left" } }] } }
+  },
+  "b": {
+    "agent": "agent-b",
+    "why": "a restock list for the stock room",
+    "files": ["src/index.ts"],
+    "fact": { "id": "restock-list", "sentence": "The restock list names the products with five or fewer left", "check": { "kind": "probe", "isolate": false, "steps": [{ "path": "/api/restock", "expect": { "status": 200, "json": { "length": 2, "0": "honey", "1": "comb" } } }] } }
+  },
+  "merge": "clean",
+  "expect": { "combinedFails": ["restock-list"] },
+  "resolution": "config.ts gains RESTOCK_AT = 5 for the restock list; LOW_STOCK stays the shop page's warning level."
+}

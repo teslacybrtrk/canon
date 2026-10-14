@@ -123,44 +123,66 @@ async function summarize(r) {
   const feature = (id) => r.ledger.features.find((f) => f.id === id);
   const ids = [c.a.fact.id, c.b.join ?? c.b.fact.id];
   const attempts = [...new Set(ids)].flatMap((id) => feature(id)?.attempts ?? []);
-  const own = (agent) => attempts.filter((a) => a.agent === agent && !a.reappliedFrom).sort((x, y) => (x.judgedAt ?? 0) - (y.judgedAt ?? 0));
-  // Each side's first verdict, read from its record: did its own fact hold, and did it break no fact canon when it forked?
-  // ("behind" alone says only that a newer fact failed on it: the other side's, landed while it was judged.)
-  const alone = await Promise.all(["a", "b"].map(async (side) => {
+  // Each attempt's own verdict, from the claims list (an attempt's verdict endpoint follows it to the judge's re-apply).
+  let claims = [];
+  for (let i = 0; i < 5 && !claims.length; i++) {
+    claims = (await fetch(`${URL_}/p/${r.project}/canon`).then((x) => x.json()).catch(() => ({ claims: [] }))).claims ?? [];
+    if (!claims.length) await sleep(2_000);
+  }
+  const verdictOf = (attempt) => claims.find((cl) => cl.attemptId === attempt)?.verdict ?? null;
+  const own = (agent) => attempts.filter((a) => a.agent === agent && !a.reappliedFrom && !/\(refreshed onto canon \d+\)$/.test(a.why ?? "")).sort((x, y) => (x.at ?? 0) - (y.at ?? 0));
+  const alone = ["a", "b"].map((side) => {
     const first = own(c[side].agent)[0];
-    if (!first) return `${side.toUpperCase()} not judged alone`;
-    const v = await fetch(`${URL_}/p/${r.project}/attempts/${first.attempt}/verdict`).then((x) => x.json()).catch(() => null);
-    const held = v?.claimed?.held && !(v?.lost ?? []).length;
-    return `${side.toUpperCase()} ${held ? "held alone" : "did not hold alone"} (${first.outcome}${first.outcome === "behind" ? ": the other's fact, landed while it was judged, failed on it" : ""})`;
-  }));
+    const v = first ? verdictOf(first.attempt) : null;
+    if (!v) return `${side.toUpperCase()} not judged alone`;
+    // A release is held only after its attempt was Ready, so a held-back verdict held alone; "behind" means a newer fact
+    // (the other side's, landed while this was judged) failed on it, which says nothing against this change on its own.
+    const held = !!v.heldBack || (v.claimed?.held && !(v.lost ?? []).length);
+    return `${side.toUpperCase()} ${held ? "held alone" : "did not hold alone"}${v.heldBack ? " (then its release was held: see below)" : v.outcome === "behind" ? " (judged as the other landed)" : ""}`;
+  });
   const accepts = r.timeline.filter((e) => e.kind === "accept");
   const releases = r.timeline.filter((e) => e.kind === "release" || e.kind === "held");
-  const combined = attempts.filter((a) => a.reappliedFrom && ["contradicts", "unproven"].includes(a.outcome)).sort((x, y) => x.judgedAt - y.judgedAt)[0];
-  const reappliedOk = attempts.filter((a) => a.reappliedFrom && a.outcome === "ready");
-  const fixed = attempts.filter((a) => /\(refreshed onto canon \d+\)$/.test(a.why ?? "") && a.outcome === "ready").sort((x, y) => x.judgedAt - y.judgedAt)[0];
+  const combined = attempts.filter((a) => a.reappliedFrom && ["contradicts", "unproven"].includes(verdictOf(a.attempt)?.outcome ?? a.outcome) && (verdictOf(a.attempt)?.lost?.length || !verdictOf(a.attempt)?.claimed?.held)).sort((x, y) => (x.judgedAt ?? 0) - (y.judgedAt ?? 0))[0];
+  const fixed = attempts.filter((a) => /\(refreshed onto canon \d+\)$/.test(a.why ?? "") && verdictOf(a.attempt) && (verdictOf(a.attempt).outcome === "ready" || verdictOf(a.attempt).heldBack)).sort((x, y) => (x.judgedAt ?? 0) - (y.judgedAt ?? 0))[0];
+  // A re-apply the repair model settled says so in its commit message.
+  let repair = null;
+  for (const a of attempts.filter((x) => x.reappliedFrom)) {
+    try {
+      const dir = mkdtempSync(join(work, "msg-"));
+      sh(`git clone -q --depth 1 --no-checkout ${URL_}/a/${a.attempt}.git ${dir}`);
+      const msg = sh("git log -1 --format=%s", {}, dir).trim();
+      if (/repair model/.test(msg)) repair = `the re-apply hit the text conflict; the judge's repair model resolved it, keeping both sides, and ${verdictOf(a.attempt)?.outcome === "ready" || feature(ids[1])?.stage?.startsWith("released") || feature(ids[1])?.stage === "healthy in production" ? "every fact held on its result" : `its result failed: ${a.failure}`}`;
+    } catch {}
+  }
   const bothCanon = ids.every((id) => ["released", "healthy in production", "accepted"].includes(feature(id)?.stage));
+  const heldRelease = releases.find((e) => e.kind === "held");
   const first = accepts[0];
-  const last = releases.at(-1);
+  const last = releases.filter((e) => e.kind === "release").at(-1);
   const sec = (a, b) => (a && b ? Math.round((b - a) / 1000) : null);
-  const repaired = r.timeline.some((e) => e.kind === "push" && /The judge/.test(e.text)) && attempts.some((a) => a.reappliedFrom);
   const records = [combined && `${URL_}/p/${r.project}/attempts/${combined.attempt}/verdict`, ...accepts.map((e) => e.link && `${URL_}${e.link}`)].filter(Boolean).slice(0, 4);
   const supersededDuplicate = !!c.b.join && attempts.some((a) => a.agent === c.b.agent && a.status === "superseded");
+  const failureOfCombined = combined && (verdictOf(combined.attempt)?.lost?.[0] ? `breaks “${claims.length ? (r.ledger.features.find((f) => f.id === verdictOf(combined.attempt).lost[0].factId)?.sentence ?? verdictOf(combined.attempt).lost[0].factId) : ""}”: ${verdictOf(combined.attempt).lost[0].detail}` : `its own fact doesn't hold: ${verdictOf(combined.attempt)?.claimed?.detail}`);
+  const holdNote = heldRelease ? ` ${heldRelease.text.match(/^Canon #\d+/)?.[0] ?? "A release"} was held before production: ${heldRelease.text.replace(/^Canon #\d+ held back before production: /, "").replace(/ \[.*$/, "").replace(/\.$/, "").slice(0, 230)}.` : "";
   let outcome;
-  if (supersededDuplicate && !combined) outcome = `Both built the same fact; ${first ? "the first Ready one landed and" : ""} the other was superseded, never combined (one implementation per fact)`;
-  else if (combined) outcome = `Alone: ${alone.join("; ")}. ${first ? `${first.text.replace(/ accepted by.*$/, "")} landed first; ` : ""}the judge re-applied the other on top and the combined code failed: ${combined.failure?.slice(0, 160)}${combined.diagnosis ? ` (diagnosis: ${combined.diagnosis.kind})` : ""}. ${fixed ? `The scripted fix (the case's reference resolution, pushed as its agent would) held every fact and ${bothCanon ? "both features are canon" : "it is Ready"}.` : "The fix didn't reach Ready."}`;
-  else if (bothCanon) outcome = `Alone: ${alone.join("; ")}. Both landed: the judge re-applied the second on the first and every fact held on the combined code${c.kind === "conflict" ? " (not detected: a miss)" : ""}`;
-  else outcome = `Alone: ${alone.join("; ")}. ${feature(ids[0])?.stage} / ${feature(ids[1])?.stage}`;
+  if (supersededDuplicate && !combined) outcome = `Both built the same fact: the first Ready one landed, the other was superseded, never combined (one implementation per fact).`;
+  else if (combined) outcome = `${alone.join("; ")}. ${first ? first.text.replace(/ accepted by.*$/, "") : "The first"} landed first; the judge re-applied the other on top by itself, and on the combined code: ${failureOfCombined}. The fix (the case's reference resolution, pushed the way an agent would) ${fixed ? `held every fact${bothCanon ? "; both features are canon" : ""}` : "didn't reach Ready"}.${holdNote}`;
+  else if (repair && bothCanon) outcome = `${alone.join("; ")}. ${repair[0].toUpperCase()}${repair.slice(1)}: both limits are in the code, nothing was lost, and both landed. (Locally, the seeded hurried resolution drops A's cap; Canon's repair didn't.)`;
+  else if (bothCanon) outcome = `${alone.join("; ")}. Both landed: the judge re-applied the second on the first, and every fact held on the combined code.${holdNote}`;
+  else if (heldRelease && c.kind === "control") outcome = `${alone.join("; ")}.${holdNote} That is the release check, not the combination: A changes the stored basket's shape, which the previous version can't read back, so a rollback wouldn't be safe and autopilot doesn't release it (an owner's accept would, and its record would name the override). B landed and shipped on its own.`;
+  else outcome = `${alone.join("; ")}. ${feature(ids[0])?.stage} / ${feature(ids[1])?.stage}.${holdNote}`;
   return {
     outcome,
-    reapplied: attempts.some((a) => a.reappliedFrom) ? (repaired ? "re-applied by the judge" : "re-applied by the judge") : "not re-applied",
+    reapplied: attempts.some((a) => a.reappliedFrom) ? (repair ? "conflict, repaired" : "clean") : "not re-applied",
+    ...(repair ? { repair } : {}),
     detected: !!combined,
     delivered: false,
     accepted: c.kind === "control" ? bothCanon : undefined,
-    resolved: !!fixed || (c.kind === "control" && bothCanon),
+    resolved: !!fixed || (!!repair && bothCanon) || (c.kind === "control" && bothCanon),
     interventions: r.detectedOn ? 1 : 0,
-    detectSeconds: combined ? sec(first?.at, combined.judgedAt) : null,
-    resolveSeconds: combined && fixed ? sec(combined.judgedAt, last?.at) : null,
-    releases: releases.map((e) => `${e.kind === "held" ? "held" : "released"}: ${e.text.slice(0, 80)}`),
+    // The runner's clock: the judge re-judges a verdict in place when canon moves, so verdict times can't date a detection.
+    detectSeconds: combined && r.repairPushedAt ? sec(first?.at, r.repairPushedAt) : null,
+    resolveSeconds: combined && fixed && r.repairPushedAt ? sec(r.repairPushedAt, fixed.judgedAt) : null,
+    releases: releases.map((e) => `${e.kind === "held" ? "held" : "released"}: ${e.text.slice(0, 100)}`),
     records,
   };
 }

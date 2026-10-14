@@ -1,0 +1,26 @@
+diff --git a/src/index.ts b/src/index.ts
+index 69770df..c712f7f 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -2,7 +2,6 @@ import { Cart } from "./cart";
+ import { findProduct, products } from "./catalog";
+ import { shopPage } from "./page";
+ import { quote } from "./pricing";
+-import { vatCents } from "./tax";
+ 
+ // Corner Larder: a small shop the designed conflict cases change (docs/conflicts.md). Each module is one concern:
+ // catalog, pricing, tax, money (formatting), config, the basket (a Durable Object) and the shop page.
+@@ -35,12 +34,7 @@ function quoteFor(url: URL): Response {
+   const qty = Number(url.searchParams.get("qty") ?? "1");
+   if (!findProduct(id)) return Response.json({ error: `unknown item ${id}` }, { status: 400 });
+   if (!Number.isInteger(qty) || qty < 1) return Response.json({ error: "qty must be a whole number, 1 or more" }, { status: 400 });
+-  const q = quote([{ id, qty }]);
+-  // Ten or more of an item take 10% off.
+-  if (qty < 10) return Response.json(q);
+-  const subtotal = Math.round(q.subtotal * 0.9);
+-  const vat = vatCents(subtotal);
+-  return Response.json({ ...q, subtotal, vat, total: subtotal + vat });
++  return Response.json(quote([{ id, qty }]));
+ }
+ 
+ // POST /api/cart {"id": "eggs", "qty": 2}: adds a line to the basket.

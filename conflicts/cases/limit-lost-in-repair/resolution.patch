@@ -1,0 +1,14 @@
+diff --git a/src/cart.ts b/src/cart.ts
+index 566dfa5..a6a5472 100644
+--- a/src/cart.ts
++++ b/src/cart.ts
+@@ -11,7 +11,8 @@ export class Cart extends DurableObject {
+     if (!product) return { ok: false, status: 400, error: `unknown product ${id}` };
+     const lines = (await this.ctx.storage.get<Record<string, number>>("lines")) ?? {};
+     const next = (lines[id] ?? 0) + qty;
+-    if (!Number.isInteger(qty) || qty < 1 || next > product.stock) return { ok: false, status: 400, error: `qty must be a whole number, and only ${product.stock} are in stock` };
++    if (!Number.isInteger(qty) || qty < 1 || next > 99) return { ok: false, status: 400, error: "qty must be a whole number, and a line holds at most 99" };
++    if (next > product.stock) return { ok: false, status: 400, error: `only ${product.stock} are in stock` };
+     lines[id] = next;
+     await this.ctx.storage.put("lines", lines);
+     return { ok: true };

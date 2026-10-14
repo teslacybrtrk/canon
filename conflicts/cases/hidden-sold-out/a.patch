@@ -1,0 +1,16 @@
+diff --git a/src/catalog.ts b/src/catalog.ts
+index ec44e8f..55fd406 100644
+--- a/src/catalog.ts
++++ b/src/catalog.ts
+@@ -15,9 +15,9 @@ const CATALOG: Product[] = [
+   { id: "greens", name: "Salad greens", price: 480, stock: 8 },
+ ];
+ 
+-// The products the shop sells, sold out or not.
++// The products the shop offers: sold-out products aren't listed.
+ export function products(): Product[] {
+-  return CATALOG;
++  return CATALOG.filter((p) => p.stock > 0);
+ }
+ 
+ export function findProduct(id: string): Product | undefined {

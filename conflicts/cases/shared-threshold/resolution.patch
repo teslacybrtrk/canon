@@ -1,0 +1,32 @@
+diff --git a/src/config.ts b/src/config.ts
+index 2c44b56..6304d4e 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -3,3 +3,6 @@ export const SHOP_NAME = "Corner Larder";
+ 
+ // Stock at or below this is low.
+ export const LOW_STOCK = 10;
++
++// The restock list names products at or below this stock.
++export const RESTOCK_AT = 5;
+diff --git a/src/index.ts b/src/index.ts
+index f122dc2..2b7fa49 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,6 +1,6 @@
+ import { Cart } from "./cart";
+ import { findProduct, products } from "./catalog";
+-import { LOW_STOCK } from "./config";
++import { RESTOCK_AT } from "./config";
+ import { shopPage } from "./page";
+ import { quote } from "./pricing";
+ 
+@@ -22,7 +22,7 @@ export default {
+ 
+     if (route === "GET /") return shopPage(products(), await cart.view());
+     if (route === "GET /api/products") return Response.json(products());
+-    if (route === "GET /api/restock") return Response.json(products().filter((p) => p.stock <= LOW_STOCK).map((p) => p.id));
++    if (route === "GET /api/restock") return Response.json(products().filter((p) => p.stock <= RESTOCK_AT).map((p) => p.id));
+     if (route === "GET /api/quote") return quoteFor(url);
+     if (route === "GET /api/cart") return Response.json(await cart.view());
+     if (route === "POST /api/cart") return addToCart(request, cart);
