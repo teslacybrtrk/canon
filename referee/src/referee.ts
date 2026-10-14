@@ -297,7 +297,7 @@ export class Referee extends DurableObject<Env> {
       ];
       // The evidence behind the stage, each item with its state and when it was observed: what passed, what's missing,
       // what's stale. "Partially verified" means the checks passed but some of this is missing or incomplete.
-      const evidence: Array<{ what: string; state: "ok" | "gap" | "missing" | "stale" | "bad"; detail: string; at: number | null }> = [];
+      const evidence: Array<{ what: string; state: "ok" | "gap" | "missing" | "stale" | "bad" | "pending"; detail: string; at: number | null }> = [];
       const maker = f.madeTrueBy ? attempts.find((a) => a.attempt === f.madeTrueBy) : ready[0];
       if (maker?.judgedAt) {
         evidence.push({ what: "verified", state: "ok", detail: `${maker.agent}'s commit ${maker.sha?.slice(0, 7)} on its own preview, against canon #${maker.canonSeq}${maker.judge ? ` (judge version ${maker.judge.slice(0, 8)})` : ""}`, at: maker.judgedAt });
@@ -316,7 +316,7 @@ export class Referee extends DurableObject<Env> {
       if (f.status === "canon" && prod && state.production?.at) {
         const age = now - state.production.at;
         evidence.push({ what: "production", state: !prod.held ? "bad" : age > 24 * 3600_000 ? "stale" : "ok", detail: prod.held ? `holds on production${age > 24 * 3600_000 ? "; last observed over a day ago" : ""}` : "fails on production", at: state.production.at });
-      } else if (f.status === "canon" && f.check.kind === "probe" && !f.heldOut && !prod) evidence.push({ what: "production", state: "missing", detail: "not observed on production yet", at: null });
+      } else if (f.status === "canon" && f.check.kind === "probe" && !f.heldOut && !prod) evidence.push({ what: "production", state: "pending", detail: "not observed on production yet (the judge checks production every hour)", at: null });
       const partial = f.status !== "retired" && f.origin !== "seed" ? evidence.filter((e) => e.state === "gap" || e.state === "missing").map((e) => `${e.what}: ${e.detail}`) : [];
       return {
         id: f.id, sentence: f.sentence, check, status: f.status, stage, detail,
@@ -384,8 +384,11 @@ export class Referee extends DurableObject<Env> {
     }
     for (const r of this.rows(`SELECT attempt_id, sha, json, at FROM verdicts ORDER BY at`)) {
       const c = byAttempt.get(r.attempt_id as string);
-      const v = this.redactVerdict(JSON.parse(r.json as string) as Verdict, hidden);
-      const d = c ? this.diagnosisOf(c, v) : null;
+      const stored = this.redactVerdict(JSON.parse(r.json as string) as Verdict, hidden);
+      // A release held later is written into its verdict afterwards; at this moment the attempt was Ready, and the hold
+      // has its own event when it happened.
+      const v: Verdict = stored.heldBack ? { ...stored, outcome: "ready", heldBack: undefined, diagnosis: null } : stored;
+      const d = c && !stored.heldBack ? this.diagnosisOf(c, v) : null;
       const what = v.outcome === "ready" ? `Ready: every fact holds on the preview of ${v.sha.slice(0, 7)} (${v.kept.length} canon facts kept${c ? `, and ${said(c.factId)}` : ""})`
         : failureOf(v, (id) => facts.get(id)?.sentence ?? id) ?? v.outcome;
       // The diagnosis only where it adds something: an implementation failure already says what broke, and "behind" says

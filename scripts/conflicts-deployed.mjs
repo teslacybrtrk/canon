@@ -116,14 +116,22 @@ async function runCase(id, offset) {
 
 // What happened in one case, from the judge's records only: each side judged alone, which landed first, the verdict on
 // the combined code, the fix, and the releases. Times are the judge's own timestamps.
-function summarize(r) {
+async function summarize(r) {
   const c = JSON.parse(readFileSync(join(CASES_DIR, r.id, "case.json"), "utf8"));
   if (r.error || !r.ledger) return { outcome: `not run: ${r.error ?? r.outcome ?? "no records"}`, detected: false, delivered: false, accepted: false, resolved: false, interventions: 0, records: [] };
   const feature = (id) => r.ledger.features.find((f) => f.id === id);
   const ids = [c.a.fact.id, c.b.join ?? c.b.fact.id];
   const attempts = [...new Set(ids)].flatMap((id) => feature(id)?.attempts ?? []);
   const own = (agent) => attempts.filter((a) => a.agent === agent && !a.reappliedFrom).sort((x, y) => (x.judgedAt ?? 0) - (y.judgedAt ?? 0));
-  const alone = ["a", "b"].map((side) => { const first = own(c[side].agent)[0]; return first ? `${side.toUpperCase()} ${first.outcome}${first.failure ? ` (${first.failure.slice(0, 90)})` : ""}` : `${side.toUpperCase()} not judged`; });
+  // Each side's first verdict, read from its record: did its own fact hold, and did it break no fact canon when it forked?
+  // ("behind" alone says only that a newer fact failed on it: the other side's, landed while it was judged.)
+  const alone = await Promise.all(["a", "b"].map(async (side) => {
+    const first = own(c[side].agent)[0];
+    if (!first) return `${side.toUpperCase()} not judged alone`;
+    const v = await fetch(`${URL_}/p/${r.project}/attempts/${first.attempt}/verdict`).then((x) => x.json()).catch(() => null);
+    const held = v?.claimed?.held && !(v?.lost ?? []).length;
+    return `${side.toUpperCase()} ${held ? "held alone" : "did not hold alone"} (${first.outcome}${first.outcome === "behind" ? ": the other's fact, landed while it was judged, failed on it" : ""})`;
+  }));
   const accepts = r.timeline.filter((e) => e.kind === "accept");
   const releases = r.timeline.filter((e) => e.kind === "release" || e.kind === "held");
   const combined = attempts.filter((a) => a.reappliedFrom && ["contradicts", "unproven"].includes(a.outcome)).sort((x, y) => x.judgedAt - y.judgedAt)[0];
@@ -158,7 +166,7 @@ function summarize(r) {
 
 if (args.summarize !== undefined) {
   const raw = JSON.parse(readFileSync(join(ROOT, "docs/conflicts/deployed-raw.json"), "utf8"));
-  const cases = Object.fromEntries(raw.results.map((r) => [r.id, summarize(r)]));
+  const cases = Object.fromEntries(await Promise.all(raw.results.map(async (r) => [r.id, await summarize(r)])));
   const out = {
     date: raw.at.slice(0, 10),
     judge: args.judge ?? "",

@@ -116,6 +116,9 @@
     rodeo: { kind: "Recorded autonomous run", when: "October 12, 2026", judge: "historical judge version (Oct 12, before commit b9f3a2c)", who: "Six Claude Code agents on a backlog, on autopilot: nobody clicked." },
     final: { kind: "Recorded autonomous run", when: "October 13, 2026", judge: "judge version 176b48f5 (commit 113abf2)", who: "Four Claude Code agents on a backlog, on autopilot: nobody accepted anything." },
     convoy: { kind: "Recorded scripted run on deployed Canon", when: "October 13, 2026", judge: "judge version a83d0b92 (commit 4c84499)", who: "Five scripted agent attempts arriving together: the code was written in advance, the judging was live." },
+    trio2: { kind: "Recorded autonomous run", when: "October 13, 2026 (evening, PDT)", judge: "the submitted judge: version 00c761d1 (commit dcac7ae)", who: "Three Claude Code agents, each given one backlog fact in a scenario designed to interact (disclosed), on autopilot: nobody accepted anything." },
+    trio: { kind: "Recorded autonomous run, first attempt", when: "October 13, 2026 (evening, PDT)", judge: "judge version 94ad0669 (commit 568e829), before the rehearsal fix", who: "The same three agents; stopped after a retried rehearsal step held a correct release (a judge bug, fixed in dcac7ae)." },
+    split: { kind: "Recorded scripted run on deployed Canon", when: "October 13, 2026 (evening, PDT)", judge: "judge version c362c14e: the first deploy of the build/publish split", who: "convoy's five scripted attempts again, on the split: the code was written in advance, the judging was live." },
   };
   const run = RUNS[project] ?? { kind: "Recorded run", when: "", judge: "the judge version recorded on each verdict", who: "" };
   $("project").textContent = project;

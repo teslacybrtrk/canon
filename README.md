@@ -10,7 +10,7 @@ production. Built on Cloudflare Workers, Artifacts, Durable Objects and Workflow
 |---|---|
 | **Live** | [canon.rodeo](https://canon.rodeo), running the judge this repository deploys. |
 | **Try it in two minutes** | [canon.rodeo/demo](https://canon.rodeo/demo): a guided tour in your browser, on sample data (a simulation; nothing deploys). Overlapping changes settled on the combined code, a change held back on real data before release, a merge train and its record. |
-| **Inspect real projects** | Feature ledgers, every feature from the request to production; open one for its trail (origin, the agents' reasons, every attempt at the exact commit, what failed, how it was resolved, the release evidence): [final](https://canon.rodeo/ledger?p=final) (four autonomous agents, Oct 13), [convoy](https://canon.rodeo/ledger?p=convoy) (scripted agent attempts), [rehearse](https://canon.rodeo/ledger?p=rehearse) (release holds). Replay a recorded run step by step: [Oct 12, twelve autonomous agents](https://canon.rodeo/replay?p=farmstand) (historical judge version). |
+| **Inspect real projects** | Feature ledgers, every feature from the request to production; open one for its trail (origin, the agents' reasons, every attempt at the exact commit, what failed, how it was resolved, the release evidence): [trio2](https://canon.rodeo/ledger?p=trio2) (three autonomous agents on the submitted judge), [final](https://canon.rodeo/ledger?p=final) (four, Oct 13), [convoy](https://canon.rodeo/ledger?p=convoy) (scripted agent attempts), [rehearse](https://canon.rodeo/ledger?p=rehearse) (release holds). Replay a recorded run step by step: [trio2](https://canon.rodeo/replay?p=trio2), [Oct 12, twelve agents](https://canon.rodeo/replay?p=farmstand) (historical judge version). |
 | **Check the claims** | The [evidence map](#evidence-map): each claim in this README with its record, test or reproduction command. [Designed conflict cases](docs/conflicts.md): clean Git merges that break a requirement, plain Git against a merge queue with the same checks and Canon. |
 | **Run your own** | Needs a Cloudflare Workers Paid account with Containers, R2 and Artifacts (open beta), Node 22.18+ and `npx wrangler login`. Then three commands: `git clone https://github.com/teslacybrtrk/canon && cd canon`, `./scripts/doctor.sh` (checks all of that, changes nothing), `./scripts/setup.sh` (asks for your account, deploys the judge, makes the keys). [Run it](#run-it), [docs/USING.md](docs/USING.md). |
 
@@ -107,7 +107,11 @@ records from canon.rodeo (projects left up for inspection); **simulated** benchm
 | Rollback compatibility is compared on the exact state each version wrote, and missing evidence holds the release | recorded: [rehearse #13](https://canon.rodeo/p/rehearse/canon/13/acceptance) (two facts with no read-back: unavailable, held), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) (an owner released over it; `recovery.override` names it) | `node scripts/test-probe.ts`, `node scripts/test-evidence.ts` |
 | A flaky release is taken back out at 10% | recorded: [canary #3](https://canon.rodeo/p/canary/canon/3/acceptance) | `node scripts/benchmark.mjs --workloads stateless` |
 | One writer of production, behind a lease (republishes included); production writes never overtake each other | method-level tests of the real write, fence and gate methods with hand-answered requests (`scripts/test-judge-writes.ts`: overlapping writes, both answer orders, an unknown outcome, a judge restart; it fails on the judge before `b013736`); `scripts/test-release.ts`; the `fence:` step every release takes ([docs/timings.md](docs/timings.md)). Unknown outcomes are held for a two-minute quarantine: a bounded-risk policy, not proof of settlement | `npm test` |
-| Autonomous agents on the submitted code: features shipped with no person, a release held back on real data, a locked rule left for a person | four Claude Code agents, Oct 13: [docs/autonomous-run.md](docs/autonomous-run.md), the [ledger](https://canon.rodeo/ledger?p=final), records [final #2](https://canon.rodeo/p/final/canon/2/acceptance), [#3 (held)](https://canon.rodeo/p/final/canon/3/acceptance), [#5](https://canon.rodeo/p/final/canon/5/acceptance), [#8 (held)](https://canon.rodeo/p/final/canon/8/acceptance) | `CANON_PROJECT=<name> AGENTS=3 ./agents/autopilot.sh` |
+| Autonomous agents on the submitted code: a feature shipped, a behavioural break on a clean text merge caught and fixed by its agent, a release held on real data | three Claude Code agents on the submitted judge, Oct 13 (a controlled scenario, disclosed): [docs/autonomous-run.md](docs/autonomous-run.md), the [ledger](https://canon.rodeo/ledger?p=trio2) and [replay](https://canon.rodeo/replay?p=trio2), records [trio2 #2](https://canon.rodeo/p/trio2/canon/2/acceptance) (shipped), [#3](https://canon.rodeo/p/trio2/canon/3/acceptance) (held), [#5](https://canon.rodeo/p/trio2/canon/5/acceptance) (the fixed discount, shipped); earlier, four agents on a backlog: the [final ledger](https://canon.rodeo/ledger?p=final) | `CANON_PROJECT=trio2 ./agents/trio.sh` (after genesis with `agents/canon.trio.json`) |
+| Designed conflicts: clean Git merges that break a requirement, against plain Git and a merge queue with the same checks | 8 seeded cases and 3 controls, each through deployed Canon: [docs/conflicts.md](docs/conflicts.md) | `node scripts/conflicts.mjs` (local), `node scripts/conflicts-deployed.mjs` (deployed) |
+| Agents' code never meets the deploy token | the build/publish split ([Execution and trust](#execution-and-trust)); the deployed scripted run on it: [split ledger](https://canon.rodeo/ledger?p=split) | `node scripts/test-publish.mjs` (a planted `.env` and a fake token), `node --import ./scripts/harness/register.mjs scripts/test-judge-guard.ts` |
+| A project is private until its owner publishes it | through the real router | `node --import ./scripts/harness/register.mjs scripts/test-access.ts` |
+| A step that runs twice can't flip a release decision | found in the final autonomous run (a retried rehearsal step held a correct release: [trio #2](https://canon.rodeo/p/trio/canon/2/acceptance)), fixed and repeated | `node --import ./scripts/harness/register.mjs scripts/test-judge-rehearsal.ts` (fails on the old code) |
 | Duplicates are superseded, prerequisites wait, merge trains release once | deployed scripted run (five scripted agent attempts): [docs/e2e.md](docs/e2e.md), records [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance) and [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance); simulated: [docs/benchmark.md](docs/benchmark.md), coordination workload | `node scripts/e2e.mjs`, `node scripts/benchmark.mjs --workloads coordination` |
 | Where the time goes, and what was changed because of it | [docs/timings.md](docs/timings.md), from Cloudflare's own Workflows records | `node scripts/timings.mjs` |
 | Held-out checks stay private | recorded: `rehearse` (the board shows the sentence, never the check); the API redacts details | |
@@ -124,7 +128,10 @@ version (Cloudflare Worker version) that produced it and the commit it was deplo
 | Oct 13 20:19–23:07 UTC | `118c6f12` | `79de603` |
 | Oct 13 23:07–23:31 UTC (per-write ordering of production writes) | `8dcb7761` | `b013736` |
 | Oct 13 23:31 UTC – Oct 14 01:24 UTC (the fence rechecks the barrier after every wait) | `77361154` | `700daca` |
-| [final #2–#9](https://canon.rodeo/ledger?p=final) (the autonomous run, [docs/autonomous-run.md](docs/autonomous-run.md)) and everything after Oct 14 01:24 UTC (the ledger, the toolchain guard) | `176b48f5` and later | `113abf2` and later |
+| [final #2–#9](https://canon.rodeo/ledger?p=final) (the Oct 13 autonomous run, [docs/autonomous-run.md](docs/autonomous-run.md)) | `176b48f5`, Oct 14 01:26 UTC | `113abf2` |
+| [split](https://canon.rodeo/ledger?p=split) (the first run on the build/publish split, scripted) | `c362c14e`, Oct 14 02:38 UTC | the working tree committed as `b571d04` |
+| [trio](https://canon.rodeo/ledger?p=trio) (the first attempt at the final run; it surfaced the retried-rehearsal bug) | `94ad0669`, Oct 14 03:13 UTC | `568e829` |
+| **[trio2](https://canon.rodeo/ledger?p=trio2) (the autonomous run on the submitted judge) and the designed conflict cases on deployed Canon ([docs/conflicts.md](docs/conflicts.md))** | **`00c761d1`, Oct 14 03:25 UTC** | **`dcac7ae`** |
 | earlier records (Oct 12–13: farmstand, rodeo, evid #2–3, rehearse #2–12, canary) | earlier versions | before `b9f3a2c` |
 
 Two rules changed after the convoy run, so a stateless release judged today would differ: a zero-comparison
@@ -143,9 +150,19 @@ and production writes are now ordered per write (judge writes serialized, each s
 | **Workers deployments API** | versions uploaded at 0%, smoke-tested with version overrides, rolled out by percentage; only the judge writes it |
 | **Workers AI** | the reviewer (Kimi K2.7 Code) and the conflict repair model; never the judge |
 
-## One real run
+## Real runs
 
-On Oct 12, 2026, twelve Claude Code agents worked on the farmstand demo at once on canon.rodeo, with a person deciding,
+**On the submitted judge (Oct 13, evening; [docs/autonomous-run.md](docs/autonomous-run.md)).** Three Claude Code agents,
+each given one backlog fact in a scenario designed to interact (disclosed), on autopilot. Agent-1's bulk discount shipped
+in under three minutes. Agent-2's order discount, re-applied by the judge on top with no text conflict, broke the
+bulk-discount fact on the combined code (the discounts stacked: "totalCents is 5350, expected 5850"); agent-2 read the
+verdict, made the discounts not stack, and that shipped too. Agent-3's stall hours passed its fresh preview and broke
+the market page on the release candidate's existing data: held before production, twice; canon stepped back each time.
+Nobody accepted anything; the operator restarted one agent session that had stopped early. Watch it step by step in the
+[replay](https://canon.rodeo/replay?p=trio2). A first attempt at this run surfaced a judge bug (a retried rehearsal
+step held a correct release); it was fixed, tested, and the run repeated.
+
+**Oct 12.** On Oct 12, 2026, twelve Claude Code agents worked on the farmstand demo at once on canon.rodeo, with a person deciding,
 while six more ran a second project (rodeo) on autopilot. On farmstand the judge ran 465 fact checks, rejected 2
 attempts without anyone reading the diff, caught 1 clash before anyone accepted either side, and re-applied 8 attempts
 on the new canon by itself; the median push-to-verdict was 48 s (p90 77 s). A person clicked once,

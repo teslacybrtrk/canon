@@ -36,6 +36,14 @@ Oct 12 the median went from 60 s to 48 s, but that baseline includes the Oct 12 
 the same day only (46 verifications before, 28 after, similar load): **median 54 s → 48 s, p90 79 s → 60 s**. The
 saving is bounded by the shorter of the two steps (command facts, median 9.5 s), and the "after" sample is small.
 
+**What keeping the deploy token away from agents' code costs (Oct 13, 20:00 PDT on).** Since the build/publish split
+(PROTOCOL.md, "Push"), a preview is two container steps in sequence: a build without credentials, then the publish of
+that bundle from an empty directory. The same scripted run (`scripts/e2e.mjs`: five attempts arriving together on the
+stateless app) took, from the judge's records, **median 41 s, p90 50 s** push to verdict before the split (project
+`convoy`, 10 pushes) and **57 s, 76 s** after it (project `split`, 10 pushes): about 16 s more per verdict, on samples
+of ten. The autonomous run on the split (`trio2`, the stateful app) had a median of 82 s (p90 98 s), with most of its
+verifications judged while a release ran. The table above predates the split; it hasn't been regenerated.
+
 ## Release: accept to production (79 instances)
 
 Release candidate, rollback rehearsal, version upload, then the judge's 0% gate and gradual rollout. Fixed settle waits (Durable Objects pick up new code eventually) are inside the check steps.
