@@ -17,11 +17,13 @@ combination breaks the bulk-discount fact (the discounts stack), and the third f
 person accepted anything: the project runs on autopilot under a charter.
 
 - **Judge:** Worker version `00c761d1`, deployed from commit `dcac7ae` (the build/publish split, private-until-published
-  projects, the rehearsal fix below). Later commits change only docs, scripts and the ledger's display.
+  projects, the rehearsal fix below). Later commits change only docs, scripts, the ledger and replay display, and the
+  default address of the hourly production check (see the setup gap below).
 - **App:** `demo-app`, a stateful Worker with a Durable Object. The canon file is
   [`agents/canon.trio.json`](../agents/canon.trio.json): nine facts (the price rule replaced by "a small basket is
   charged the listed price"), and a backlog of three facts written by people. Runner: [`agents/trio.sh`](../agents/trio.sh)
-  (the goal text is in it).
+  (the goal text is in it; trio2's first three sessions ran it at commit `e67c849`, with a 35-minute limit the restart
+  dropped).
 
 What happened (the [replay](https://canon.rodeo/replay?p=trio2) steps through it; times from the judge's records):
 

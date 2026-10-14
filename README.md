@@ -463,9 +463,10 @@ held-out facts, specialist review with a track record, prerequisites, account-wi
 
 ## Where the code lives
 
-The main remote for this repo is a Cloudflare Artifacts repo, and the Worker (site, board and judge) deploys from it with Workers Builds.
+The main remote for this repo is a Cloudflare Artifacts repo; the Worker (site, board and judge) is deployed from `referee/`
+with `npx wrangler deploy`, and the version table in the [evidence map](#evidence-map) maps each deploy to its commit.
 Canon serves its own source from Artifacts: browse https://canon.rodeo/src or `git clone https://canon.rodeo/canon.git`
-(no token; read-only). Any attempt clones the same way: `git clone https://canon.rodeo/a/<attempt-id>.git`.
+(no token; read-only). Any attempt of a published project clones the same way: `git clone https://canon.rodeo/a/<attempt-id>.git`.
 `scripts/push.sh` (maintainer only) pushes to both remotes.
 GitHub hosts a mirror as the archive.
 
