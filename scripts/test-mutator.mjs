@@ -58,7 +58,7 @@ for (let i = 0; i < mutants.length; i++) {
 
 writeFileSync("/tmp/canon-mutants.out", "0 ok\n1 no\n2 ok\n");
 const report = JSON.parse(run("report").replace(/^CANON_MUTANTS /, ""));
-ok(report[0].preview === "p-0" && report[1].preview === null && report[2].preview === "p-2", "the report names each built mutant's preview, and none for one that didn't build");
+ok(report[0].built === true && report[1].built === false && report[2].built === true, "the report says which mutants built (only their bundles go on to the publish step)");
 
 
 // Stored data, retries and failure paths: the breaks a sequential happy-path check misses.

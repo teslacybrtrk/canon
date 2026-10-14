@@ -43,6 +43,7 @@ import { changedLines, judgeAnswer, rankNotes, REVIEW_SCHEMA, reviewBatches, rev
 // The advisory reviewer: a different model from the agents' (they are Claude or Grok), on Workers AI.
 const REVIEW_MODELS = ["@cf/moonshotai/kimi-k2.7-code", "@cf/moonshotai/kimi-k2.6"];
 import { diffTrees, inScope } from "./scope";
+import { ownerPath, publishTarget, type PublishTarget } from "./publish";
 
 const ATTEMPT_TOKEN_TTL_S = 4 * 60 * 60;
 const PREVIEW_READY_TIMEOUT_MS = 45_000;
@@ -231,11 +232,18 @@ export class Referee extends DurableObject<Env> {
     }
     const reverted = new Set(rows.map((r) => r.reverts).filter((x) => x !== null && x !== undefined));
     const results = state.production?.results ?? {};
+    const sentences = new Map(state.facts.map((f) => [f.id, f.sentence]));
+    const sentence = (id: string) => sentences.get(id) ?? id;
+    const now = Date.now();
     const features = this.rows(`SELECT * FROM facts ORDER BY created_at`).map(toFact).map((f) => this.redactFact(f)).map((f) => {
       const claims = state.claims.filter((c) => c.factId === f.id).sort((a, b) => a.createdAt - b.createdAt);
       const attempts = claims.map((c) => ({
-        claimId: c.id, agent: c.agent, status: c.status, at: c.createdAt,
-        reappliedFrom: c.refreshedFrom, after: c.after ?? [],
+        claimId: c.id, agent: c.agent, status: c.status, at: c.createdAt, why: c.why,
+        attempt: c.attemptId, sha: c.verdict?.sha.slice(0, 12) ?? null, canonSeq: c.verdict?.canonSeq ?? null,
+        judgedAt: c.verdict?.judgedAt ?? null, judge: c.verdict?.judge ?? null, preview: c.verdict?.previewUrl || null,
+        failure: failureOf(c.verdict, sentence),
+        reappliedFrom: c.refreshedFrom ? (state.claims.find((x) => x.id === c.refreshedFrom)?.attemptId ?? c.refreshedFrom) : null, after: c.after ?? [],
+        mutationRun: c.mutation ?? null,
         outcome: c.verdict?.outcome ?? null,
         diagnosis: c.verdict?.diagnosis ? { kind: c.verdict.diagnosis.kind, why: c.verdict.diagnosis.why, next: c.verdict.diagnosis.next } : null,
         waiting: c.autoWait,
@@ -253,6 +261,9 @@ export class Referee extends DurableObject<Env> {
           rehearsal: rec?.recovery?.rehearsal ? `${rec.recovery.rehearsal.state}: ${rec.recovery.rehearsal.detail.slice(0, 200)}` : null,
           rollout: (rec?.exposure ?? []).map((e) => `${e.percent}%: ${e.verdict}`),
           record: rec ? `/p/${project}/canon/${seq}/acceptance` : null,
+          checkVersion: rec?.facts.find((x) => x.id === f.id)?.check ?? null, policyVersion: rec?.policy.version ?? null, judge: rec?.judge ?? null,
+          coverage: rec?.recovery.coverage ? { compared: rec.recovery.coverage.compared.length, incompatible: rec.recovery.coverage.incompatible.length, inconclusive: rec.recovery.coverage.inconclusive.length, unsupported: rec.recovery.coverage.unsupported.length, notApplicable: rec.recovery.coverage.notApplicable.length } : null,
+          override: rec?.recovery.override ?? null,
         };
       });
       const last = releases.at(-1);
@@ -282,13 +293,37 @@ export class Referee extends DurableObject<Env> {
         ...ready.filter((a) => a.waiting).map((a) => `${a.agent}'s attempt: ${a.waiting}`),
         ...attempts.filter((a) => a.diagnosis && ["requirement", "unsupported-check"].includes(a.diagnosis.kind)).map((a) => `${a.diagnosis!.why}. Next: ${a.diagnosis!.next}`),
       ];
+      // The evidence behind the stage, each item with its state and when it was observed: what passed, what's missing,
+      // what's stale. "Partially verified" means the checks passed but some of this is missing or incomplete.
+      const evidence: Array<{ what: string; state: "ok" | "gap" | "missing" | "stale" | "bad"; detail: string; at: number | null }> = [];
+      const maker = f.madeTrueBy ? attempts.find((a) => a.attempt === f.madeTrueBy) : ready[0];
+      if (maker?.judgedAt) {
+        evidence.push({ what: "verified", state: "ok", detail: `${maker.agent}'s commit ${maker.sha?.slice(0, 7)} on its own preview, against canon #${maker.canonSeq}${maker.judge ? ` (judge version ${maker.judge.slice(0, 8)})` : ""}`, at: maker.judgedAt });
+        if (f.status === "proposed" && state.canon && maker.canonSeq !== null && maker.canonSeq < state.canon.seq) evidence.push({ what: "stale", state: "stale", detail: `judged against canon #${maker.canonSeq}; canon is now #${state.canon.seq}, so it is re-applied and judged again before it can land`, at: maker.judgedAt });
+        const m = maker.mutationRun;
+        if (m?.status === "done" && m.total) evidence.push({ what: "deliberate breaks", state: m.caught === m.total ? "ok" : "gap", detail: m.caught === m.total ? `all ${m.total} deliberate breaks of the change were caught by a check` : `${m.total - m.caught} of ${m.total} deliberate breaks of the change went unnoticed by every check (code no check covers)`, at: m.at });
+        else if (m?.status === "done" && (m.reason === "build-failed" || m.reason === "start-failed")) evidence.push({ what: "deliberate breaks", state: "missing", detail: "the mutation run couldn't build its breaks, so how well the checks cover the change is unknown", at: m.at });
+      }
+      if (last) {
+        const r = last;
+        if (r.rehearsal) evidence.push({ what: "rollback rehearsal", state: r.rehearsal.startsWith("passed") ? "ok" : r.rehearsal.startsWith("failed") ? "bad" : "missing", detail: r.rehearsal, at: null });
+        if (r.coverage && (r.coverage.unsupported || r.coverage.inconclusive)) evidence.push({ what: "rollback coverage", state: "gap", detail: `compared ${r.coverage.compared} fact${r.coverage.compared === 1 ? "" : "s"} across versions; ${r.coverage.unsupported} couldn't be compared and ${r.coverage.inconclusive} were inconclusive`, at: null });
+        if (r.override) evidence.push({ what: "owner exception", state: "gap", detail: r.override, at: null });
+        if (r.exceptions.length) evidence.push({ what: "accepted over", state: "gap", detail: r.exceptions.join("; "), at: null });
+      }
+      if (f.status === "canon" && prod && state.production?.at) {
+        const age = now - state.production.at;
+        evidence.push({ what: "production", state: !prod.held ? "bad" : age > 24 * 3600_000 ? "stale" : "ok", detail: prod.held ? `holds on production${age > 24 * 3600_000 ? "; last observed over a day ago" : ""}` : "fails on production", at: state.production.at });
+      } else if (f.status === "canon" && f.check.kind === "probe" && !f.heldOut && !prod) evidence.push({ what: "production", state: "missing", detail: "not observed on production yet", at: null });
+      const partial = f.status !== "retired" && f.origin !== "seed" ? evidence.filter((e) => e.state === "gap" || e.state === "missing").map((e) => `${e.what}: ${e.detail}`) : [];
       return {
         id: f.id, sentence: f.sentence, check, status: f.status, stage, detail,
         requestedBy: f.origin === "backlog" ? "people (backlog)" : f.origin === "seed" ? "genesis" : f.origin === "heldout" ? "the owner (held out)" : `an agent (${claims[0]?.agent ?? "claim"})`,
         after: [...new Set(attempts.flatMap((a) => a.after))],
-        attempts, releases,
+        attempts: attempts.map(({ mutationRun, ...a }) => a), releases,
         production: f.status === "canon" && prod ? { held: prod.held, at: state.production?.at ?? null } : null,
-        needs,
+        needs, evidence, partial,
+        madeTrueBy: f.madeTrueBy ?? null, replaces: f.replaces ?? null,
       };
     });
     const count = (stage: string) => features.filter((x) => x.stage === stage).length;
@@ -302,31 +337,127 @@ export class Referee extends DurableObject<Env> {
         healthy: count("healthy in production"),
         inProgress: count("in progress") + count("verified") + count("accepted"),
         needsAPerson: features.filter((x) => x.needs.length).length,
-        heldBack: features.reduce((n, x) => n + x.releases.filter((r) => r.release === "not released" || r.reverted).length, 0), // releases held back, counted per release
+        heldBack: new Set(features.flatMap((x) => x.releases.filter((r) => r.release === "not released" || r.reverted).map((r) => r.seq))).size, // releases held back: a merge train held as a whole counts once
+        partiallyVerified: features.filter((x) => x.partial.length && x.stage !== "baseline").length,
       },
       features,
     };
   }
 
+  /** Whether anyone may read this project (board, ledger, records, repository), or only holders of a key. */
+  isPublic(): boolean {
+    return this.meta("public") === "1";
+  }
+
+  /** The owner publishes the project, read-only, or takes it back. */
+  setPublic(on: boolean) {
+    this.setMeta("public", on ? "1" : "0");
+    return { project: this.requireProject(), public: on };
+  }
+
   /**
-   * Before an attempt's preview is built with deploy credentials, the toolchain that runs with them must be canon's: the
-   * same package-lock.json (npm ci installs exactly that, integrity-checked, so every binary is canon's) and no custom
-   * build command in the Wrangler config (it would run with the credentials). Returns why not, or null. Genesis is the
-   * owner's own push; a charter with "toolchain": "open" turns the guard off, on the owner's authority.
+   * The run as it happened, oldest first, from the judge's own tables (claims, pushes, verdicts, clash warnings, merge
+   * trains, canon moves, releases, declines), each event pointing at the record it comes from: for replaying a recorded
+   * run step by step. Held-out details stay redacted.
+   */
+  timeline() {
+    const project = this.requireProject();
+    const hidden = this.heldOutIds();
+    const facts = new Map(this.rows(`SELECT * FROM facts`).map(toFact).map((f) => [f.id, f]));
+    const said = (id: string | undefined) => `“${(id && facts.get(id)?.sentence) ?? id ?? "a fact"}”`;
+    const claims = this.rows(`SELECT * FROM claims ORDER BY created_at`).map(toClaim);
+    const byAttempt = new Map(claims.map((c) => [c.attemptId, c]));
+    const byId = new Map(claims.map((c) => [c.id, c]));
+    type Event = { at: number; kind: string; tone: "good" | "bad" | "wait" | "note"; text: string; agent?: string; fact?: string; attempt?: string; sha?: string; link?: string; preview?: string; judge?: string };
+    const out: Event[] = [];
+    for (const c of claims) {
+      const from = c.refreshedFrom ? byId.get(c.refreshedFrom) : null;
+      out.push(c.refreshedFrom
+        ? { at: c.createdAt, kind: "reapply", tone: "note", agent: c.agent, fact: c.factId, attempt: c.attemptId, text: `The judge re-applied ${c.agent}'s change for ${said(c.factId)} onto the newer canon${from ? `, from ${from.attemptId}` : ""}` }
+        : { at: c.createdAt, kind: "claim", tone: "note", agent: c.agent, fact: c.factId, attempt: c.attemptId, text: `${c.agent} claimed ${said(c.factId)}: “${c.why}”` });
+    }
+    for (const p of this.rows(`SELECT * FROM pushes ORDER BY at`)) {
+      const c = byAttempt.get(p.attempt_id as string);
+      if (c) out.push({ at: p.at as number, kind: "push", tone: "note", agent: c.agent, fact: c.factId, attempt: c.attemptId, sha: String(p.sha).slice(0, 12), text: `${c.refreshedFrom ? "The judge" : c.agent} pushed ${String(p.sha).slice(0, 7)} with plain Git` });
+    }
+    for (const r of this.rows(`SELECT attempt_id, sha, json, at FROM verdicts ORDER BY at`)) {
+      const c = byAttempt.get(r.attempt_id as string);
+      const v = this.redactVerdict(JSON.parse(r.json as string) as Verdict, hidden);
+      const d = c ? this.diagnosisOf(c, v) : null;
+      const what = v.outcome === "ready" ? `Ready: every fact holds on the preview of ${v.sha.slice(0, 7)} (${v.kept.length} canon facts kept${c ? `, and ${said(c.factId)}` : ""})`
+        : failureOf(v, (id) => facts.get(id)?.sentence ?? id) ?? v.outcome;
+      // The diagnosis only where it adds something: an implementation failure already says what broke, and "behind" says
+      // the judge re-applies it.
+      const plain = { combination: "two changes that fail together", requirement: "the requirement itself", "unsupported-check": "a check that can't be made", infrastructure: "the platform, not the code" } as Record<string, string>;
+      const why = d && v.outcome !== "behind" && plain[d.kind] ? `. The judge's diagnosis: ${plain[d.kind]}; next: ${d.next}` : "";
+      out.push({ at: r.at as number, kind: "verdict", tone: v.outcome === "ready" ? "good" : v.outcome === "behind" || v.outcome === "pending" ? "wait" : "bad", agent: c?.agent, fact: c?.factId, attempt: r.attempt_id as string, sha: v.sha.slice(0, 12), ...(v.previewUrl ? { preview: v.previewUrl } : {}), ...(v.judge ? { judge: v.judge } : {}), link: `/p/${project}/attempts/${r.attempt_id}/verdict`, text: `${c ? `${c.agent}: ` : "Genesis: "}${what}${why}` });
+    }
+    for (const k of this.rows(`SELECT * FROM clashes ORDER BY at`)) {
+      const a = byId.get(k.claim_id as string);
+      const b = byId.get(k.other_claim_id as string);
+      out.push({ at: k.at as number, kind: "clash", tone: "wait", fact: k.fact_id as string, text: `Clash warning, before anyone accepts either: ${b?.agent ?? "another attempt"}'s change breaks ${said(k.fact_id as string)}, which ${a?.agent ?? "another agent"}'s attempt makes true${hidden.has(k.fact_id as string) ? "" : ` (${String(k.detail).slice(0, 160)})`}. Not proof they can't coexist: the combination is judged again after a re-apply or repair` });
+    }
+    for (const t of this.rows(`SELECT * FROM trains ORDER BY created_at`)) {
+      const riders = (JSON.parse(t.claims as string) as string[]).flatMap((id) => (byId.get(id) ? [byId.get(id)!] : []));
+      out.push({ at: t.created_at as number, kind: "train", tone: t.status === "landed" ? "good" : t.status === "failed" ? "bad" : "wait", text: `Merge train of ${riders.length}: ${riders.map((c) => `${c.agent} (${said(c.factId)})`).join(" + ")}: ${t.status}${t.detail ? `, ${String(t.detail).slice(0, 200)}` : ""}` });
+    }
+    const rows = this.rows(`SELECT * FROM canon ORDER BY seq`);
+    for (const r of rows) {
+      const seq = r.seq as number;
+      const at = r.at as number;
+      const sha = String(r.sha).slice(0, 12);
+      if (r.reverts !== null && r.reverts !== undefined) {
+        out.push({ at, kind: "revert", tone: "bad", sha, text: `Canon #${seq} steps back from #${r.reverts}: canon equals production again, and production never served #${r.reverts}` });
+        continue;
+      }
+      const ids = r.facts_json ? (JSON.parse(r.facts_json as string) as string[]) : r.accepted_fact ? [r.accepted_fact as string] : [];
+      const rec = this.acceptance(seq);
+      if (!ids.length) out.push({ at, kind: "genesis", tone: "good", sha, text: `Canon #${seq}: genesis, the owner's first commit (${sha.slice(0, 7)})` });
+      else out.push({ at, kind: "accept", tone: "good", sha, ...(rec ? { link: `/p/${project}/canon/${seq}/acceptance` } : {}), ...(rec?.judge ? { judge: rec.judge } : {}), text: `Canon #${seq}: ${ids.map((id) => said(id)).join(" + ")} accepted by ${rec?.authorizedBy ?? "the owner"}${rec?.chosenBecause ? `, chosen because ${rec.chosenBecause}` : ""}` });
+      const revert = rows.find((x) => x.reverts === seq);
+      const marks = [rec?.recovery.rehearsal?.at, rec?.recovery.candidateReset?.at, ...(rec?.exposure ?? []).map((e) => e.at)].filter((x): x is number => typeof x === "number");
+      const done = revert ? (revert.at as number) - 1 : marks.length ? Math.max(...marks) : at + 1;
+      if (!ids.length) continue;
+      if (r.deployed === -1 || r.health === "held" || r.health === "rolled-back" || revert) out.push({ at: done, kind: "held", tone: "bad", sha, ...(rec ? { link: `/p/${project}/canon/${seq}/acceptance` } : {}), text: `Canon #${seq} ${r.health === "rolled-back" ? "rolled back" : "held back before production"}: ${String(r.health_detail ?? "its release didn't pass").slice(0, 300)}` });
+      else if (r.deployed === 1) out.push({ at: done, kind: "release", tone: r.health === "broken" ? "bad" : "good", sha, ...(rec ? { link: `/p/${project}/canon/${seq}/acceptance` } : {}), text: `Canon #${seq} released${r.version_id ? ` as Worker version ${String(r.version_id).slice(0, 8)}` : ""}${rec?.recovery.rehearsal ? `; rollback rehearsal ${rec.recovery.rehearsal.state}` : ""}${(rec?.exposure ?? []).length ? `; rolled out ${rec!.exposure!.map((e) => `${e.percent}%`).join(" → ")} → 100%` : ""}${r.health === "broken" ? `; broken in production: ${r.health_detail}` : ""}` });
+    }
+    for (const f of facts.values()) if (f.declinedAt) out.push({ at: f.declinedAt, kind: "decline", tone: "bad", fact: f.id, text: `${said(f.id)} declined by the owner${f.declineReason ? `: “${f.declineReason}”` : ""}` });
+    const order = ["genesis", "claim", "reapply", "push", "verdict", "clash", "train", "accept", "release", "held", "revert", "decline"];
+    out.sort((x, y) => x.at - y.at || order.indexOf(x.kind) - order.indexOf(y.kind));
+    return { project, from: out[0]?.at ?? null, to: out.at(-1)?.at ?? null, events: out };
+  }
+
+  /**
+   * Before anything is installed or built, the toolchain and the deploy config must be canon's: an attempt that changes
+   * the lockfile, .npmrc, the Wrangler config, files wrangler loads (.env, .dev.vars, .wrangler/) or anything under
+   * node_modules is refused (publish.ts says why each matters). Returns why, or null. Genesis is the owner's own push; a
+   * charter with "toolchain": "open" turns the guard off, on the owner's authority.
    */
   async buildGuard(repo: string, sha: string): Promise<string | null> {
     const attempt = this.attempt(repo);
     if (!attempt?.claimId || !attempt.baseSha || this.charter()?.toolchain === "open") return null;
-    const read = (ref: string, path: string) => this.fileAtStrict(attempt.id, ref, path).then((t) => t ?? "", () => undefined);
-    const [head, base] = await Promise.all([read(sha, "package-lock.json"), read(attempt.baseSha, "package-lock.json")]);
-    if (head === undefined || base === undefined) return "the judge couldn't read package-lock.json to check the toolchain, so the attempt isn't built with deploy credentials; push again";
-    if (head !== base) return "it changes package-lock.json, and a preview is built with deploy credentials, so its toolchain must be canon's; revert the dependency change (the owner changes dependencies and build commands)";
-    for (const path of ["wrangler.jsonc", "wrangler.json", "wrangler.toml"]) {
-      const text = await read(sha, path);
-      if (text === undefined) return "the judge couldn't read the Wrangler config to check the build, so the attempt isn't built with deploy credentials; push again";
-      if (hasBuildCommand(path, text)) return `its ${path} has a custom build command, which would run with deploy credentials; remove it (the owner changes build commands)`;
+    const changed = await this.changedPaths(attempt, sha);
+    if (!changed) return "the judge couldn't list the files it changes, so nothing was installed or built; push again";
+    for (const path of changed) {
+      const why = ownerPath(path);
+      if (why) return `${why}; revert it (the owner changes these, or opens the toolchain in the charter)`;
     }
     return null;
+  }
+
+  /**
+   * What the publish step uploads with (publish.ts): the owner's Wrangler config, from the canon the attempt forked
+   * from (an attempt can't change it, see buildGuard), unless the charter opened the toolchain to agents.
+   */
+  async publishTargetFor(repo: string, sha: string): Promise<PublishTarget> {
+    const attempt = this.attempt(repo);
+    const ref = attempt?.claimId && attempt.baseSha && this.charter()?.toolchain !== "open" ? attempt.baseSha : sha;
+    for (const path of ["wrangler.jsonc", "wrangler.json", "wrangler.toml"]) {
+      // A read that fails is the platform's, not the attempt's: it throws, and the step retries.
+      const text = await this.fileAtStrict(repo, ref, path);
+      if (text !== null) return publishTarget(path, text);
+    }
+    return { refused: "there's no wrangler.jsonc or wrangler.json at the top of the repository" };
   }
 
   // ---- Move 2: declare --------------------------------------------------------------
@@ -2758,6 +2889,7 @@ export class Referee extends DurableObject<Env> {
       }
     }
     const record: Acceptance = {
+      ...(this.env.CF_VERSION_METADATA?.id ? { judge: this.env.CF_VERSION_METADATA.id } : {}),
       canonSeq: seq,
       sha: verdict.sha,
       attemptId,
@@ -2798,6 +2930,32 @@ export class Referee extends DurableObject<Env> {
   acceptance(seq: number): Acceptance | null {
     const row = this.rows(`SELECT json FROM acceptances WHERE seq = ?`, seq)[0];
     return row ? (JSON.parse(row.json as string) as Acceptance) : null;
+  }
+
+  /**
+   * An acceptance record as served: the stored record, plus what became of the release (read now, never stored with
+   * it), so a held release shows why it was held. A revert has no acceptance (the judge stepped canon back); it says so.
+   */
+  acceptanceView(seq: number) {
+    const row = this.rows(`SELECT * FROM canon WHERE seq = ?`, seq)[0];
+    const record = this.acceptance(seq);
+    if (!row) return null;
+    if (!record && row.reverts !== null && row.reverts !== undefined) {
+      const held = this.rows(`SELECT health_detail FROM canon WHERE seq = ?`, row.reverts)[0];
+      return { canonSeq: seq, sha: row.sha as string, at: row.at as number, revert: { of: row.reverts as number, why: `canon #${row.reverts} wasn't released, so canon stepped back to what production runs (canon always equals production): ${String(held?.health_detail ?? "its release didn't pass")}` } };
+    }
+    if (!record) return null;
+    const revertedBy = this.rows(`SELECT seq FROM canon WHERE reverts = ?`, seq)[0];
+    return {
+      ...record,
+      outcome: {
+        release: row.deployed === 1 ? "deployed" : row.deployed === -1 ? "not released" : "in progress",
+        health: (row.health as string | null) ?? null,
+        detail: (row.health_detail as string | null) ?? null,
+        versionId: (row.version_id as string | null) ?? null,
+        revertedBy: (revertedBy?.seq as number | undefined) ?? null,
+      },
+    };
   }
 
   /**
@@ -2876,7 +3034,12 @@ export class Referee extends DurableObject<Env> {
       this.setRehearsal(seq, "unavailable", "there is no released version before it to rehearse with");
       return null;
     }
-    return { PREV_URL: await this.tokenUrl(a, "read"), PREV_SHA: prev.sha as string, PREV_SEQ: String(prev.seq) };
+    const target = await this.publishTargetFor(a.id, prev.sha as string);
+    if ("refused" in target) {
+      this.setRehearsal(seq, "unavailable", `the previous version can't be published onto the release candidate: ${target.refused}`);
+      return null;
+    }
+    return { PREV_URL: await this.tokenUrl(a, "read"), PREV_SHA: prev.sha as string, PREV_SEQ: String(prev.seq), PREV_CONFIG: target.config, PREV_ENTRY: target.entry };
   }
 
   /**
@@ -2963,7 +3126,10 @@ export class Referee extends DurableObject<Env> {
     if (!this.holds(seq, holder) || (!always && (!record || (record.recovery.rollbackSafe && !record.recovery.rehearse)))) return null;
     const prev = this.rows(`SELECT * FROM canon WHERE seq < ? AND deployed = 1 ORDER BY seq DESC LIMIT 1`, seq)[0];
     const a = prev ? this.attempt(prev.attempt_id as string) : null;
-    return prev && a ? { PREV_URL: await this.tokenUrl(a, "read"), PREV_SHA: prev.sha as string } : null;
+    if (!prev || !a) return null;
+    const target = await this.publishTargetFor(a.id, prev.sha as string);
+    if ("refused" in target) return null;
+    return { PREV_URL: await this.tokenUrl(a, "read"), PREV_SHA: prev.sha as string, PREV_CONFIG: target.config, PREV_ENTRY: target.entry };
   }
 
   /**
@@ -3235,6 +3401,7 @@ export class Referee extends DurableObject<Env> {
     if (unreleasedBase) stale.push({ factId: "canon", detail: `built on canon #${unreleasedBase.seq}, which was never released` });
     const behind = stale.length > 0 || ledger.status === "behind";
     const verdict: Verdict = {
+      ...(this.env.CF_VERSION_METADATA?.id ? { judge: this.env.CF_VERSION_METADATA.id } : {}),
       attemptId: attempt.id,
       sha,
       previewUrl,
@@ -3503,6 +3670,17 @@ function toFact(r: Row): Fact {
   };
 }
 
+/** What a verdict observed going wrong, in one line (details of held-out facts already redacted), or null. */
+function failureOf(v: Verdict | null | undefined, sentence: (id: string) => string): string | null {
+  if (!v) return null;
+  if (v.heldBack) return `held back at release: ${v.heldBack}`;
+  if (v.outcome === "contradicts" && v.lost[0]) return `breaks “${sentence(v.lost[0].factId)}”: ${v.lost[0].detail}`;
+  if (v.outcome === "unproven") return `its own fact doesn't hold: ${v.claimed.detail}`;
+  if (v.outcome === "behind" && v.stale[0]) return `canon moved under it: “${sentence(v.stale[0].factId)}” fails on it (${v.stale[0].detail})`;
+  if (v.outcome === "error") return `couldn't be judged (the platform, not the code): ${v.claimed.detail}`;
+  return null;
+}
+
 function toClaim(r: Row): Claim {
   return {
     id: r.id as string,
@@ -3601,31 +3779,3 @@ function shortId() {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Whether a Wrangler config declares a custom build command (top level or in an environment), which wrangler runs with
- * whatever credentials it has. JSON/JSONC are read with comments stripped (strings respected); TOML by its [build]
- * tables. A config that can't be parsed counts as having one: unknown is not safe.
- */
-export function hasBuildCommand(path: string, text: string): boolean {
-  if (!text.trim()) return false;
-  if (path.endsWith(".toml")) return /^\s*\[(?:env\.[^\]]+\.)?build\]/m.test(text);
-  let out = "";
-  for (let i = 0, inString = false; i < text.length; i++) {
-    const c = text[i];
-    if (inString) {
-      out += c;
-      if (c === "\\") out += text[++i] ?? "";
-      else if (c === '"') inString = false;
-    } else if (c === '"') (inString = true), (out += c);
-    else if (c === "/" && text[i + 1] === "/") while (i < text.length && text[i] !== "\n") i++;
-    else if (c === "/" && text[i + 1] === "*") { i += 2; while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++; i++; }
-    else out += c;
-  }
-  try {
-    const config = JSON.parse(out.replace(/,(\s*[}\]])/g, "$1")) as { build?: unknown; env?: Record<string, { build?: unknown }> };
-    return config.build !== undefined || Object.values(config.env ?? {}).some((e) => e?.build !== undefined);
-  } catch {
-    return true;
-  }
-}

@@ -28,4 +28,5 @@ export type Env = CiBindings & {
   // anything; an agent's key can only claim, so accepting a fact stays a person's decision.
   CANON_KEY?: string;
   CANON_AGENT_KEY?: string;
+  CF_VERSION_METADATA?: WorkerVersionMetadata; // the judge's own Worker version, written into verdicts and records
 };

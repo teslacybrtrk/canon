@@ -75,5 +75,7 @@
   },
   // Secrets (wrangler secret put): CF_TOKEN, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
   // CANON_KEY (owner: genesis and accepting facts), CANON_AGENT_KEY (agents: claim, never accept)
+  // The judge's own Worker version, written into every verdict and acceptance record, so a record names the code that made it.
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "observability": { "enabled": true, "logs": { "enabled": true } }
 }

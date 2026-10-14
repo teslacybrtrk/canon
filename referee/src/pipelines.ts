@@ -4,6 +4,7 @@ import type { CheckResult } from "./protocol";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { Env } from "./env";
 import { refereeForRepo } from "./stub";
+import { buildScript, bundleEnv, bundleOf, checkBundle, PACK, PREV_BUILD_SCRIPT, publishScript, type PublishTarget } from "./publish";
 
 // Started by the cf.artifacts.repo.pushed trigger for every repo in the namespace.
 // Builds the pushed attempt as a Workers Preview, then hands it to the referee to judge.
@@ -17,8 +18,8 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const referee = refereeForRepo(this.env, repo);
     const attemptId = await step.do("register push", () => referee.pushed(repo, sha));
     if (!attemptId) return;
-    // The preview is built with deploy credentials, so the toolchain that runs with them must be canon's (buildGuard):
-    // an attempt that changes it is refused before anything is installed or built.
+    // The toolchain and the deploy config are canon's (buildGuard): an attempt that changes them, or puts files under
+    // node_modules, is refused before anything is installed or built.
     const unsafe = await step.do("toolchain", () => referee.buildGuard(repo, sha));
     if (unsafe) {
       await step.do("toolchain refused", () => referee.buildFailed(repo, sha, `toolchain protected: ${unsafe}`));
@@ -72,19 +73,34 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       return;
     }
 
-    // The Preview upload and the command facts both start from the installed snapshot and don't need each other, so
-    // they run side by side (measured: they were the two longest steps on the push-to-verdict path, one after the other;
-    // see docs/timings.md). Command facts (lint, types, tests, budgets) run on this commit's checkout in ONE container;
-    // the commands come from canon, never from the attempt. A claimed command fact also runs on the commit the attempt
+    // The Preview: built, then published (publish.ts). The Worker is bundled in a container without credentials, and the
+    // deploy token only ever meets that bundle, the owner's config and canon's wrangler, in an empty directory.
+    // Building and publishing, and the command facts, all start from the installed snapshot, and the two run side by
+    // side (measured: they were the two longest steps on the push-to-verdict path, one after the other; see
+    // docs/timings.md). Command facts (lint, types, tests, budgets) run on this commit's checkout in ONE container; the
+    // commands come from canon, never from the attempt. A claimed command fact also runs on the commit the attempt
     // forked from: if it passes there, it isn't new.
-    const previewRun = withRetries("preview", (a) =>
-      deps.runner({
-        name: named("preview", a),
-        command: `npx wrangler preview --name ${previewName} --json`,
-        cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
-        config: once,
-      }),
-    ).then((preview) => ({ ok: true as const, preview }), (err: unknown) => ({ ok: false as const, err }));
+    const target = JSON.parse(await step.do("publish target", async () => JSON.stringify(await referee.publishTargetFor(repo, sha)))) as PublishTarget;
+    if ("refused" in target) {
+      await step.do("can't publish", () => referee.buildFailed(repo, sha, `can't publish: ${target.refused}`));
+      return;
+    }
+    const previewRun = (async () => {
+      const built = await withRetries("build", (a) => deps.runner({ name: named("build", a), command: buildScript(), config: once }));
+      const bundle = bundleOf(built.logs);
+      const bad = await step.do("bundle", () => checkBundle(bundle, [target.entry]));
+      if (bad || !bundle) return { ok: false as const, err: null, refused: bad ?? "no bundle" };
+      const preview = await withRetries("preview", (a) =>
+        deps.runner({
+          name: named("preview", a),
+          command: publishScript(`$WR preview $PUB --name ${previewName} --json`),
+          env: { CANON_CONFIG: target.config, ...bundleEnv(bundle) },
+          cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+          config: once,
+        }),
+      );
+      return { ok: true as const, preview };
+    })().catch((err: unknown) => ({ ok: false as const, err, refused: null as string | null }));
     const commandRun = (async () => {
       const commands = await step.do("command facts", () => referee.commandsFor(repo, sha));
       const base: Novelty | null = await step.do("forked-from commit", async () => {
@@ -103,6 +119,11 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       }
     })();
     const [built, checked] = await Promise.all([previewRun, commandRun]);
+    if (!built.ok && built.refused) {
+      const why = built.refused;
+      await step.do("bundle refused", () => referee.buildFailed(repo, sha, `can't publish: ${why}`));
+      return;
+    }
     if (!built.ok) {
       const detail = isCiRunnerFailure(built.err) ? built.err.message : String(built.err);
       if (exitedNonZero(built.err)) await step.do("build failed", () => referee.buildFailed(repo, sha, detail));
@@ -162,15 +183,34 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     };
     // `w` recomputes the time left right before every wrangler call, so in a script that first clones and installs,
     // a slow start can't stretch a later call past the lease: each call is bounded by the absolute deadline.
-    const inTime = () => `D=${Math.floor(deadline / 1000)}; w() { T=$(( D - $(date +%s) - 60 )); [ "$T" -gt 0 ] || exit 3; timeout "$T" npx wrangler "$@"; }; [ $(( D - $(date +%s) - 60 )) -gt 0 ] || exit 3; `;
-    const wrangler = "w";
+    // Every wrangler call here is a publish step (publish.ts): `w` is that step's wrangler with the owner's config.
+    const inTime = () => `D=${Math.floor(deadline / 1000)}; w() { T=$(( D - $(date +%s) - 60 )); [ "$T" -gt 0 ] || exit 3; timeout "$T" $WR "$@" $PUB; }; [ $(( D - $(date +%s) - 60 )) -gt 0 ] || exit 3; `;
+    const publish = (commands: string) => publishScript(`${inTime()}${commands}`);
     let ok = true;
     let versionId: string | null = null;
     let candidateRan = false;
     const project = repo.slice(0, repo.lastIndexOf("-"));
     const creds = { accountId: this.env.CLOUDFLARE_ACCOUNT_ID };
+    let deps: CiRunnerResult | null = null;
+    // Production's code, for the steps that put it back on the release candidate: built from its clone without
+    // credentials, like the release's own bundle, and handed to the publish step as the owner's config plus a bundle.
+    const previous = async (label: string, job: Record<string, string>) => {
+      const built = await ci.runner({ name: `build production's code (${label})`, command: PREV_BUILD_SCRIPT, env: { PREV_URL: job.PREV_URL, PREV_SHA: job.PREV_SHA }, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
+      const bundle = bundleOf(built.logs);
+      const bad = await step.do(`production's bundle (${label})`, () => checkBundle(bundle, [job.PREV_ENTRY]));
+      if (bad || !bundle) throw new Error(`production's code couldn't be built for publishing: ${bad ?? "no bundle"}`);
+      return { CANON_CONFIG: job.PREV_CONFIG, ...bundleEnv(bundle) };
+    };
     try {
-      const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
+      deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
+      // The release's bundle: built once, without credentials, and published from an empty directory at every step below.
+      const target = JSON.parse(await step.do("publish target", async () => JSON.stringify(await referee.publishTargetFor(repo, sha)))) as PublishTarget;
+      if ("refused" in target) throw new Error(`can't publish: ${target.refused}`);
+      const built = await deps.runner({ name: "build", command: buildScript() });
+      const bundle = bundleOf(built.logs);
+      const bad = await step.do("bundle", () => checkBundle(bundle, [target.entry]));
+      if (bad || !bundle) throw new Error(`can't publish: ${bad ?? "no bundle"}`);
+      const release = { CANON_CONFIG: target.config, ...bundleEnv(bundle) };
       // Each project deploys under its own Worker name (project above), so projects never share a production app.
       // A candidate left dirty (unreleased code ran on it and it couldn't be rebuilt) is never reused as it is: rebuild
       // it from production's code first, or stop here as a platform failure.
@@ -182,14 +222,16 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
           return j ? (Object.fromEntries(Object.entries(j)) as Record<string, string>) : null;
         });
         if (!job) throw new Error(`the release candidate is dirty (${dirty}) and there is no released code to rebuild it from`);
-        await ci.runner({ name: "rebuild dirty release candidate", command: `${inTime()}${RESET_SCRIPT(project, wrangler)}`, env: job, cloudflareCredentials: creds, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
+        const prev = await previous("rebuild first", job);
+        await fenced("candidate rebuild first: publish");
+        await deps.runner({ name: "rebuild dirty release candidate", command: publish(RESET(project)), env: prev, cloudflareCredentials: creds, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
         await step.do("candidate clean", () => referee.markCandidate(null));
       }
       // Step one, the release candidate: the whole commit on its own Worker with production's config, so every fact
       // runs on all of its code (Durable Objects included) before production is touched.
       await fenced("release candidate");
       candidateRan = true;
-      await deps.runner({ name: "deploy release candidate", command: `${inTime()}${wrangler} deploy --name ${project}-candidate`, cloudflareCredentials: creds });
+      await deps.runner({ name: "deploy release candidate", command: publish(`w deploy --name ${project}-candidate`), env: release, cloudflareCredentials: creds });
       const candidateOk = await step.do("check release candidate", { timeout: "10 minutes" }, async () => await referee.candidateCheck(seq));
       if (!candidateOk) throw new Error("held back: the release candidate broke a fact");
       // The rollback rehearsal, for a change that touches stored data (or couldn't be fully inspected): the code
@@ -204,7 +246,9 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
         let deployedPrev = true;
         let why = "";
         try {
-          await ci.runner({ name: "rehearse rollback", command: `${inTime()}${REHEARSE_SCRIPT(project, wrangler)}`, env: rehearsal, cloudflareCredentials: creds, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
+          const prev = await previous("rehearsal", rehearsal);
+          await fenced("rollback rehearsal: publish");
+          await deps.runner({ name: "rehearse rollback", command: publish(`w deploy --name ${project}-candidate`), env: prev, cloudflareCredentials: creds, config: { retries: { limit: 1, delay: 10_000 }, timeout: 8 * 60_000 } });
         } catch (err) {
           deployedPrev = false;
           why = isCiRunnerFailure(err) ? err.message : String(err);
@@ -217,11 +261,10 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       // traffic. For a Worker without Durable Objects the judge stages it at 0% and smoke-tests every fact on the
       // production URL against it first; with Durable Objects an object runs one version at a time, so a 0% test can't
       // reach that code, and the release candidate (a full copy, its own persistent data) was the gate.
-      const objects = await deps.runner({ name: "durable objects?", command: `grep -qs '"durable_objects"' wrangler.jsonc wrangler.json && echo CANON_HAS_DO || true` });
-      const hasObjects = typeof objects.logs.stdout === "string" && objects.logs.stdout.includes("CANON_HAS_DO");
+      const hasObjects = target.objects;
       let atomic = false;
       await fenced("production");
-      const run = await deps.runner({ name: "upload version", command: `${inTime()}${wrangler} versions upload --name ${project}`, cloudflareCredentials: creds }).catch((err) => {
+      const run = await deps.runner({ name: "upload version", command: publish(`w versions upload --name ${project}`), env: release, cloudflareCredentials: creds }).catch((err) => {
         // Only two cases skip the judge's write: a Durable Object class change (Cloudflare can't upload it as a version;
         // it's applied atomically by a deploy), and the project's first release, when its production Worker doesn't exist
         // yet (there's nothing to stage beside, and Cloudflare can't upload a version of a Worker that doesn't exist).
@@ -234,7 +277,7 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       if (atomic || !run) {
         // A class change deploys atomically from here, still under the lease's deadline (refused late, killed at it).
         await fenced("production deploy");
-        const deployed = await deps.runner({ name: "deploy", command: `${inTime()}${wrangler} deploy --name ${project}`, cloudflareCredentials: creds });
+        const deployed = await deps.runner({ name: "deploy", command: publish(`w deploy --name ${project}`), env: release, cloudflareCredentials: creds });
         const out = typeof deployed.logs.stdout === "string" ? deployed.logs.stdout : "";
         versionId = out.match(/Version ID:\s*([0-9a-f-]{36})/i)?.[1] ?? null;
       } else {
@@ -252,7 +295,8 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     // Not shipped after this release's code ran on the candidate, and it touched stored data: rebuild the candidate from
     // production's code while this run still holds the release, so no later release is judged on data production
     // never had. Best effort, and recorded either way.
-    if (!ok && candidateRan) {
+    if (!ok && candidateRan && deps) {
+      const installed = deps;
       try {
         await fenced("candidate rebuild");
         const job = await step.do("candidate rebuild job", async () => {
@@ -264,7 +308,9 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
           let rebuilt = true;
           let why = "rebuilt from production's code (the candidate Worker and its Durable Objects deleted, then redeployed)";
           try {
-            await ci.runner({ name: "rebuild release candidate", command: `${inTime()}${RESET_SCRIPT(project, wrangler)}`, env: job, cloudflareCredentials: creds, config: { retries: { limit: 0, delay: 1_000 }, timeout: 8 * 60_000 } });
+            const prev = await previous("rebuild", job);
+            await fenced("candidate rebuild: publish");
+            await installed.runner({ name: "rebuild release candidate", command: publish(RESET(project)), env: prev, cloudflareCredentials: creds, config: { retries: { limit: 0, delay: 1_000 }, timeout: 8 * 60_000 } });
           } catch (err) {
             rebuilt = false;
             why = `couldn't rebuild: ${isCiRunnerFailure(err) ? err.message : String(err)}`;
@@ -290,24 +336,9 @@ export class PromoteAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   }
 }
 
-// Runs in the CI container: the rollback rehearsal. Checks out the code production runs now (PREV_URL at PREV_SHA, a
-// read-only token) and deploys it onto the release candidate, which this release's code has just run on.
-const REHEARSE_SCRIPT = (project: string, wrangler: string) => [
-  `set -e`,
-  `rm -rf /tmp/canon-prev && git clone -q "$PREV_URL" /tmp/canon-prev && cd /tmp/canon-prev && git checkout -q "$PREV_SHA"`,
-  `npm ci --no-audit --no-fund --ignore-scripts >/dev/null`,
-  `${wrangler} deploy --name ${project}-candidate`,
-].join(" && ");
-
-// Runs in the CI container: rebuilds the release candidate from production's code. Deleting the Worker deletes its
+// In a publish step (publish.ts): rebuilds the release candidate from production's code. Deleting the Worker deletes its
 // Durable Objects; the namespace takes a moment to go, so the fresh deploy is retried.
-const RESET_SCRIPT = (project: string, wrangler: string) => [
-  `set -e`,
-  `(${wrangler} delete --name ${project}-candidate --force >/dev/null 2>&1 || true)`,
-  `rm -rf /tmp/canon-prev && git clone -q "$PREV_URL" /tmp/canon-prev && cd /tmp/canon-prev && git checkout -q "$PREV_SHA"`,
-  `npm ci --no-audit --no-fund --ignore-scripts >/dev/null`,
-  `for i in 1 2 3 4 5; do ${wrangler} deploy --name ${project}-candidate && exit 0; sleep 15; done; exit 1`,
-].join(" && ");
+const RESET = (project: string) => `(w delete --name ${project}-candidate --force >/dev/null 2>&1 || true) && for i in 1 2 3 4 5; do w deploy --name ${project}-candidate && exit 0; sleep 15; done; exit 1`;
 
 // Runs in the CI container: writes refs/notes/canon (one note per canon commit) and pushes it to the canon attempt.
 // The previous canon's notes are fetched first, so a note the judge could not regenerate is still carried forward.
@@ -421,7 +452,8 @@ export class TrainAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
 // Checks that are checked. Started by the judge when a claim is Ready: in the attempt's checkout, deliberately break its
 // own change (drop a one-line guard, flip a comparison, swap an error status for 200), at most six ways, and build each
 // break as a preview of its own. The judge then runs the facts on every one: a break no fact notices is code no check
-// covers. The previews are deleted afterwards.
+// covers. The breaks are made and bundled without credentials; only their bundles reach the publish step (publish.ts).
+// The previews are deleted afterwards.
 export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
   protected async pipeline(event: WorkflowEvent<CiParams<CloudflareArtifacts>>, step: WorkflowStep, ci: CiContext) {
     const { repo, sha } = event.payload;
@@ -432,35 +464,61 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
       return;
     }
     const prefix = `${repo}-mut`;
-    let built: Array<{ file: string; line: number; op: string; before: string; after: string; preview: string | null }> = [];
+    type Mutant = { file: string; line: number; op: string; before: string; after: string };
+    let built: Array<Mutant & { preview: string | null }> = [];
     let failed = false;
+    let deps: CiRunnerResult | null = null;
+    let config = "";
     try {
-      const deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
+      deps = await ci.runner({ name: "install", command: "npm ci --no-audit --no-fund --ignore-scripts", cache: { inputs: ["package-lock.json"] } });
+      const target = JSON.parse(await step.do("publish target", async () => JSON.stringify(await referee.publishTargetFor(repo, sha)))) as PublishTarget;
+      if ("refused" in target) throw new Error(target.refused);
+      config = target.config;
       const ran = await deps.runner({
         name: "build mutants",
         command: MUTANT_SCRIPT,
-        env: { FILES: btoa(files), PREFIX: prefix, MAX: "8", MUTATOR: btoa(MUTATOR_JS) },
-        cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+        env: { FILES: btoa(files), MAX: "8", MUTATOR: btoa(MUTATOR_JS) },
         config: { retries: { limit: 0, delay: 1_000 }, timeout: 12 * 60_000 },
       });
       const out = typeof ran.logs.stdout === "string" ? ran.logs.stdout : "";
       const line = out.split("\n").find((l) => l.startsWith("CANON_MUTANTS "));
-      built = line ? JSON.parse(line.slice("CANON_MUTANTS ".length)) : [];
-      if (!line) failed = true;
+      if (!line) throw new Error("no mutants reported");
+      const mutants: Array<Mutant & { built: boolean }> = JSON.parse(line.slice("CANON_MUTANTS ".length));
+      const ids = mutants.flatMap((m, i) => (m.built ? [i] : []));
+      const published = new Set<number>();
+      if (ids.length) {
+        const bundle = bundleOf(ran.logs);
+        const bad = await step.do("mutant bundles", () => checkBundle(bundle, ids.map((i) => `m${i}/${target.entry}`)));
+        if (bad || !bundle) throw new Error(bad ?? "no bundle");
+        const pub = await deps.runner({
+          name: "publish mutants",
+          command: publishScript(MUTANT_PUBLISH(ids, prefix, target.entry)),
+          env: { CANON_CONFIG: target.config, ...bundleEnv(bundle) },
+          cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+          config: { retries: { limit: 0, delay: 1_000 }, timeout: 12 * 60_000 },
+        });
+        const pubOut = typeof pub.logs.stdout === "string" ? pub.logs.stdout : "";
+        for (const l of pubOut.split("\n")) if (l.startsWith("CANON_PUBLISHED ")) published.add(Number(l.split(" ")[1]));
+      }
+      built = mutants.map(({ built: _, ...m }, i) => ({ ...m, preview: published.has(i) ? `${prefix}${i}` : null }));
     } catch {
       built = [];
       failed = true;
     }
     // No mutants because the platform failed is not "nothing to break": the judge records it as unavailable evidence.
     await step.do("judge mutants", { timeout: "15 minutes" }, () => referee.mutantsBuilt(repo, sha, built, built.length ? undefined : failed ? "build-failed" : "no-mutants"));
-    try {
-      await ci.runner({
-        name: "delete mutant previews",
-        command: built.filter((m) => m.preview).map((m) => `npx wrangler preview delete --name ${m.preview} >/dev/null 2>&1 || true`).join("\n") || "true",
-        cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
-      });
-    } catch {
-      // Leftover previews are harmless; scripts/reset-project.sh removes them too.
+    const leftover = built.filter((m) => m.preview);
+    if (deps && config && leftover.length) {
+      try {
+        await deps.runner({
+          name: "delete mutant previews",
+          command: publishScript(leftover.map((m) => `$WR preview delete $PUB --name ${m.preview} >/dev/null 2>&1 || true`).join("\n")),
+          env: { CANON_CONFIG: config },
+          cloudflareCredentials: { accountId: this.env.CLOUDFLARE_ACCOUNT_ID },
+        });
+      } catch {
+        // Leftover previews are harmless; scripts/reset-project.sh removes them too.
+      }
     }
   }
 }
@@ -468,7 +526,7 @@ export class MutateAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
 // In the attempt's checkout: list the lines the attempt added (against FILES, its changed files where it forked), make up to MAX simple
 // breaks of them, and build each as a preview named PREFIX<n>, restoring the file after each. The generator is a
 // small Node script (MUTATOR_JS, passed base64) so no shell quoting touches it; it prints one CANON_MUTANTS JSON line.
-const MUTATOR_JS = String.raw`const fs = require("fs");
+export const MUTATOR_JS = String.raw`const fs = require("fs");
 const [cmd, arg] = process.argv.slice(2);
 const MAX = +process.env.MAX || 6;
 if (cmd === "gen") {
@@ -530,22 +588,32 @@ if (cmd === "gen") {
 } else if (cmd === "report") {
   const ms = JSON.parse(fs.readFileSync("/tmp/canon-mutants.json", "utf8"));
   const ok = new Set(fs.readFileSync("/tmp/canon-mutants.out", "utf8").split("\n").filter((l) => l.endsWith(" ok")).map((l) => +l.split(" ")[0]));
-  console.log("CANON_MUTANTS " + JSON.stringify(ms.map((m, i) => ({ ...m, preview: ok.has(i) ? process.env.PREFIX + i : null }))));
+  console.log("CANON_MUTANTS " + JSON.stringify(ms.map((m, i) => ({ ...m, built: ok.has(i) }))));
 }
 `;
-const MUTANT_SCRIPT = [
+export const MUTANT_SCRIPT = [
   `set +e`,
   `printf %s "$MUTATOR" | base64 -d > /tmp/canon-mutator.js`,
   `printf %s "$FILES" | base64 -d > /tmp/canon-mut-files.json`,
   `n=$(node /tmp/canon-mutator.js gen)`,
-  `i=0; : > /tmp/canon-mutants.out`,
+  `i=0; : > /tmp/canon-mutants.out; rm -rf .canon-build`,
   `while [ "$i" -lt "\${n:-0}" ]; do`,
   `  node /tmp/canon-mutator.js apply "$i"`,
-  `  if npx wrangler preview --name "$PREFIX$i" --json > /tmp/canon-mut-$i.log 2>&1; then echo "$i ok" >> /tmp/canon-mutants.out; else echo "$i no" >> /tmp/canon-mutants.out; fi`,
+  `  if npx wrangler deploy --dry-run --outdir ".canon-build/m$i" > /tmp/canon-mut-$i.log 2>&1; then echo "$i ok" >> /tmp/canon-mutants.out; else echo "$i no" >> /tmp/canon-mutants.out; fi`,
   `  node /tmp/canon-mutator.js restore "$i"`,
   `  i=$((i+1))`,
   `done`,
   `node /tmp/canon-mutator.js report`,
+  // No breaks built means no bundle: the script still ends well, so "nothing to break" isn't read as a failed build.
+  `if [ -d .canon-build ]; then ${PACK}; fi`,
+].join("\n");
+
+// In a publish step (publish.ts): each built break as a preview of its own, named PREFIX<n>, from its bundle (m<n>/).
+export const MUTANT_PUBLISH = (ids: number[], prefix: string, entry: string) => [
+  `for i in ${ids.join(" ")}; do`,
+  `  node -e 'const fs=require("fs");const c=JSON.parse(fs.readFileSync("wrangler.json","utf8"));const i=process.argv[1];c.main="bundle/m"+i+"/"+process.argv[2];c.base_dir="bundle/m"+i;fs.writeFileSync("m"+i+".json",JSON.stringify(c))' "$i" "${entry}"`,
+  `  if $WR preview --config "m$i.json" --env-file /dev/null --name "${prefix}$i" --json > /tmp/canon-pub-$i.log 2>&1; then echo "CANON_PUBLISHED $i"; fi`,
+  `done`,
 ].join("\n");
 
 // Runs in the CI container: applies each rider's change (everything since it forked, except canon.json) in order.

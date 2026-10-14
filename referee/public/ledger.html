@@ -71,6 +71,27 @@
   .needs ul { margin: 4px 0 0; padding-left: 18px; }
   code { font-family: var(--mono); font-size: 12.5px; }
   .empty, .err { padding: 24px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 8px; }
+  .partial { margin-left: 6px; }
+  .evidence { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }
+  .evidence li { padding: 3px 9px; border-radius: 6px; font-size: 12.5px; border: 1px solid var(--border); background: var(--bg-subtle); }
+  .evidence li.ok { border-color: color-mix(in srgb, var(--held) 50%, transparent); }
+  .evidence li.gap, .evidence li.missing, .evidence li.stale { border-color: var(--pending); background: var(--pending-bg); }
+  .evidence li.bad { border-color: var(--broke); background: var(--broke-bg); }
+  .evidence b { font-weight: 600; }
+  .trail-h { display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .trail-h a { text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+  ol.trail { counter-reset: step; list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  ol.trail > li { position: relative; padding-left: 34px; }
+  ol.trail > li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--bg); background: var(--muted); }
+  ol.trail > li.good::before { background: var(--held); } ol.trail > li.bad::before { background: var(--broke); } ol.trail > li.wait::before { background: var(--pending); }
+  ol.trail h4 { margin: 0 0 3px; font-size: 13.5px; }
+  ol.trail .row { margin: 4px 0 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-subtle); }
+  ol.trail .row.bad { border-left: 3px solid var(--broke); } ol.trail .row.good { border-left: 3px solid var(--held); } ol.trail .row.wait { border-left: 3px solid var(--pending); }
+  .rev { font-family: var(--mono); font-size: 12px; padding: 0 5px; border-radius: 4px; background: var(--bg-inset); border: 1px solid var(--border); cursor: copy; color: var(--ink-2); }
+  .quote { color: var(--ink-2); font-style: italic; }
+  .caveat { color: var(--muted); font-size: 12.5px; }
+  .links a { margin-right: 10px; font-size: 12.5px; }
+  details.feature:target, details.feature.focus { outline: 2px solid var(--brand); outline-offset: 2px; }
   footer { margin: 40px 0 30px; color: var(--muted); font-size: 12.5px; }
   @media (max-width: 560px) { h1 { font-size: 22px; } header .right { margin-left: 0; } }
 </style>
@@ -83,7 +104,7 @@
 <main class="wrap">
   <h1>Feature ledger</h1>
   <p class="lede">Every feature someone asked for, from the request to production: its requirement (a fact and its check), the agents' attempts and verdicts, who accepted it and why, how it was released, and whether it holds in production. Built only from the judge's own records; nothing here is self-reported by an agent.</p>
-  <p class="kinds">This page reads a real project on canon.rodeo (deployed execution). Held-out checks stay hidden.</p>
+  <p class="kinds">This page reads a real project on canon.rodeo (deployed execution), live. Open a feature to follow its trail: where it came from, who asserted it and why, every attempt at the exact commit, what failed, how it was resolved, and the evidence its release carried. Held-out checks stay hidden.</p>
   <section class="summary" id="summary"></section>
   <div id="groups"><div class="empty">Loading…</div></div>
   <footer>Raw JSON: <a id="rawlink" href="#">/p/…/ledger</a> · each release links to its acceptance record (the exact commit, the evidence, the policy that allowed it, and how a failed release recovers).</footer>
@@ -113,41 +134,99 @@
     ["Declined or retired", (f) => ["declined", "retired"].includes(f.stage)],
     ["Baseline (true since genesis, or added by the owner)", (f) => f.stage === "baseline"],
   ];
-  function attemptLine(a) {
-    const cls = a.status === "accepted" || a.status === "ready" ? "good" : ["contradicts", "error", "declined"].includes(a.status) ? "bad" : a.status === "superseded" ? "" : "wait";
-    const bits = [a.reappliedFrom ? "re-applied by the judge on a newer canon" : "", a.after.length ? `builds on ${a.after.map(esc).join(", ")}` : "", a.mutation ?? "", a.review ? `reviewer: ${esc(a.review)}` : ""].filter(Boolean);
-    return `<li class="${cls}"><span class="k">Attempt</span> <b>${esc(a.agent)}</b>: ${esc(a.status)}${a.outcome && a.outcome !== a.status ? ` (verdict: ${esc(a.outcome)})` : ""} <span class="k">${ago(a.at)}</span>
-      ${bits.length ? `<div>${bits.map(esc).join(" · ")}</div>` : ""}
-      ${a.waiting ? `<div>Autopilot is waiting: ${esc(a.waiting)}</div>` : ""}
-      ${a.diagnosis ? `<div><b>Diagnosis: ${esc(a.diagnosis.kind)}.</b> ${esc(a.diagnosis.why)} <i>Next: ${esc(a.diagnosis.next)}</i></div>` : ""}</li>`;
+  const short = (sha) => (sha ? String(sha).slice(0, 7) : "");
+  const when = (t) => (t ? `${new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${ago(t)})` : "");
+  // An exact revision: click to copy the Git commands that fetch it (attempts of a public project are served read-only).
+  const rev = (attempt, sha) => sha ? `<span class="rev" title="Click to copy: git clone ${esc(location.origin)}/a/${esc(attempt)}.git, then git checkout ${esc(sha)}" data-copy="git clone ${esc(location.origin)}/a/${esc(attempt)}.git && git -C ${esc(attempt)} checkout ${esc(sha)}">${esc(short(sha))}</span>` : "";
+  const canonRev = (sha) => sha ? `<span class="rev" title="Click to copy: git clone ${esc(location.origin)}/p/${esc(project)}.git, then git checkout ${esc(sha)}" data-copy="git clone ${esc(location.origin)}/p/${esc(project)}.git && git -C ${esc(project)} checkout ${esc(sha)}">${esc(short(sha))}</span>` : "";
+  const DIAG = { implementation: "the code", combination: "a combination of changes", requirement: "the requirement", "unsupported-check": "a check that can't be made", infrastructure: "the platform" };
+
+  function attemptRow(a) {
+    const cls = ["accepted", "ready"].includes(a.status) ? "good" : ["contradicts", "unproven", "error", "declined"].includes(a.status) ? "bad" : a.status === "superseded" ? "" : "wait";
+    const extra = [a.reappliedFrom ? `re-applied by the judge from ${esc(a.reappliedFrom)} onto a newer canon` : "", a.after.length ? `builds on ${a.after.map(esc).join(", ")}` : "", a.mutation ? esc(a.mutation) : "", a.review ? `reviewer: ${esc(a.review)}` : ""].filter(Boolean);
+    const combo = a.diagnosis?.kind === "combination" && a.outcome === "contradicts" ? `<div class="caveat">Observed: this check failed on the combined code. That doesn't prove the two features can't coexist; a combined implementation is judged again after a repair.</div>` : "";
+    return `<div class="row ${cls}"><b>${esc(a.agent)}</b> ${rev(a.attempt, a.sha)} · ${esc(a.status)}${a.outcome && a.outcome !== a.status ? ` (verdict: ${esc(a.outcome)})` : ""}${a.canonSeq ? ` · judged against canon #${a.canonSeq}` : ""} <span class="k">${ago(a.judgedAt ?? a.at)}</span>
+      ${a.why && !a.reappliedFrom ? `<div class="quote">“${esc(a.why)}”</div>` : ""}
+      ${a.failure ? `<div><b>Observed:</b> ${esc(a.failure)}</div>` : ""}
+      ${a.diagnosis ? `<div><b>Diagnosis: ${esc(DIAG[a.diagnosis.kind] ?? a.diagnosis.kind)}.</b> ${esc(a.diagnosis.why)}. <i>Next: ${esc(a.diagnosis.next)}</i></div>${combo}` : ""}
+      ${a.waiting ? `<div><b>Autopilot is waiting:</b> ${esc(a.waiting)}</div>` : ""}
+      ${extra.length ? `<div class="caveat">${extra.join(" · ")}</div>` : ""}
+      <div class="links">${a.preview ? `<a href="${esc(a.preview)}" target="_blank" rel="noopener">Its preview ↗</a>` : ""}<a href="/p/${project}/attempts/${esc(a.attempt)}/verdict">Verdict record</a>${a.judge ? `<span class="k">judge ${esc(a.judge.slice(0, 8))}</span>` : ""}</div></div>`;
   }
-  function releaseLine(r) {
+  function releaseRow(r) {
     const cls = r.release === "deployed" && !r.reverted && r.health !== "broken" ? "good" : r.release === "in progress" ? "wait" : "bad";
-    return `<li class="${cls}"><span class="k">Canon #${r.seq}</span> ${r.release === "deployed" ? "released" : esc(r.release)}${r.reverted ? ", then reverted" : ""}${r.versionId ? ` as Worker version <code>${esc(r.versionId.slice(0, 8))}</code>` : ""} (commit <code>${esc(r.sha)}</code>) <span class="k">${ago(r.at)}</span>
-      ${r.authorizedBy ? `<div>Accepted by ${esc(r.authorizedBy)}${r.exceptions.length ? `; accepted over: ${r.exceptions.map(esc).join("; ")}` : ""}</div>` : ""}
-      ${r.rehearsal ? `<div>Rollback rehearsal ${esc(r.rehearsal)}</div>` : ""}
-      ${r.rollout.length ? `<div>Rollout: ${r.rollout.map(esc).join(" → ")} → 100%</div>` : ""}
-      ${r.detail && cls !== "good" ? `<div>${esc(r.detail)}</div>` : ""}
-      ${r.record ? `<div><a href="${esc(r.record)}">Acceptance record</a></div>` : ""}</li>`;
+    return `<div class="row ${cls}"><b>Canon #${r.seq}</b> commit ${canonRev(r.sha)} · ${r.release === "deployed" && !r.reverted ? "released" : r.reverted ? "held back before production, then canon stepped back" : esc(r.release)}${r.versionId ? ` as Worker version <code>${esc(r.versionId.slice(0, 8))}</code>` : ""} <span class="k">${ago(r.at)}</span>
+      ${r.authorizedBy ? `<div><b>Accepted by</b> ${esc(r.authorizedBy)}${r.exceptions.length ? `; over: ${r.exceptions.map(esc).join("; ")}` : ""}</div>` : ""}
+      ${r.rehearsal ? `<div><b>Rollback rehearsal</b> ${esc(r.rehearsal)}</div>` : ""}
+      ${r.coverage ? `<div><b>Rollback coverage:</b> ${r.coverage.compared} compared, ${r.coverage.incompatible} incompatible, ${r.coverage.inconclusive} inconclusive, ${r.coverage.unsupported} couldn't be compared, ${r.coverage.notApplicable} not applicable</div>` : ""}
+      ${r.override ? `<div><b>Owner exception:</b> ${esc(r.override)}</div>` : ""}
+      ${r.rollout.length ? `<div><b>Rollout:</b> ${r.rollout.map(esc).join(" → ")} → 100%</div>` : ""}
+      ${r.detail && cls !== "good" ? `<div><b>Why:</b> ${esc(r.detail)}</div>` : ""}
+      <div class="links">${r.record ? `<a href="${esc(r.record)}">Acceptance record</a>` : ""}${r.checkVersion ? `<span class="k">check version ${esc(r.checkVersion)}</span> ` : ""}${r.policyVersion ? `<span class="k">policy ${esc(r.policyVersion)}</span> ` : ""}${r.judge ? `<span class="k">judge ${esc(r.judge.slice(0, 8))}</span>` : ""}</div></div>`;
+  }
+  // The trail, in the order a reviewer asks: where it came from, who asserted it and why, every attempt and what it
+  // observed, how it was resolved, who accepted it, and what its release carried (with when production was observed).
+  function trail(f) {
+    const asserted = f.attempts.filter((a) => !a.reappliedFrom);
+    // Each agent once, with its reason (an agent's own refresh repeats the reason with a note).
+    const voices = [...new Map(asserted.map((a) => [a.agent, (a.why ?? "").replace(/\s*\(refreshed onto canon \d+\)$/, "")])).entries()];
+    // Attempts that only fell behind as canon moved and were superseded by a newer one are folded away.
+    const folded = f.attempts.filter((a) => a.status === "superseded" && a.outcome === "behind");
+    const shown = f.attempts.filter((a) => !folded.includes(a));
+    const maker = f.attempts.find((a) => a.attempt === f.madeTrueBy) ?? f.attempts.find((a) => a.status === "ready");
+    const failedBefore = maker ? f.attempts.filter((a) => a !== maker && (a.failure || ["contradicts", "unproven"].includes(a.status))) : [];
+    const resolution = !maker ? (f.stage === "requested" ? "No attempt yet." : "Not resolved yet: no attempt holds every fact.")
+      : maker.reappliedFrom ? `Resolved when the judge re-applied the change from ${esc(maker.reappliedFrom)} onto the newer canon (commit ${rev(maker.attempt, maker.sha)}) and every fact held on the combined code.`
+      : failedBefore.length ? `Resolved by ${esc(maker.agent)}'s commit ${rev(maker.attempt, maker.sha)}, after ${failedBefore.length} attempt${failedBefore.length === 1 ? "" : "s"} that didn't hold; every fact held on its preview.`
+      : `${esc(maker.agent)}'s commit ${rev(maker.attempt, maker.sha)} held every fact on its first verdict.`;
+    const origin = f.requestedBy.startsWith("an agent") ? `Proposed by ${esc(f.requestedBy.replace(/^an agent \((.*)\)$/, "$1"))}${asserted[0]?.why ? `: <span class="quote">“${esc(asserted[0].why)}”</span>` : "."}`
+      : f.requestedBy === "genesis" ? "A seed fact, written into canon.json at genesis."
+      : f.requestedBy.includes("held out") ? "Added by the owner as a held-out fact: agents see the sentence, never the check."
+      : "Written by people in the backlog, for an agent to make true.";
+    const items = [
+      [`good`, "Where it came from", `${origin}${f.replaces ? ` A revision of <code>${esc(f.replaces)}</code>.` : ""}`],
+      [`good`, "The requirement", `${esc(f.sentence)}<div class="caveat">${esc(f.check)}</div>`],
+      voices.length ? [`good`, `Who asserted it (${voices.length})`, voices.map(([agent, why]) => `<div>${esc(agent)}${why ? `: <span class="quote">“${esc(why)}”</span>` : ""}</div>`).join("")] : null,
+      f.attempts.length ? [failedBefore.length ? "bad" : "good", `Attempts, at the exact commit judged (${f.attempts.length})`, shown.map(attemptRow).join("") + (folded.length ? `<details class="row"><summary>${folded.length} more fell behind as canon moved and were superseded: re-applied by the judge, or refreshed by their agent</summary>${folded.map(attemptRow).join("")}</details>` : "")] : null,
+      [maker ? "good" : "wait", "How it was resolved", resolution],
+      f.releases.length ? [f.releases.some((r) => r.release === "not released" || r.reverted) ? "bad" : "good", "Acceptance and release", f.releases.map(releaseRow).join("")] : null,
+      f.production ? [f.production.held ? "good" : "bad", "Production", `${f.production.held ? "Holds on production" : "Fails on production"}, observed ${esc(when(f.production.at))}.`] : null,
+    ].filter(Boolean);
+    return `<div class="trail-h">The trail <a href="#fact-${esc(f.id)}">link to this feature</a> <a href="/p/${project}/facts/${esc(f.id)}/why">fact chain (JSON)</a></div>
+      <ol class="trail">${items.map(([cls, h, body]) => `<li class="${cls}"><h4>${h}</h4>${body}</li>`).join("")}</ol>
+      <div class="broke-after" data-why="${esc(f.id)}"></div>`;
   }
   function feature(f) {
     const [cls, label] = STAGE[f.stage] ?? ["s-quiet", f.stage];
-    const prod = f.production ? `<li class="${f.production.held ? "good" : "bad"}"><span class="k">Production</span> ${f.production.held ? "holds on production" : "broken on production"} <span class="k">checked ${ago(f.production.at)}</span></li>` : "";
-    return `<details class="feature"><summary><span class="sentence">${esc(f.sentence)}</span><span class="pill ${cls}">${esc(label)}</span>
+    const partial = f.partial.length && f.stage !== "baseline" ? `<span class="pill s-wait partial" title="${esc(f.partial.join(" · "))}">Partially verified</span>` : "";
+    const ev = f.evidence.length ? `<ul class="evidence">${f.evidence.map((e) => `<li class="${esc(e.state)}" title="${esc(e.detail)}"><b>${esc(e.what)}</b>: ${esc(e.detail)}${e.at ? ` <span class="k">${ago(e.at)}</span>` : ""}</li>`).join("")}</ul>` : "";
+    return `<details class="feature" id="fact-${esc(f.id)}"><summary><span class="sentence">${esc(f.sentence)}</span><span><span class="pill ${cls}">${esc(label)}</span>${partial}</span>
       <span class="sub"><code>${esc(f.id)}</code> · requested by ${esc(f.requestedBy)}${f.detail ? ` · ${esc(f.detail)}` : ""}</span></summary>
       <div class="body">
         ${f.needs.length ? `<div class="needs"><b>Needs a person</b><ul>${f.needs.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></div>` : ""}
-        <ol class="timeline">
-          <li class="good"><span class="k">Requirement</span> ${esc(f.sentence)}<div>${esc(f.check)}</div></li>
-          ${f.attempts.map(attemptLine).join("")}
-          ${f.releases.map(releaseLine).join("")}
-          ${prod}
-        </ol>
+        ${ev}
+        ${trail(f)}
       </div></details>`;
   }
-  fetch(`/p/${project}/ledger`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))).then((l) => {
+  // Attempts at other facts that broke this one while it was canon: from the fact chain, fetched when it's opened.
+  async function brokeAfter(el) {
+    if (el.dataset.done) return;
+    el.dataset.done = "1";
+    try {
+      const w = await (await fetch(`/p/${project}/facts/${el.dataset.why}/why`)).json();
+      const broke = [...new Map((w.rejected ?? []).filter((r) => r.kind === "contradiction").map((r) => [r.attempt_id, r])).values()];
+      if (broke.length) el.innerHTML = `<ol class="trail" start="9"><li class="bad"><h4>Changes it stopped (${broke.length})</h4>${broke.slice(0, 8).map((r) => `<div class="row bad"><b>${esc(r.agent ?? "")}</b> ${rev(r.attempt_id, r.sha)} was rejected for breaking it: ${esc(r.detail)}</div>`).join("")}</li></ol>`;
+    } catch {}
+  }
+  document.addEventListener("toggle", (e) => { if (e.target.matches?.("details.feature") && e.target.open) brokeAfter(e.target.querySelector(".broke-after")); }, true);
+  document.addEventListener("click", (e) => {
+    const c = e.target.closest?.("[data-copy]");
+    if (!c) return;
+    navigator.clipboard?.writeText(c.dataset.copy).then(() => { const t = c.textContent; c.textContent = "copied"; setTimeout(() => (c.textContent = t), 900); }, () => {});
+  });
+  fetch(`/p/${project}/ledger`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 404 ? "this project isn't public" : `HTTP ${r.status}`)))).then((l) => {
     const s = l.summary;
-    $("summary").innerHTML = [[s.requested, "features requested"], [s.released, "released"], [s.healthy, "healthy in production"], [s.inProgress, "in flight"], [s.needsAPerson, "need a person"], [s.heldBack, "releases held back"]]
+    $("summary").innerHTML = [[s.requested, "features requested"], [s.released, "released"], [s.healthy, "healthy in production"], [s.inProgress, "in flight"], [s.needsAPerson, "need a person"], [s.heldBack, "releases held back"], [s.partiallyVerified ?? 0, "partially verified"]]
       .map(([n, t]) => `<div class="stat"><b>${n}</b><span>${t}</span></div>`).join("");
     const seen = new Set();
     const html = GROUPS.map(([title, test]) => {
@@ -156,7 +235,10 @@
       return items.length ? `<section class="group"><h2>${esc(title)} · ${items.length}</h2>${items.map(feature).join("")}</section>` : "";
     }).join("");
     $("groups").innerHTML = html || `<div class="empty">No features yet.</div>`;
-  }).catch((e) => { $("groups").innerHTML = `<div class="err">Couldn't load the ledger for “${esc(project)}” (${esc(e.message)}). Is the project name right?</div>`; });
+    // A link to one feature opens its trail.
+    const target = location.hash.startsWith("#fact-") && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (target) { target.open = true; target.classList.add("focus"); target.scrollIntoView({ block: "start" }); }
+  }).catch((e) => { $("groups").innerHTML = `<div class="err">Couldn't load the ledger for “${esc(project)}” (${esc(e.message)}). A project is shown here only once its owner publishes it.</div>`; });
 </script>
 </body>
 </html>

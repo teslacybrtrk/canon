@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run replay · Canon</title>
+<meta name="description" content="A recorded run on canon.rodeo, replayed step by step from the judge's own records: claims, pushes, verdicts, clash warnings, re-applies, merge trains, acceptances and releases. Nothing is re-run.">
+<link rel="icon" href="/favicon-32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b1220; --bg-subtle: #0f1829; --bg-inset: #080e1a; --border: #26324a; --ink: #e6edf3; --ink-2: #b6c2d2;
+    --muted: #8592a6; --link: #5ea3ff; --brand: #fd6f16; --gold: #fdc86d;
+    --held: #3fb950; --held-bg: rgb(63 185 80 / 0.15); --broke: #f85149; --broke-bg: rgb(248 81 73 / 0.15);
+    --pending: #d29922; --pending-bg: rgb(210 153 34 / 0.15); --merged: #fd8a3c; --merged-bg: rgb(253 111 22 / 0.15);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #ffffff; --bg-subtle: #f6f8fa; --bg-inset: #eff2f5; --border: #d1d9e0; --ink: #1f2328; --ink-2: #3d444d;
+      --muted: #59636e; --link: #0969da; --brand: #ed5616; --gold: #9a6700;
+      --held: #1a7f37; --held-bg: rgb(26 127 55 / 0.1); --broke: #d1242f; --broke-bg: rgb(209 36 47 / 0.08);
+      --pending: #9a6700; --pending-bg: rgb(154 103 0 / 0.1); --merged: #c2410c; --merged-bg: rgb(194 65 12 / 0.1);
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+  header { border-bottom: 1px solid var(--border); background: var(--bg-inset); }
+  header .wrap { display: flex; align-items: center; gap: 12px; min-height: 60px; flex-wrap: wrap; }
+  .logo { display: flex; align-items: center; gap: 10px; color: var(--ink); font: 800 22px/1 "Big Shoulders Display", var(--sans); letter-spacing: 0.04em; text-transform: uppercase; }
+  .logo img { width: 30px; height: 30px; border-radius: 7px; }
+  header .crumb { color: var(--muted); }
+  header .right { margin-left: auto; display: flex; gap: 14px; font-size: 13px; }
+  .label { margin: 22px 0 6px; display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 12px; border: 1px solid var(--gold); border-radius: 8px; background: rgb(253 200 109 / 0.08); color: var(--gold); font-weight: 700; letter-spacing: 0.02em; }
+  .label span { color: var(--ink-2); font-weight: 500; }
+  h1 { margin: 8px 0 4px; font-size: 26px; }
+  .lede { margin: 0; color: var(--ink-2); max-width: 820px; }
+  .controls { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0 12px; padding: 10px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+  button, select { font: inherit; color: var(--ink); background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; cursor: pointer; }
+  button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; min-width: 84px; }
+  input[type=range] { flex: 1 1 220px; accent-color: var(--brand); }
+  .clock { font: 600 13px var(--mono); color: var(--ink-2); min-width: 150px; text-align: right; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .panel { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-subtle); }
+  .panel h2 { margin: 0; padding: 10px 12px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--border); }
+  #events { list-style: none; margin: 0; padding: 6px 0; max-height: 64vh; overflow: auto; }
+  #events li { display: grid; grid-template-columns: 58px 14px minmax(0, 1fr); gap: 8px; padding: 6px 12px; border-left: 3px solid transparent; }
+  #events li.now { background: var(--bg-inset); border-left-color: var(--brand); }
+  #events li .t { font: 12px var(--mono); color: var(--muted); padding-top: 2px; }
+  #events li .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--border); }
+  #events li.good .dot { background: var(--held); } #events li.bad .dot { background: var(--broke); } #events li.wait .dot { background: var(--pending); }
+  #events li .what { overflow-wrap: anywhere; }
+  #events li .links { font-size: 12px; margin-top: 2px; }
+  #events li .links a, #events li .links span { margin-right: 10px; }
+  .k { color: var(--muted); font-size: 12px; }
+  .counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px; }
+  .counts div { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+  .counts b { display: block; font-size: 20px; line-height: 1.1; }
+  .counts span { font-size: 12px; color: var(--muted); }
+  #facts { list-style: none; margin: 0; padding: 4px 12px 12px; display: grid; gap: 6px; }
+  #facts li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+  .chip { white-space: nowrap; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--border); color: var(--muted); }
+  .chip.claimed { color: var(--merged); background: var(--merged-bg); border-color: transparent; }
+  .chip.ready { color: var(--pending); background: var(--pending-bg); border-color: transparent; }
+  .chip.canon { color: var(--held); background: var(--held-bg); border-color: transparent; }
+  .chip.held { color: var(--broke); background: var(--broke-bg); border-color: transparent; }
+  .chip.declined { color: var(--muted); }
+  .empty, .err { padding: 24px; text-align: center; color: var(--muted); }
+  footer { margin: 30px 0; color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="logo" href="/"><img src="/icon-96.png" alt="">Canon</a><span class="crumb">/ <span id="project">…</span> / replay</span>
+  <span class="right"><a id="ledgerlink" href="#">Feature ledger</a><a id="statslink" href="#">Run report</a></span>
+</div></header>
+<main class="wrap">
+  <div class="label" id="label">Recorded run <span>loading…</span></div>
+  <h1 id="title">Run replay</h1>
+  <p class="lede" id="lede">A replay of the judge's own records, event by event: what each agent claimed and why, every push and verdict, clash warnings, re-applies, merge trains, acceptances and releases. Nothing is re-run here, and time is compressed. Each step links to the record it comes from.</p>
+  <div class="controls">
+    <button id="restart" title="Back to the start">⏮</button>
+    <button id="prev" title="Previous event">◀</button>
+    <button id="play" class="primary">▶ Play</button>
+    <button id="next" title="Next event">▶︎▏</button>
+    <select id="speed" title="Events per second"><option value="1">1 / s</option><option value="3" selected>3 / s</option><option value="8">8 / s</option></select>
+    <select id="only" title="Which events"><option value="all">every event</option><option value="key">verdicts, clashes, canon, releases</option></select>
+    <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Position in the run">
+    <span class="clock" id="clock"></span>
+  </div>
+  <div class="grid">
+    <section class="panel"><h2>What happened</h2><ol id="events"><li class="empty">Loading…</li></ol></section>
+    <aside>
+      <section class="panel"><h2>At this moment</h2><div class="counts" id="counts"></div></section>
+      <section class="panel" style="margin-top:12px"><h2>Facts</h2><ul id="facts"></ul></section>
+    </aside>
+  </div>
+  <footer>Raw records: <a id="rawlink" href="#">timeline JSON</a>. A replay shows what the judge recorded at the time, with the judge version of that day; it doesn't show fixes made later.</footer>
+</main>
+<script>
+  const project = (new URLSearchParams(location.search).get("p") || "farmstand").replace(/[^a-z0-9]/g, "");
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  // What each recorded run was, and which judge recorded it (README: "Which code made which record").
+  const RUNS = {
+    farmstand: { kind: "Recorded autonomous run", when: "October 12, 2026", judge: "historical judge version (Oct 12, before commit b9f3a2c)", who: "Twelve Claude Code agents at once, with a person deciding: one click, to accept one side of a clash." },
+    rodeo: { kind: "Recorded autonomous run", when: "October 12, 2026", judge: "historical judge version (Oct 12, before commit b9f3a2c)", who: "Six Claude Code agents on a backlog, on autopilot: nobody clicked." },
+    final: { kind: "Recorded autonomous run", when: "October 13, 2026", judge: "judge version 176b48f5 (commit 113abf2)", who: "Four Claude Code agents on a backlog, on autopilot: nobody accepted anything." },
+    convoy: { kind: "Recorded scripted run on deployed Canon", when: "October 13, 2026", judge: "judge version a83d0b92 (commit 4c84499)", who: "Five scripted agent attempts arriving together: the code was written in advance, the judging was live." },
+  };
+  const run = RUNS[project] ?? { kind: "Recorded run", when: "", judge: "the judge version recorded on each verdict", who: "" };
+  $("project").textContent = project;
+  $("ledgerlink").href = `/ledger?p=${project}`;
+  $("statslink").href = `/p/${project}/stats`;
+  $("rawlink").href = `/p/${project}/timeline`;
+  document.title = `Replay · ${project} · Canon`;
+  const KEY = new Set(["verdict", "clash", "train", "accept", "release", "held", "revert", "decline", "genesis"]);
+  let all = [], events = [], facts = [], i = 0, timer = null;
+  const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `+${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+
+  function stateAt(n) {
+    const st = { claims: 0, pushes: 0, ready: 0, rejected: 0, clashes: 0, reapplies: 0, canon: 1, releases: 0, held: 0, fact: {} };
+    const landed = {}; // canon number -> the facts its acceptance named
+    for (const e of events.slice(0, n + 1)) {
+      if (e.kind === "claim") { st.claims++; if (!st.fact[e.fact] || st.fact[e.fact] === "requested") st.fact[e.fact] = "claimed"; }
+      if (e.kind === "push") st.pushes++;
+      if (e.kind === "reapply") st.reapplies++;
+      if (e.kind === "clash") st.clashes++;
+      if (e.kind === "verdict" && e.fact) { if (e.tone === "good") { st.ready++; if (st.fact[e.fact] !== "canon") st.fact[e.fact] = "ready"; } else if (e.tone === "bad") st.rejected++; }
+      if (e.kind === "accept") { const m = e.text.match(/^Canon #(\d+)/); if (m) st.canon = Number(m[1]); landed[st.canon] = facts.filter((f) => e.text.includes(`“${f.sentence}”`)); for (const f of landed[st.canon]) st.fact[f.id] = "canon"; }
+      if (e.kind === "revert") { const m = e.text.match(/^Canon #(\d+)/); if (m) st.canon = Number(m[1]); }
+      if (e.kind === "release") st.releases++;
+      if (e.kind === "held") { st.held++; const m = e.text.match(/^Canon #(\d+)/); for (const f of (m && landed[m[1]]) || []) st.fact[f.id] = "held"; }
+      if (e.kind === "decline" && e.fact) st.fact[e.fact] = "declined";
+    }
+    return st;
+  }
+  function draw() {
+    if (!events.length) return;
+    const e = events[i];
+    $("scrub").max = String(events.length - 1);
+    $("scrub").value = String(i);
+    $("clock").textContent = `${i + 1} / ${events.length} · ${mmss(e.at - events[0].at)}`;
+    $("events").innerHTML = events.slice(0, i + 1).map((x, n) => `<li class="${esc(x.tone)}${n === i ? " now" : ""}"><span class="t">${mmss(x.at - events[0].at)}</span><span class="dot"></span><span class="what">${esc(x.text)}
+      <div class="links">${x.sha ? `<span class="k">commit ${esc(x.sha.slice(0, 7))}</span>` : ""}${x.link ? `<a href="${esc(x.link)}">record</a>` : ""}${x.preview ? `<a href="${esc(x.preview)}" target="_blank" rel="noopener">preview ↗</a>` : ""}${x.judge ? `<span class="k">judge ${esc(x.judge.slice(0, 8))}</span>` : ""}</div></span></li>`).join("");
+    const now = $("events").querySelector("li.now");
+    if (now) now.scrollIntoView({ block: "nearest" });
+    const st = stateAt(i);
+    $("counts").innerHTML = [[st.claims, "claims"], [st.pushes, "pushes"], [st.ready, "Ready verdicts"], [st.rejected, "verdicts that failed"], [st.clashes, "clash warnings"], [st.reapplies, "re-applied by the judge"], [`#${st.canon}`, "canon"], [`${st.releases} / ${st.held}`, "released / held back"]]
+      .map(([n, t]) => `<div><b>${esc(n)}</b><span>${esc(t)}</span></div>`).join("");
+    const label = { requested: "requested", claimed: "being built", ready: "Ready", canon: "canon", held: "held back", declined: "declined" };
+    $("facts").innerHTML = facts.map((f) => { const s = st.fact[f.id] ?? (f.baseline ? "canon" : "requested"); return `<li><span>${esc(f.sentence)}</span><span class="chip ${esc(s)}">${esc(f.baseline ? "baseline" : label[s])}</span></li>`; }).join("");
+  }
+  function go(n) { i = Math.max(0, Math.min(events.length - 1, n)); draw(); }
+  function stop() { clearInterval(timer); timer = null; $("play").textContent = "▶ Play"; }
+  function play() {
+    if (timer) return stop();
+    if (i >= events.length - 1) i = 0;
+    $("play").textContent = "❚❚ Pause";
+    timer = setInterval(() => { if (i >= events.length - 1) return stop(); go(i + 1); }, 1000 / Number($("speed").value));
+  }
+  function filter() { const at = events[i]?.at ?? 0; events = $("only").value === "key" ? all.filter((e) => KEY.has(e.kind)) : all; i = Math.max(0, events.findIndex((e) => e.at >= at)); draw(); }
+  $("play").onclick = play;
+  $("prev").onclick = () => { stop(); go(i - 1); };
+  $("next").onclick = () => { stop(); go(i + 1); };
+  $("restart").onclick = () => { stop(); go(0); };
+  $("scrub").oninput = (ev) => { stop(); go(Number(ev.target.value)); };
+  $("speed").onchange = () => { if (timer) { stop(); play(); } };
+  $("only").onchange = filter;
+  document.addEventListener("keydown", (ev) => { if (ev.target.closest?.("select, input")) return; if (ev.key === " ") { ev.preventDefault(); play(); } if (ev.key === "ArrowRight") { stop(); go(i + 1); } if (ev.key === "ArrowLeft") { stop(); go(i - 1); } });
+
+  Promise.all([fetch(`/p/${project}/timeline`), fetch(`/p/${project}/ledger`)]).then(async ([t, l]) => {
+    if (!t.ok) throw new Error(t.status === 404 ? "this project isn't public" : `HTTP ${t.status}`);
+    const tl = await t.json();
+    const ledger = l.ok ? await l.json() : { features: [] };
+    all = tl.events;
+    facts = ledger.features.filter((f) => f.stage !== "retired").map((f) => ({ id: f.id, sentence: f.sentence, baseline: f.stage === "baseline" }));
+    const minutes = tl.from && tl.to ? Math.round((tl.to - tl.from) / 60000) : 0;
+    $("label").innerHTML = `${esc(run.kind)}${run.when ? ` · ${esc(run.when)}` : ""} <span>${esc(run.judge)}</span>`;
+    $("title").textContent = `${project}: the run, step by step`;
+    $("lede").textContent = `${run.who ? `${run.who} ` : ""}This replays the judge's own records (${all.length} events over ${minutes} minutes of real time, compressed); nothing is re-run, and fixes made after this run aren't in it. Each step links to the record it comes from.`;
+    events = all;
+    if (!events.length) { $("events").innerHTML = `<li class="empty">No events recorded.</li>`; return; }
+    go(0);
+  }).catch((e) => { $("events").innerHTML = `<li class="err">Couldn't load the run for “${esc(project)}” (${esc(e.message)}). A project can be replayed only once its owner publishes it.</li>`; });
+</script>
+</body>
+</html>

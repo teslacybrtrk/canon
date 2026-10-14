@@ -89,8 +89,10 @@ export interface Charter {
   intentRisk?: boolean;
   // true: every claim must declare the files it will change (touches); a change outside them waits for the owner.
   requireScope?: boolean;
-  // "open": attempts may change the toolchain (package-lock.json, a Wrangler build command) although previews are built
-  // with deploy credentials. Off by default: agents can't change what runs with the credentials (see buildGuard).
+  // "open": attempts may change the toolchain and the deploy config (package-lock.json, .npmrc, the Wrangler config and
+  // its bindings, .env files), and the publish step uses the attempt's own Wrangler config. Off by default: those are
+  // the owner's (see buildGuard and publish.ts). Even open, the deploy token never meets repository code: builds still
+  // run without it.
   toolchain?: "open";
 }
 export interface Policy {
@@ -324,6 +326,7 @@ export interface Verdict {
   headsUp?: Clash[];
   reviewer?: Review | null; // the advisory reviewer's grounded notes (a model that didn't write the change), never a verdict
   diagnosis?: Diagnosis | null; // what kind of failure this is, and what would resolve it (see diagnosis.ts)
+  judge?: string; // the judge's own Worker version that made this verdict (recorded since Oct 14)
 }
 
 /**
@@ -356,6 +359,7 @@ export interface Acceptance {
   // The gradual rollout, step by step: the share of traffic, what was watched (synthetic checks on both versions at the
   // same moment, routed checks, and real traffic per version when analytics allow), and the verdict.
   exposure?: Array<{ percent: number; newFails: number; oldFails: number; routedFails: number; mixedFails?: number; checks: number; raw: string; analytics: string; verdict: string; at: number }>;
+  judge?: string; // the judge's own Worker version that wrote this record (recorded since Oct 14)
   at: number;
 }
 

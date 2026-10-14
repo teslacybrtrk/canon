@@ -316,8 +316,8 @@ function factFile(path) {
 async function api(method, path, body, allowPending = false) {
   const res = await fetch(`${URL_BASE}/p/${PROJECT}${path}`, {
     method,
-    // Reads are public; only writes carry the key.
-    headers: { ...(body ? { "content-type": "application/json" } : {}), ...(KEY && method !== "GET" ? { authorization: `Bearer ${KEY}` } : {}) },
+    // The key goes with every request: a project its owner hasn't published answers reads only to a key.
+    headers: { ...(body ? { "content-type": "application/json" } : {}), ...(KEY ? { authorization: `Bearer ${KEY}` } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));

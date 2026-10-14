@@ -17,6 +17,10 @@ export async function serveGit(request: Request, env: Env): Promise<Response | n
   const m = url.pathname.match(/^\/(?:(canon)|(?:a|w)\/([\w.-]+)|p\/([a-z0-9]+))\.git(\/.*)$/);
   if (!m) return null;
   const [, isSource, named, project, rest] = m;
+  // Only a project its owner published is served here (attempts are named <project>-<suffix>); agents fetch their own
+  // attempts through the remotes and tokens their claims gave them.
+  const owner = project ?? (named ? named.slice(0, named.lastIndexOf("-")) : null);
+  if (!isSource && (!owner || !/^[a-z0-9]+$/.test(owner) || !(await refereeForProject(env, owner).isPublic()))) return new Response("no such repository\n", { status: 404 });
   // /p/<project>.git is the canon: the attempt production runs right now, notes and all.
   const attempt = project ? await refereeForProject(env, project).canonRepo() : named;
   if (project && !attempt) return new Response("no canon yet\n", { status: 404 });

@@ -21,7 +21,7 @@ const keychain = (name) => sh(`source scripts/env.sh >/dev/null 2>&1; keychain $
 const OWNER = keychain("canon-owner-key");
 const AGENT = keychain("canon-agent-key");
 if (!URL_ || !OWNER || !AGENT) throw new Error("source scripts/env.sh first, with both keys in the Keychain (scripts/keys.sh)");
-const get = async (path) => (await fetch(`${URL_}/p/${PROJECT}${path}`)).json();
+const get = async (path) => (await fetch(`${URL_}/p/${PROJECT}${path}`, { headers: { authorization: `Bearer ${OWNER}` } })).json();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const t0 = Date.now();
 const at = () => `${Math.round((Date.now() - t0) / 1000)}s`;
@@ -46,7 +46,7 @@ const existing = await get("/canon").catch(() => null);
 if (existing?.canon) note(`project ${PROJECT} already has canon #${existing.canon.seq}; reusing it`);
 else {
   note(`genesis of ${PROJECT}`);
-  sh(`./scripts/genesis.sh`, { CANON_PROJECT: PROJECT, CANON_FILE: join(work, "canon.json"), DEMO_DIR: "demo-stateless", CANON_KEY: OWNER });
+  sh(`./scripts/genesis.sh`, { CANON_PROJECT: PROJECT, CANON_FILE: join(work, "canon.json"), DEMO_DIR: "demo-stateless", CANON_KEY: OWNER, CANON_PUBLIC: "1" });
   for (let i = 0; i < 90; i++) {
     const s = await get("/canon").catch(() => null);
     if (s?.canon) break;

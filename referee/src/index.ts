@@ -10,9 +10,10 @@ export { Referee } from "./referee";
 export { Capacity } from "./capacity";
 export { VerifyAttempt, PromoteAttempt, RefreshAttempt, TrainAttempt, MutateAttempt } from "./pipelines";
 
-// The Canon HTTP surface. Reads are public. Writes need a bearer key: the owner's key (CANON_KEY)
-// can do anything, an agent's key (CANON_AGENT_KEY) can only declare. Running a fact's check
-// against production stays open, since it changes nothing in canon.
+// The Canon HTTP surface. A project's reads are public only once its owner publishes it (POST /visibility); until then
+// they need a key, like writes, and to anyone without one the project doesn't exist. Writes need a bearer key: the
+// owner's key (CANON_KEY) can do anything, an agent's key (CANON_AGENT_KEY) can only declare. Running a fact's check
+// against production needs no key on a public project, since it changes nothing in canon.
 //
 //   GET  /p/:project/canon                    move 1: read
 //   POST /p/:project/claims                   move 2: declare  (fork + token)        agent or owner key
@@ -28,6 +29,9 @@ export { VerifyAttempt, PromoteAttempt, RefreshAttempt, TrainAttempt, MutateAtte
 //   GET  /p/:project/ws                       live board
 //   GET  /p/:project/previews                 Preview names used (for reset)
 //   GET  /p/:project/stats                    the run report: counts and push-to-verdict times
+//   GET  /p/:project/ledger                   every feature from the request to production, with its evidence
+//   GET  /p/:project/timeline                 the run as it happened, event by event (for replaying a recorded run)
+//   POST /p/:project/visibility               {"public": true}: anyone may read it (read-only); false takes it back   owner key
 //   POST /p/:project/republish                redeploy canon and rewrite its Git notes                owner key
 //   POST /p/:project/reconcile                canon = production now: revert a canon that wasn't released   owner key
 //   POST /p/:project/attempts/:id/review      run the advisory reviewer again on the attempt's latest commit  owner key
@@ -49,6 +53,15 @@ export default {
     const referee = refereeForProject(env, project);
     const route = `${request.method} ${rest}`;
 
+    // A project its owner hasn't published answers only to a key (an agent's or the owner's); to anyone else it doesn't
+    // exist. Genesis creates the project, so it's let through to its own owner-key check below.
+    if (route !== "POST /genesis") {
+      // Right after a deploy a busy project's judge can still be on the old code for a moment.
+      const open = await Promise.resolve(referee.isPublic()).catch(() => null);
+      if (open === null) return json({ error: "this project's judge is restarting; try again in a moment" }, 503);
+      if (!open && (await deny(request, env, "agent"))) return json({ error: "no such public project" }, 404);
+    }
+
     // Every POST is a write and needs a key, except checking a fact against production.
     if (request.method === "POST" && !/^POST \/facts\/[\w-]+\/check$/.test(route)) {
       const denied = await deny(request, env, route === "POST /claims" || route === "POST /mcp" || route === "POST /overlaps" ? "agent" : "owner");
@@ -63,6 +76,13 @@ export default {
       if (route === "GET /previews") return json(await referee.previews());
       if (route === "GET /stats") return json(await referee.stats());
       if (route === "GET /ledger") return json(await referee.ledger());
+      if (route === "GET /timeline") return json(await referee.timeline());
+      if (route === "GET /visibility") return json({ project, public: await referee.isPublic() });
+      if (route === "POST /visibility") {
+        const body = await request.json<{ public?: unknown }>().catch(() => ({}) as { public?: unknown });
+        if (typeof body.public !== "boolean") return json({ error: 'send {"public": true} or {"public": false}' }, 400);
+        return json(await referee.setPublic(body.public));
+      }
       // Held-out facts: the owner writes them into the judge and reads them back; agents see only their sentences.
       if (route === "POST /repair") {
         const b = await request.json<{ path?: string; conflicted?: string; intents?: string[] }>().catch(() => ({}) as { path?: string; conflicted?: string; intents?: string[] });
@@ -75,8 +95,8 @@ export default {
         return json(await referee.heldOut());
       }
       if ((match = route.match(/^GET \/canon\/(\d+)\/acceptance$/))) {
-        const record = await referee.acceptance(Number(match[1]));
-        return record ? json(record) : json({ error: "no acceptance record (genesis, a revert, or accepted before records existed)" }, 404);
+        const record = await referee.acceptanceView(Number(match[1]));
+        return record ? json(record) : json({ error: "no acceptance record (genesis, or accepted before records existed)" }, 404);
       }
       if (route === "POST /republish") return json(await referee.republish(), 202);
       if (route === "POST /reconcile") return json(await referee.reconcile());

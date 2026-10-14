@@ -6,6 +6,8 @@
 #   CANON_PROJECT=rodeo CANON_FILE=agents/canon.autopilot.json ./scripts/genesis.sh
 # To start from an existing repo instead (it must contain canon.json at its root):
 #   CANON_URL=... IMPORT_URL=https://github.com/<you>/<repo>.git ./scripts/genesis.sh
+# A new project is private: its board, ledger and records answer only to a key. To publish it read-only:
+#   CANON_PUBLIC=1 ./scripts/genesis.sh   (or later: POST /p/<project>/visibility {"public": true} with the owner key)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/env.sh
@@ -19,6 +21,10 @@ body="$(node -e 'process.stdout.write(JSON.stringify(process.env.IMPORT_URL ? { 
 if ! resp="$(printf 'authorization: Bearer %s\n' "$CANON_KEY" | curl -sS --fail-with-body -X POST -H @- -H 'content-type: application/json' --data "$body" "$CANON_URL/p/$PROJECT/genesis")"; then
   echo "genesis failed: $resp" >&2
   exit 1
+fi
+if [ "${CANON_PUBLIC:-}" = "1" ]; then
+  printf 'authorization: Bearer %s\n' "$CANON_KEY" | curl -sS --fail-with-body -X POST -H @- -H 'content-type: application/json' --data '{"public":true}' "$CANON_URL/p/$PROJECT/visibility" >/dev/null
+  echo "Published $PROJECT read-only."
 fi
 if [ -n "${IMPORT_URL:-}" ]; then
   echo "Imported $IMPORT_URL as genesis. Watch $CANON_URL/board?p=$PROJECT until its facts go green."
