@@ -302,7 +302,7 @@ export class Referee extends DurableObject<Env> {
         healthy: count("healthy in production"),
         inProgress: count("in progress") + count("verified") + count("accepted"),
         needsAPerson: features.filter((x) => x.needs.length).length,
-        heldBack: count("held back at release"),
+        heldBack: features.reduce((n, x) => n + x.releases.filter((r) => r.release === "not released" || r.reverted).length, 0), // releases held back, counted per release
       },
       features,
     };

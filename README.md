@@ -13,6 +13,8 @@ production. Built on Cloudflare Workers, Artifacts, Durable Objects and Workflow
 | **Check the claims** | The [evidence map](#evidence-map): each claim in this README with its record, test or reproduction command. |
 | **Run your own** | `./scripts/doctor.sh` checks the prerequisites, then `./scripts/setup.sh` ([Run it](#run-it), [docs/USING.md](docs/USING.md)). |
 
+![The feature ledger of a project four autonomous agents worked on: four features healthy in production, a revision of a locked rule waiting for a person, a schema change still being fixed after two releases were held back](docs/img/ledger-final.png)
+
 **What's different**
 
 - **Facts, not diffs.** People review changes to plain-sentence facts; the judge checks every fact on a live preview of
@@ -100,6 +102,7 @@ records from canon.rodeo (projects left up for inspection); **simulated** benchm
 | Rollback compatibility is compared on the exact state each version wrote, and missing evidence holds the release | recorded: [rehearse #13](https://canon.rodeo/p/rehearse/canon/13/acceptance) (two facts with no read-back: unavailable, held), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) (an owner released over it; `recovery.override` names it) | `node scripts/test-probe.ts`, `node scripts/test-evidence.ts` |
 | A flaky release is taken back out at 10% | recorded: [canary #3](https://canon.rodeo/p/canary/canon/3/acceptance) | `node scripts/benchmark.mjs --workloads stateless` |
 | One writer of production, behind a lease (republishes included); production writes never overtake each other | method-level tests of the real write, fence and gate methods with hand-answered requests (`scripts/test-judge-writes.ts`: overlapping writes, both answer orders, an unknown outcome, a judge restart; it fails on the judge before `b013736`); `scripts/test-release.ts`; the `fence:` step every release takes ([docs/timings.md](docs/timings.md)). Unknown outcomes are held for a two-minute quarantine: a bounded-risk policy, not proof of settlement | `npm test` |
+| Autonomous agents on the submitted code: features shipped with no person, a release held back on real data, a locked rule left for a person | four Claude Code agents, Oct 13: [docs/autonomous-run.md](docs/autonomous-run.md), the [ledger](https://canon.rodeo/ledger?p=final), records [final #2](https://canon.rodeo/p/final/canon/2/acceptance), [#3 (held)](https://canon.rodeo/p/final/canon/3/acceptance), [#5](https://canon.rodeo/p/final/canon/5/acceptance), [#8 (held)](https://canon.rodeo/p/final/canon/8/acceptance) | `CANON_PROJECT=<name> AGENTS=3 ./agents/autopilot.sh` |
 | Duplicates are superseded, prerequisites wait, merge trains release once | deployed scripted run (five scripted agent attempts): [docs/e2e.md](docs/e2e.md), records [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance) and [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance); simulated: [docs/benchmark.md](docs/benchmark.md), coordination workload | `node scripts/e2e.mjs`, `node scripts/benchmark.mjs --workloads coordination` |
 | Where the time goes, and what was changed because of it | [docs/timings.md](docs/timings.md), from Cloudflare's own Workflows records | `node scripts/timings.mjs` |
 | Held-out checks stay private | recorded: `rehearse` (the board shows the sentence, never the check); the API redacts details | |
@@ -115,7 +118,8 @@ version (Cloudflare Worker version) that produced it and the commit it was deplo
 | [convoy #2](https://canon.rodeo/p/convoy/canon/2/acceptance), [convoy #3](https://canon.rodeo/p/convoy/canon/3/acceptance) (the deployed scripted run, [docs/e2e.md](docs/e2e.md)) | `a83d0b92`, Oct 13 18:41 UTC | `4c84499` |
 | Oct 13 20:19–23:07 UTC | `118c6f12` | `79de603` |
 | Oct 13 23:07–23:31 UTC (per-write ordering of production writes) | `8dcb7761` | `b013736` |
-| everything after Oct 13 23:31 UTC (the fence rechecks the barrier after every wait) | `77361154` | `700daca` |
+| Oct 13 23:31 UTC – Oct 14 01:24 UTC (the fence rechecks the barrier after every wait) | `77361154` | `700daca` |
+| [final #2–#9](https://canon.rodeo/ledger?p=final) (the autonomous run, [docs/autonomous-run.md](docs/autonomous-run.md)) and everything after Oct 14 01:24 UTC (the ledger, the toolchain guard) | `176b48f5` and later | `113abf2` and later |
 | earlier records (Oct 12–13: farmstand, rodeo, evid #2–3, rehearse #2–12, canary) | earlier versions | before `b9f3a2c` |
 
 Two rules changed after the convoy run, so a stateless release judged today would differ: a zero-comparison
@@ -388,6 +392,25 @@ held-out facts, specialist review with a track record, prerequisites, account-wi
   ([docs/benchmark.md](docs/benchmark.md)), and `scripts/e2e.mjs` runs a workload on deployed Canon
   ([docs/e2e.md](docs/e2e.md)); next, workloads written by people who didn't build Canon, a larger repository,
   merge trains modelled for both systems, and wall-clock with real parallelism.
+
+**After the submission**, from an outside review of this entry, in order:
+- **Handoffs and an event inbox for agents**: a resumable export of an agent's state (requirement versions, base and
+  head, claim status, dependencies, decisions, blockers, next actions), and durable events with cursors that prompt
+  agents to reread state, never to act on stale state.
+- **Searchable decision history**: past decisions, failures and rejected alternatives retrieved per task, labelled by
+  revision and freshness, kept apart from current evidence.
+- **Interface contracts as facts**: versioned API and schema contracts with their producers and consumers, checked
+  when a contract changes even across files that don't overlap.
+- **Deterministic repairs** for mechanical conflicts (commutative records, regenerated files, migration names), with
+  the combined-code checks run afterwards.
+- **Budgets enforced before work starts**, with capacity kept back so a release is never stranded halfway, and the full
+  delivery cost (model calls included) attributed to attempts and features.
+- **Scoped agent identities** and preparation, verification and publishing separated, so project commands never
+  inherit publishing credentials; preview data isolation made explicit for external state.
+- **The coordination protocol exercised under failure** (crash and restart, duplicate requests, lost acknowledgements,
+  delayed operations), extending the method-level ordering tests.
+- **Comparative runs** on fresh applications and stateful maintenance against other approaches, with real agents,
+  unsuccessful runs published too.
 
 ## Where the code lives
 

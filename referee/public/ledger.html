@@ -147,7 +147,7 @@
   }
   fetch(`/p/${project}/ledger`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))).then((l) => {
     const s = l.summary;
-    $("summary").innerHTML = [[s.requested, "features requested"], [s.released, "released"], [s.healthy, "healthy in production"], [s.inProgress, "in flight"], [s.needsAPerson, "need a person"], [s.heldBack, "held back at release"]]
+    $("summary").innerHTML = [[s.requested, "features requested"], [s.released, "released"], [s.healthy, "healthy in production"], [s.inProgress, "in flight"], [s.needsAPerson, "need a person"], [s.heldBack, "releases held back"]]
       .map(([n, t]) => `<div class="stat"><b>${n}</b><span>${t}</span></div>`).join("");
     const seen = new Set();
     const html = GROUPS.map(([title, test]) => {
