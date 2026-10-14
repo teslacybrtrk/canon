@@ -175,7 +175,14 @@
     const shown = f.attempts.filter((a) => !folded.includes(a));
     const maker = f.attempts.find((a) => a.attempt === f.madeTrueBy) ?? f.attempts.find((a) => a.status === "ready");
     const failedBefore = maker ? f.attempts.filter((a) => a !== maker && (a.failure || ["contradicts", "unproven"].includes(a.status))) : [];
+    // Follow the judge's re-applies back to the change an agent wrote: that's who resolved it; the judge carried it.
+    const byAttempt = new Map(f.attempts.map((a) => [a.attempt, a]));
+    let origin = maker;
+    let hops = 0;
+    while (origin?.reappliedFrom && byAttempt.get(origin.reappliedFrom)) { origin = byAttempt.get(origin.reappliedFrom); hops++; }
+    const fixAfterFailure = origin && origin !== maker && /\(refreshed onto canon \d+\)$/.test(origin.why ?? "");
     const resolution = !maker ? (f.stage === "requested" ? "No attempt yet." : "Not resolved yet: no attempt holds every fact.")
+      : fixAfterFailure ? `Resolved by ${esc(origin.agent)}'s own fix (commit ${rev(origin.attempt, origin.sha)}, in a fresh attempt after the failure above). As canon moved, the judge re-applied it ${hops === 1 ? "once" : `${hops} times`} (finally commit ${rev(maker.attempt, maker.sha)}), and every fact held on the combined code.`
       : maker.reappliedFrom ? `Resolved when the judge re-applied the change from ${esc(maker.reappliedFrom)} onto the newer canon (commit ${rev(maker.attempt, maker.sha)}) and every fact held on the combined code.`
       : failedBefore.length ? `Resolved by ${esc(maker.agent)}'s commit ${rev(maker.attempt, maker.sha)}, after ${failedBefore.length} attempt${failedBefore.length === 1 ? "" : "s"} that didn't hold; every fact held on its preview.`
       : `${esc(maker.agent)}'s commit ${rev(maker.attempt, maker.sha)} held every fact on its first verdict.`;
@@ -190,7 +197,7 @@
       f.attempts.length ? [failedBefore.length ? "bad" : "good", `Attempts, at the exact commit judged (${f.attempts.length})`, shown.map(attemptRow).join("") + (folded.length ? `<details class="row"><summary>${folded.length} more fell behind as canon moved and were superseded: re-applied by the judge, or refreshed by their agent</summary>${folded.map(attemptRow).join("")}</details>` : "")] : null,
       [maker ? "good" : "wait", "How it was resolved", resolution],
       f.releases.length ? [f.releases.some((r) => r.release === "not released" || r.reverted) ? "bad" : "good", "Acceptance and release", f.releases.map(releaseRow).join("")] : null,
-      f.production ? [f.production.held ? "good" : "bad", "Production", `${f.production.held ? "Holds on production" : "Fails on production"}, observed ${esc(when(f.production.at))}.`] : null,
+      f.production ? (() => { const e = f.evidence.find((x) => x.what === "production"); const unverified = e?.state === "missing"; return [f.production.held ? "good" : unverified ? "wait" : "bad", "Production", `${f.production.held ? "Holds on production" : unverified ? esc(e.detail[0].toUpperCase() + e.detail.slice(1)) : "Fails on production"}, observed ${esc(when(f.production.at))}.`]; })() : null,
     ].filter(Boolean);
     return `<div class="trail-h">The trail <a href="#fact-${esc(f.id)}">link to this feature</a> <a href="/p/${project}/facts/${esc(f.id)}/why">fact chain (JSON)</a></div>
       <ol class="trail">${items.map(([cls, h, body]) => `<li class="${cls}"><h4>${h}</h4>${body}</li>`).join("")}</ol>

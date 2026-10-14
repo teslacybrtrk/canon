@@ -143,7 +143,7 @@ async function summarize(r) {
   const accepts = r.timeline.filter((e) => e.kind === "accept");
   const releases = r.timeline.filter((e) => e.kind === "release" || e.kind === "held");
   const combined = attempts.filter((a) => a.reappliedFrom && ["contradicts", "unproven"].includes(verdictOf(a.attempt)?.outcome ?? a.outcome) && (verdictOf(a.attempt)?.lost?.length || !verdictOf(a.attempt)?.claimed?.held)).sort((x, y) => (x.judgedAt ?? 0) - (y.judgedAt ?? 0))[0];
-  const fixed = attempts.filter((a) => /\(refreshed onto canon \d+\)$/.test(a.why ?? "") && verdictOf(a.attempt) && (verdictOf(a.attempt).outcome === "ready" || verdictOf(a.attempt).heldBack)).sort((x, y) => (x.judgedAt ?? 0) - (y.judgedAt ?? 0))[0];
+  const fixed = attempts.filter((a) => !a.reappliedFrom && /\(refreshed onto canon \d+\)$/.test(a.why ?? "") && verdictOf(a.attempt) && (verdictOf(a.attempt).outcome === "ready" || verdictOf(a.attempt).heldBack)).sort((x, y) => (x.judgedAt ?? 0) - (y.judgedAt ?? 0))[0];
   // A re-apply the repair model settled says so in its commit message.
   let repair = null;
   for (const a of attempts.filter((x) => x.reappliedFrom)) {

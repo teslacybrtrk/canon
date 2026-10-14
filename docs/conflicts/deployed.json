@@ -29,7 +29,7 @@
       "detected": false,
       "delivered": false,
       "accepted": false,
-      "resolved": true,
+      "resolved": false,
       "interventions": 0,
       "detectSeconds": null,
       "resolveSeconds": null,

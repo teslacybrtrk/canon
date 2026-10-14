@@ -68,7 +68,7 @@
     // Previews are "<preview-name>-<worker-name>.<subdomain>.workers.dev"; production for each project is its
     // own Worker on a canon.rodeo custom domain (scripts/setup.sh writes workers.dev addresses for your own Canon).
     "PREVIEW_URL_TEMPLATE": "https://{name}-farmstand.canon-rodeo.workers.dev",
-    "PRODUCTION_URL": "https://{project}.canon.rodeo",
+    "PRODUCTION_URL": "https://{project}.canon-rodeo.workers.dev",
     // The release candidate: the accepted commit deployed in full to its own Worker ({project}-candidate) with
     // production's config, so every fact runs on all of its code, Durable Objects included, before release.
     "CANDIDATE_URL": "https://{project}-candidate.canon-rodeo.workers.dev"

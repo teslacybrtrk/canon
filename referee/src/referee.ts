@@ -315,7 +315,8 @@ export class Referee extends DurableObject<Env> {
       }
       if (f.status === "canon" && prod && state.production?.at) {
         const age = now - state.production.at;
-        evidence.push({ what: "production", state: !prod.held ? "bad" : age > 24 * 3600_000 ? "stale" : "ok", detail: prod.held ? `holds on production${age > 24 * 3600_000 ? "; last observed over a day ago" : ""}` : "fails on production", at: state.production.at });
+        const unreached = !prod.held && edgeFailure(prod.detail);
+        evidence.push({ what: "production", state: unreached ? "missing" : !prod.held ? "bad" : age > 24 * 3600_000 ? "stale" : "ok", detail: prod.held ? `holds on production${age > 24 * 3600_000 ? "; last observed over a day ago" : ""}` : unreached ? `production didn't answer (${prod.detail.replace(/^step \d+: /, "")}): unverified, and nothing was rolled back` : "fails on production", at: state.production.at });
       } else if (f.status === "canon" && f.check.kind === "probe" && !f.heldOut && !prod) evidence.push({ what: "production", state: "pending", detail: "not observed on production yet (the judge checks production every hour)", at: null });
       const partial = f.status !== "retired" && f.origin !== "seed" ? evidence.filter((e) => e.state === "gap" || e.state === "missing").map((e) => `${e.what}: ${e.detail}`) : [];
       return {
