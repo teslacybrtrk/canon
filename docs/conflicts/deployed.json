@@ -5,7 +5,7 @@
   "notes": "Run Oct 13, 20:59 to 21:23 PDT, the eleven projects in parallel (csbasketshape and the rest, left up). Of the 8 conflict cases, 6 broke on the combined code and were caught there; in the other two nothing broke on Canon: double-discount's second implementation of the same fact was superseded, never combined, and in limit-lost-in-repair the judge's repair model kept both limits when it resolved the text conflict. In every case the first change landed while the second was being judged, so the second's first verdict came back behind and the judge re-applied it by itself: detection is on that re-applied, combined code, and its diagnosis label reads 'the code' rather than 'a combination' (the earlier verdict was behind, not Ready). Times come from the runner's clock and the judge's records: detection runs from the first landing until the runner saw the failure on the combined code (it polls every 10 s); resolution from the fix's push to its Ready verdict. The basket-shape fix, and control-basket-shape's A, were then held at release by the rollback rehearsal (the previous version can't read the new basket shape): the release check, not the combination.",
   "cases": {
     "basket-shape": {
-      "outcome": "A held alone (judged as the other landed); B held alone. Canon #2: “A shopper can take one of a product back out of the basket” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “A shopper can take one of a product back out of the basket”: step 3: lines.0.qty is undefined, expected 2. The fix (the case's reference resolution, pushed the way an agent would) held every fact. Canon #3 was held before production: its rollback rehearsal failed (the previous version can't read what this release wrote for “cart-keeps-lines” (it reads what it wrote itself): step 1: subtotal is null, expected 1120.",
+      "outcome": "A alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it); B alone: every fact held. Canon #2: “A shopper can take one of a product back out of the basket” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “A shopper can take one of a product back out of the basket”: step 3: lines.0.qty is undefined, expected 2. The fix (the case's reference resolution, pushed the way an agent would) held every fact. Canon #3 was held before production: its rollback rehearsal failed (the previous version can't read what this release wrote for “cart-keeps-lines” (it reads what it wrote itself): step 1: subtotal is null, expected 1120.",
       "reapplied": "clean",
       "detected": true,
       "delivered": false,
@@ -24,7 +24,7 @@
       ]
     },
     "control-basket-shape": {
-      "outcome": "A held alone (then its release was held: see below); B held alone (judged as the other landed). Canon #2 was held before production: its rollback rehearsal failed (the previous version can't read what this release wrote for “cart-keeps-lines” (it reads what it wrote itself): step 1: subtotal is null, expected 1120. That is the release check, not the combination: A changes the stored basket's shape, which the previous version can't read back, so a rollback wouldn't be safe and autopilot doesn't release it (an owner's accept would, and its record would name the override). B landed and shipped on its own.",
+      "outcome": "A alone: every fact held (then its release was held: see below); B alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it). Canon #2 was held before production: its rollback rehearsal failed (the previous version can't read what this release wrote for “cart-keeps-lines” (it reads what it wrote itself): step 1: subtotal is null, expected 1120. That is the release check, not the combination: A changes the stored basket's shape, which the previous version can't read back, so a rollback wouldn't be safe and autopilot doesn't release it (an owner's accept would, and its record would name the override). B landed and shipped on its own.",
       "reapplied": "clean",
       "detected": false,
       "delivered": false,
@@ -43,7 +43,7 @@
       ]
     },
     "control-threshold": {
-      "outcome": "A held alone; B held alone (judged as the other landed). Both landed: the judge re-applied the second on the first, and every fact held on the combined code.",
+      "outcome": "A alone: every fact held; B alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it). Both landed: the judge re-applied the second on the first, and every fact held on the combined code.",
       "reapplied": "clean",
       "detected": false,
       "delivered": false,
@@ -62,7 +62,7 @@
       ]
     },
     "control-vat-per-line": {
-      "outcome": "A held alone; B held alone (judged as the other landed). Both landed: the judge re-applied the second on the first, and every fact held on the combined code.",
+      "outcome": "A alone: every fact held; B alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it). Both landed: the judge re-applied the second on the first, and every fact held on the combined code.",
       "reapplied": "clean",
       "detected": false,
       "delivered": false,
@@ -81,7 +81,7 @@
       ]
     },
     "dollars-and-cents": {
-      "outcome": "A held alone (judged as the other landed); B held alone. Canon #2: “The till prints a price list with every product's price” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “The till prints a price list with every product's price”: step 1: GET /till body does not include \"eggs $4.00\". The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "outcome": "A alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it); B alone: every fact held. Canon #2: “The till prints a price list with every product's price” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “The till prints a price list with every product's price”: step 1: GET /till body does not include \"eggs $4.00\". The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
       "reapplied": "clean",
       "detected": true,
       "delivered": false,
@@ -116,7 +116,7 @@
       ]
     },
     "hidden-sold-out": {
-      "outcome": "A held alone (judged as the other landed); B held alone. Canon #2: “Each product has an API page that says whether it's in stock” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “Each product has an API page that says whether it's in stock”: step 1: GET /api/products/honey returned 404, expected 200. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "outcome": "A alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it); B alone: every fact held. Canon #2: “Each product has an API page that says whether it's in stock” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “Each product has an API page that says whether it's in stock”: step 1: GET /api/products/honey returned 404, expected 200. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
       "reapplied": "clean",
       "detected": true,
       "delivered": false,
@@ -135,7 +135,7 @@
       ]
     },
     "limit-lost-in-repair": {
-      "outcome": "A held alone; B held alone (judged as the other landed). The re-apply hit the text conflict; the judge's repair model resolved it, keeping both sides, and every fact held on its result: both limits are in the code, nothing was lost, and both landed. (Locally, the seeded hurried resolution drops A's cap; Canon's repair didn't.)",
+      "outcome": "A alone: every fact held; B alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it). The re-apply hit the text conflict; the judge's repair model resolved it, keeping both sides, and every fact held on its result: both limits are in the code, nothing was lost, and both landed. (Locally, the seeded hurried resolution drops A's cap; Canon's repair didn't.)",
       "reapplied": "conflict, repaired",
       "repair": "the re-apply hit the text conflict; the judge's repair model resolved it, keeping both sides, and every fact held on its result",
       "detected": false,
@@ -154,7 +154,7 @@
       ]
     },
     "shared-threshold": {
-      "outcome": "A held alone; B held alone (judged as the other landed). Canon #2: “The shop page warns when ten or fewer of a product are left” landed first; the judge re-applied the other on top by itself, and on the combined code: its own fact doesn't hold: step 1: length is 3, expected 2. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "outcome": "A alone: every fact held; B alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it). Canon #2: “The shop page warns when ten or fewer of a product are left” landed first; the judge re-applied the other on top by itself, and on the combined code: its own fact doesn't hold: step 1: length is 3, expected 2. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
       "reapplied": "clean",
       "detected": true,
       "delivered": false,
@@ -173,7 +173,7 @@
       ]
     },
     "strict-fields": {
-      "outcome": "A held alone; B held alone (judged as the other landed). Canon #2: “The basket refuses fields it doesn't know, so a client can't set its own price” landed first; the judge re-applied the other on top by itself, and on the combined code: its own fact doesn't hold: step 1: POST /api/cart returned 400, expected 200. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "outcome": "A alone: every fact held; B alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it). Canon #2: “The basket refuses fields it doesn't know, so a client can't set its own price” landed first; the judge re-applied the other on top by itself, and on the combined code: its own fact doesn't hold: step 1: POST /api/cart returned 400, expected 200. The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
       "reapplied": "clean",
       "detected": true,
       "delivered": false,
@@ -192,7 +192,7 @@
       ]
     },
     "vat-on-list-price": {
-      "outcome": "A held alone; B held alone (judged as the other landed). Canon #2: “Ten or more of an item take 10% off the line, before VAT is added” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “VAT is 25% of the subtotal, and the total is the subtotal plus VAT”: sample 2, step 2: vat is 1320, expected 1188 (with qty = 11, item = greens). The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
+      "outcome": "A alone: every fact held; B alone: its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it). Canon #2: “Ten or more of an item take 10% off the line, before VAT is added” landed first; the judge re-applied the other on top by itself, and on the combined code: breaks “VAT is 25% of the subtotal, and the total is the subtotal plus VAT”: sample 2, step 2: vat is 1320, expected 1188 (with qty = 11, item = greens). The fix (the case's reference resolution, pushed the way an agent would) held every fact; both features are canon.",
       "reapplied": "clean",
       "detected": true,
       "delivered": false,

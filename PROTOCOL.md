@@ -106,7 +106,7 @@ wrangler's API at a local listener and shows the old way sending a fake token to
 | `contradicts` | a canon fact broke on this attempt. Rejected without anyone opening the diff. |
 | `unproven` | canon held; the claimed fact does not hold yet. |
 | `behind` | canon gained (or retired) a fact after this attempt forked; the judge re-applies its changes on the current canon as a new attempt (`canon refresh` does the same by hand, for a text conflict). |
-| `ready` | canon held and the claimed fact holds. A human decides. The verdict lists any `clashes`: Ready attempts it can't land together with. |
+| `ready` | canon held and the claimed fact holds. A person decides, or the charter on autopilot. The verdict lists any `clashes`: Ready attempts it can't land together with. |
 | `error` | the platform couldn't judge it (not the code). Push again. |
 | `pending` | no verdict yet (HTTP 202): the preview is still building. |
 
@@ -498,7 +498,7 @@ candidate (a full copy, with its own long-lived data) is its gate. `canon.json` 
 In the release gate, a fact that fails at 0% counts against the new version only if the old version answers
 differently (both run with the same inputs).
 
-**Canon always equals what production runs.** A canon that isn't released (held back in step 1 or 2, rolled back in
+**Canon never stays ahead of what production runs.** A canon that isn't released (held back in step 1 or 2, rolled back in
 step 4, or a deploy that failed) is reverted: a new canon entry (`reverts` in `deploys`) points back at the last
 released canon. Every fact accepted since then is proposed again (a rule a revision retired comes back), and the
 accepted claim's verdict says what broke where (`heldBack`); its agent claims the fact again with a fix, because an

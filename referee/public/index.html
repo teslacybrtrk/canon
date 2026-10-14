@@ -453,7 +453,7 @@
     <li><b>Deterministic repairs.</b> Mechanical conflicts (records that commute, regenerated files, migration names) settled without a model, then judged on the combined code like any other.</li>
     <li><b>Budgets before work starts.</b> Capacity kept back so a release is never stranded halfway, and the whole cost of a feature, model calls included, attributed to it.</li>
     <li><b>Escalations.</b> When something touches a line only people may move, the owner agent sends it to you: what would change, why, and the evidence, approved or declined in one tap.</li>
-    <li><b>Run under failure.</b> The protocol driven through crashes, restarts, duplicate and lost messages. The ordering tests and the retried rehearsal step the final run surfaced are the start.</li>
+    <li><b>Run under failure.</b> The protocol driven through crashes, restarts, duplicate and lost messages. The ordering tests, and the retried rehearsal step a live run surfaced, are the start.</li>
     <li><b>Any stack.</b> Facts about apps beyond Workers, built and previewed in Containers.</li>
     <li><b>Facts from production.</b> An error in production becomes a proposed fact, so once it’s fixed it stays fixed.</li>
   </ul>
@@ -478,7 +478,7 @@
         <p><b>Agents</b> decide what to attempt. <b>The judge</b> decides what is true: it runs every fact against the attempt’s live preview and rejects any attempt that breaks one, automatically. <b>A person</b> decides what becomes canon by accepting a fact, or writes a charter once that decides by rules.</p>
         <p>Agents propose, the judge checks, people decide what must stay true.</p></div></details>
       <details><summary>Who writes the facts?</summary><div class="a">
-        <p>The starting facts live in the repo as <code>canon.json</code>. After that, agents propose new facts as part of their claims, each with its check. A fact only becomes canon when a person accepts an attempt that makes it true.</p>
+        <p>The starting facts live in the repo as <code>canon.json</code>. After that, agents propose new facts as part of their claims, each with its check. A fact becomes canon when a person accepts an attempt that makes it true, or on its own for the facts the owner's policy lets autopilot land.</p>
         <p>A proposed fact whose check already passes on canon is refused: if it can’t fail, it isn’t a new fact.</p></div></details>
       <details><summary>What if the product’s behaviour needs to change?</summary><div class="a">
         <p>Canon doesn’t stop behaviour from changing; it stops it changing <i>by accident</i>. An agent that wants a new rule proposes a <b>revision</b>: a fact that replaces an existing one (“the listed price” becomes “the listed price, with 10% off lines of 10 or more”). Its attempt may break the old fact; the verdict shows “retires X”, and a person approves the rule change. The old fact is kept in history with who replaced it and why.</p></div></details>
@@ -530,7 +530,7 @@
           <p>For a few humans, often yes. With agents, two things break. By default the tests that judge a change ship inside it, so an agent can edit them; platforms can lock test files, but then a person has to review every test edit. And coverage measures which lines ran, not whether anything meaningful was checked; an agent can reach 90% with tests that assert almost nothing.</p>
           <p>In Canon the checks are owned by canon, out of the agent’s reach, and a fact that can’t fail is refused. Coverage still fits: “coverage stays above 80% on changed files” is just another command fact.</p></div></details>
         <details><summary>What if canon changes while an agent is still working?</summary><div class="a">
-          <p>Its attempt is marked <b>behind canon</b>, not rejected: it simply predates the new fact. The judge makes a fresh attempt from the current canon, re-applies the agent’s changes and judges it again, with no work from the agent. If the changes conflict as text, the agent runs <code>canon refresh</code> and resolves it.</p></div></details>
+          <p>Its attempt is marked <b>behind canon</b>, not rejected: it simply predates the new fact. The judge makes a fresh attempt from the current canon, re-applies the agent’s changes and judges it again, with no work from the agent. If the changes conflict as text, the judge's repair model tries first (every fact still decides); if it can't, the agent runs <code>canon refresh</code> and resolves it.</p></div></details>
         <details><summary>What happens to rejected attempts?</summary><div class="a">
         <p>They stay. Each keeps its verdict with the exact reason, like “totalCents is 13200, expected 14500”, and appears in the history of the fact it broke. The attempt stays clonable, and its agent can push a fix to the same attempt for a new verdict. Failed attempts are memory, not waste.</p>
         <p>Workers keep the newest 500 previews per app; older attempts remain clonable from Artifacts.</p></div></details>
@@ -543,7 +543,7 @@
         <p>KV, D1 and R2 aren’t isolated automatically. Give previews their own bindings under <code>previews</code> in the Wrangler config, or every agent’s preview reads and writes your production data.</p></div></details>
         <details><summary>How is it kept safe?</summary><div class="a">
           <p>An agent’s token can write only to its own fork. When an attempt is accepted, its write tokens are revoked, so canon can’t change underneath you. Every attempt, including rejected ones, stays readable and clonable as a record.</p>
-          <p>Anyone can read the board; writing to the judge takes a key. An agent’s key can claim a fact but never accept one.</p></div></details>
+          <p>Anyone can read a published project's board (a project is private until its owner publishes it); writing to the judge takes a key. An agent’s key can claim a fact but never accept one.</p></div></details>
         <details><summary>What does it run on?</summary><div class="a">
           <p>Cloudflare Artifacts for every repo and fork, Workers and a Durable Object for the judge, Workflows and Containers for CI, Workers Previews for every commit, Workers AI for the advisory reviewer, and R2 for build caches. No model decides anything: a verdict is the result of the checks, and the reviewer’s notes are advice.</p></div></details>
         <details id="qasource" data-gated hidden><summary>Where is the code?</summary><div class="a">

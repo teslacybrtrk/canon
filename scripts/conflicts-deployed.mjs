@@ -138,7 +138,7 @@ async function summarize(r) {
     // A release is held only after its attempt was Ready, so a held-back verdict held alone; "behind" means a newer fact
     // (the other side's, landed while this was judged) failed on it, which says nothing against this change on its own.
     const held = !!v.heldBack || (v.claimed?.held && !(v.lost ?? []).length);
-    return `${side.toUpperCase()} ${held ? "held alone" : "did not hold alone"}${v.heldBack ? " (then its release was held: see below)" : v.outcome === "behind" ? " (judged as the other landed)" : ""}`;
+    return `${side.toUpperCase()} alone: ${!held ? "a fact failed" : v.outcome === "behind" ? "its own fact and every earlier fact held (only the other's, landed meanwhile, failed on it)" : "every fact held"}${v.heldBack ? " (then its release was held: see below)" : ""}`;
   });
   const accepts = r.timeline.filter((e) => e.kind === "accept");
   const releases = r.timeline.filter((e) => e.kind === "release" || e.kind === "held");

@@ -5,7 +5,7 @@ Three runs, newest first. Each says which judge version made its records; a run'
 | Run | When (PDT) | Agents | Judge version (commit) | Records |
 |---|---|---|---|---|
 | **trio2: on the submitted judge** | Oct 13, 20:27–20:46 | 3 Claude Code (Sonnet), preassigned interacting facts | `00c761d1` (`dcac7ae`) | [ledger](https://canon.rodeo/ledger?p=trio2), [replay](https://canon.rodeo/replay?p=trio2), [run report](https://canon.rodeo/p/trio2/stats) |
-| trio: the first attempt at that run, stopped after it surfaced a judge bug | Oct 13, 20:15–20:24 | the same three | `94ad0669` (`568e829`) | [ledger](https://canon.rodeo/ledger?p=trio) |
+| trio: the first attempt at that run, stopped after it surfaced a judge bug | Oct 13, 20:15–20:24 (agents) | the same three | `94ad0669` (`568e829`); genesis on `0f6ef6a1`, canon #5 on `00c761d1` | [ledger](https://canon.rodeo/ledger?p=trio) |
 | final: four agents on a backlog | Oct 13, 18:29–18:51 | 4 Claude Code (3 Haiku, 1 Sonnet) | `176b48f5` (`113abf2`) | [ledger](https://canon.rodeo/ledger?p=final), [run report](https://canon.rodeo/p/final/stats) |
 
 ## trio2: the run on the submitted judge
@@ -49,10 +49,11 @@ What happened (the [replay](https://canon.rodeo/replay?p=trio2) steps through it
 | Rejected on combined code | 1 (the stacked discounts), counted by the judge's run report |
 | Re-applied by the judge on a newer canon | 4 |
 | Pushes, verdicts, checks | 10 pushes, 10 verdicts, 111 checks; median push to verdict 82 s (p90 98 s) |
-| Accepted by a person / by the charter | 0 / all four acceptances (#2, #3, #5, #6) |
+| Accepted by a person / by the charter | 0 / 4 (2 released, 2 held) |
 
-**Interventions, recorded:** one operator action. Agent-3's first session stopped about ten minutes in, believing its
-35-minute limit was up, before its hold came back; the operator started it once more with the same goal minus the
+**Interventions, recorded:** one operator action. Agent-3's first session stopped about five minutes in (5.2 minutes by
+its transcript), believing its 35-minute limit was up, before its hold came back (agent-1 also ended its session before
+its release finished, believing it was still waiting for a decision; the release went out regardless); the operator started it once more with the same goal minus the
 time limit (`ONLY=stall-hours ./agents/trio.sh`). That second session claimed the fact again (its reason: "test"),
 wrote the same unmigrated change, which was held again, and ended its session meaning to check back later, which a
 non-interactive session can't. Nobody accepted, declined or edited anything.
@@ -78,21 +79,25 @@ on a Claude plan. Their sessions lasted 2.8, 9.9, 5.2 and 3.9 minutes.
 
 ## trio: the first attempt, and the judge bug it surfaced
 
-The same scenario on judge `94ad0669` (commit `568e829`), 20:15–20:24. Two things happened, both left up in its records:
+The same scenario, agents running 20:15–20:24 on judge `94ad0669` (commit `568e829`; the project's genesis ran just
+before, on `0f6ef6a1`). Two things happened, both left up in its records:
 
 1. **The combination caught.** The bulk discount landed first (canon #2). The judge re-applied agent-2's order discount
    on top, and on the combined code the bulk-discount fact failed ("totalCents is 5350, expected 5850": the discounts
    stacked).
 2. **A correct release held by a judge bug.** Canon #2's rollback rehearsal passed, then its record said "unavailable"
-   and autopilot held the release. The cause: a deploy at 20:13 reached the project's judge mid-call, so Workflows ran
-   the "check rollback rehearsal" step again; the first run had passed and deleted its fixtures, so the second found
+   and autopilot held the release. The cause: the project's judge restarted mid-call (Cloudflare reported "Network
+   connection lost", then "this Durable Object instance is no longer active"; it wasn't the 20:13 deploy, which the judge
+   had already picked up by 20:17), so Workflows ran the "check rollback rehearsal" step again; the first run had passed and deleted its fixtures, so the second found
    nothing to compare. The hold was safe (production never served the release) but wrong. The record shows both: its
    `recovery.how` keeps the passed result, its `recovery.rehearsal` the unavailable one.
 
 Fixed in `dcac7ae`: a rehearsal's first verdict stands when the step runs again
 ([`scripts/test-judge-rehearsal.ts`](../scripts/test-judge-rehearsal.ts) reproduces the retry and fails on the old code).
-The run was stopped (agent-1 had already stopped, its fact canon before the hold), and repeated on the fixed judge as
-trio2. Its goal also changed in one place: an agent's fact is done when it is released, not when it is canon.
+The agents were stopped at 20:24 (agent-1 had already ended, its fact canon before the hold). Work already with the
+judge went on: agent-2's order discount landed as canon #4 (on a canon without the bulk discount) and was released at
+20:28; agent-3's stall hours landed as canon #5 on the fixed judge (`00c761d1`) and was held at 20:34, its market page
+broken on the release candidate's data. The run was then repeated on the fixed judge as trio2. Its goal also changed in one place: an agent's fact is done when it is released, not when it is canon.
 
 ## final: four agents on a backlog (Oct 13)
 
@@ -113,7 +118,7 @@ project ([`final`](https://canon.rodeo/ledger?p=final), left up) runs on autopil
 | Re-applied by the judge on a newer canon | 28 |
 | Merge trains | 1 (2 riders, held as a whole, then split) |
 | Pushes, verdicts, checks | 41 pushes, 41 verdicts, 697 checks; median push to verdict 45 s (p90 54 s) |
-| Accepted by a person / by the charter | 0 / 4 |
+| Accepted by a person / by the charter | 0 / 6 (4 released, 2 held) |
 
 1. **A verified feature reached production.** Two agents implemented "a sold-out product cannot be added" at the same
    time; the first Ready attempt landed, the other was superseded, never integrated or released.

@@ -136,7 +136,7 @@ connects with one line and the agent key:
 claude mcp add --transport http canon <your Canon URL>/p/myapp/mcp --header "Authorization: Bearer <the agent key>"
 ```
 
-The agent then has `canon_read`, `canon_claim`, `canon_verdict`, `canon_refresh` and `canon_why`, and needs nothing
+The agent then has `canon_read`, `canon_claim`, `canon_overlap`, `canon_verdict`, `canon_refresh` and `canon_why`, and needs nothing
 else to know the protocol. Claiming returns the commands that clone its attempt and record the claim; it still pushes
 with plain Git.
 
@@ -145,6 +145,7 @@ Or use the CLI: put `cli/canon.mjs` on the agent's PATH as `canon`, set its envi
 
 ```sh
 export PATH=/path/to/canon/cli:$PATH
+# CANON_KEY holds whichever key the CLI should send: an agent gets the agent key (it can claim, never accept)
 export CANON_URL=<your Canon URL> CANON_PROJECT=myapp CANON_AGENT=agent-1 CANON_KEY=<the agent key>
 claude -p "$(cat /path/to/canon/agents/PROTOCOL_FOR_AGENTS.md) Goal: make search case-insensitive." \
   --allowedTools Read Edit Write Glob Grep "Bash(canon:*)" "Bash(git:*)" "Bash(npm:*)" "Bash(npx:*)"

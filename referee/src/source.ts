@@ -103,7 +103,7 @@ export async function serveSource(request: Request, env: Env): Promise<Response 
     : `<p>Canon's own source, served from Cloudflare Artifacts by Canon's referee Worker.
         Latest commit <code>${head.hash.slice(0, 8)}</code>: ${esc(head.message.split("\n")[0])}.</p>
        <pre><code>git clone https://canon.rodeo/canon.git</code></pre>
-       <p>Every attempt can be cloned the same way, including rejected ones: <code>git clone https://canon.rodeo/a/&lt;attempt-id&gt;.git</code>.
+       <p>Every attempt of a published project can be cloned the same way, including rejected ones: <code>git clone https://canon.rodeo/a/&lt;attempt-id&gt;.git</code>.
         Mirror: <a href="${GITHUB_MIRROR}">${GITHUB_MIRROR}</a>. License: MIT.</p>`;
   return page(path || "Canon source", `${intro}${crumbs(parts)}<ul class="tree">${rows}</ul>`);
 }
