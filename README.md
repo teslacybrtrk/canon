@@ -100,7 +100,7 @@ records from canon.rodeo (projects left up for inspection); **simulated** benchm
 
 | Claim | Evidence | Reproduce |
 |---|---|---|
-| Conflicts are judged on the combined code, not the text | the Oct 12 run ([farmstand stats](https://canon.rodeo/p/farmstand/stats)): a clash flagged before either side was accepted, the loser re-applied and judged; the [demo](https://canon.rodeo/demo)'s tour, step 1 (simulated in the browser) | `node scripts/baseline.mjs` ([docs/baseline.md](docs/baseline.md)) |
+| Conflicts are judged on the combined code, not the text | the Oct 12 run ([farmstand stats](https://canon.rodeo/p/farmstand/stats), [replay](https://canon.rodeo/replay?p=farmstand)): a clash flagged before either side was accepted; the judge re-applied the other side on the new canon, hit a text conflict and handed it back to its agent; the [demo](https://canon.rodeo/demo)'s tour, step 1 (simulated in the browser) | `node scripts/baseline.mjs` ([docs/baseline.md](docs/baseline.md)) |
 | A check that didn't run is never a pass | recorded: [evid #2](https://canon.rodeo/p/evid/canon/2/acceptance) (review unavailable, owner exception named), [evid #5](https://canon.rodeo/p/evid/canon/5/acceptance) | `node scripts/test-evidence.ts` |
 | Every canon has an acceptance record, also in Git notes | recorded: any `/p/<project>/canon/<n>/acceptance`; `git fetch https://canon.rodeo/p/rehearse.git refs/notes/canon` | |
 | A change that passes its preview but breaks on existing data never reaches production | recorded: [rehearse #7](https://canon.rodeo/p/rehearse/canon/7/acceptance) (data migration the previous version can't read); simulated: [docs/benchmark.md](docs/benchmark.md), data workload | `node scripts/benchmark.mjs --workloads data` |

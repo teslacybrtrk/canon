@@ -3054,6 +3054,10 @@ export class Referee extends DurableObject<Env> {
     if (!this.holds(seq, holder)) return false;
     const record = this.acceptance(seq);
     if (!record) return true;
+    // A Workflow step can run again after it finished (its answer lost when the judge restarted mid-call). The first run's
+    // verdict stands: its fixtures are deleted once it's judged, so a second run would find nothing to compare and call a
+    // passed rehearsal unavailable.
+    if (record.recovery.rehearsal) return this.rehearsalDecision(seq);
     if (deployed) {
       const url = this.env.CANDIDATE_URL.replace("{project}", this.requireProject());
       const landing = new Set(record.facts.map((f) => f.id));
@@ -3101,8 +3105,13 @@ export class Referee extends DurableObject<Env> {
         }
       }
     } else this.setRehearsal(seq, "unavailable", `the previous version couldn't be deployed onto the release candidate: ${detail.replace(/\s+/g, " ").slice(0, 160)}`);
-    const after = this.acceptance(seq)!;
     for (const run of [`reh-${seq}`, `ctl-${seq}`]) this.sql.exec(`DELETE FROM meta WHERE key = ?`, `fixtures:${run}`);
+    return this.rehearsalDecision(seq);
+  }
+
+  /** What a rehearsal's result means for the release (the same answer however often it's asked). */
+  private rehearsalDecision(seq: number): boolean {
+    const after = this.acceptance(seq)!;
     if (after.recovery.rollbackSafe) return true;
     if (after.authorizedBy.startsWith("the owner")) {
       // A person's accept still goes out without a safe rollback; the record says so, and over what.
