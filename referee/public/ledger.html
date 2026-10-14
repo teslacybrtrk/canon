@@ -177,12 +177,12 @@
     const failedBefore = maker ? f.attempts.filter((a) => a !== maker && (a.failure || ["contradicts", "unproven"].includes(a.status))) : [];
     // Follow the judge's re-applies back to the change an agent wrote: that's who resolved it; the judge carried it.
     const byAttempt = new Map(f.attempts.map((a) => [a.attempt, a]));
-    let origin = maker;
+    let wrote = maker;
     let hops = 0;
-    while (origin?.reappliedFrom && byAttempt.get(origin.reappliedFrom)) { origin = byAttempt.get(origin.reappliedFrom); hops++; }
-    const fixAfterFailure = origin && origin !== maker && /\(refreshed onto canon \d+\)$/.test(origin.why ?? "");
+    while (wrote?.reappliedFrom && byAttempt.get(wrote.reappliedFrom)) { wrote = byAttempt.get(wrote.reappliedFrom); hops++; }
+    const fixAfterFailure = wrote && wrote !== maker && /\(refreshed onto canon \d+\)$/.test(wrote.why ?? "");
     const resolution = !maker ? (f.stage === "requested" ? "No attempt yet." : "Not resolved yet: no attempt holds every fact.")
-      : fixAfterFailure ? `Resolved by ${esc(origin.agent)}'s own fix (commit ${rev(origin.attempt, origin.sha)}, in a fresh attempt after the failure above). As canon moved, the judge re-applied it ${hops === 1 ? "once" : `${hops} times`} (finally commit ${rev(maker.attempt, maker.sha)}), and every fact held on the combined code.`
+      : fixAfterFailure ? `Resolved by ${esc(wrote.agent)}'s own fix (commit ${rev(wrote.attempt, wrote.sha)}, in a fresh attempt after the failure above). As canon moved, the judge re-applied it ${hops === 1 ? "once" : `${hops} times`} (finally commit ${rev(maker.attempt, maker.sha)}), and every fact held on the combined code.`
       : maker.reappliedFrom ? `Resolved when the judge re-applied the change from ${esc(maker.reappliedFrom)} onto the newer canon (commit ${rev(maker.attempt, maker.sha)}) and every fact held on the combined code.`
       : failedBefore.length ? `Resolved by ${esc(maker.agent)}'s commit ${rev(maker.attempt, maker.sha)}, after ${failedBefore.length} attempt${failedBefore.length === 1 ? "" : "s"} that didn't hold; every fact held on its preview.`
       : `${esc(maker.agent)}'s commit ${rev(maker.attempt, maker.sha)} held every fact on its first verdict.`;
