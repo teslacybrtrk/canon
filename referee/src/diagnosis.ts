@@ -48,6 +48,9 @@ export function diagnose(v: Pick<Verdict, "outcome" | "lost" | "stale" | "claime
   if (/already passes on the commit this attempt forked from/.test(v.claimed.detail)) {
     return { kind: "requirement", why: "its fact already holds before the change, so the fact doesn't capture what the change does", next: "the fact's author tightens it (a check that fails without the change); only a person changes a protected fact" };
   }
+  if (/toolchain protected/.test(v.claimed.detail)) {
+    return { kind: "implementation", why: v.claimed.detail.replace(/^build failed: /, "").slice(0, 220), next: "undo the dependency or build-command change and push; the owner changes the toolchain (it runs with deploy credentials)" };
+  }
   if (/^build failed/.test(v.claimed.detail)) {
     return { kind: "implementation", why: `the code didn't build or deploy as a preview: ${v.claimed.detail.slice(13, 180)}`, next: "fix the build, then push" };
   }

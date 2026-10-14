@@ -89,6 +89,9 @@ export interface Charter {
   intentRisk?: boolean;
   // true: every claim must declare the files it will change (touches); a change outside them waits for the owner.
   requireScope?: boolean;
+  // "open": attempts may change the toolchain (package-lock.json, a Wrangler build command) although previews are built
+  // with deploy credentials. Off by default: agents can't change what runs with the credentials (see buildGuard).
+  toolchain?: "open";
 }
 export interface Policy {
   autoAccept?: AutoAccept;

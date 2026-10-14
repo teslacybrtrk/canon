@@ -214,6 +214,121 @@ export class Referee extends DurableObject<Env> {
     };
   }
 
+  /**
+   * The feature ledger: every fact someone asked for, from the request to production, built only from the judge's own
+   * records (facts, claims, verdicts, canon, acceptance records, the last production check). Stages stay apart:
+   * requested, in progress, verified (Ready), waiting for evidence or a person, accepted, released, healthy in
+   * production, held back, declined, retired. Held-out checks stay hidden, as on the board.
+   */
+  ledger() {
+    const state = this.read();
+    const project = state.project;
+    const rows = this.rows(`SELECT * FROM canon ORDER BY seq`);
+    const landedIn = new Map<string, Row[]>();
+    for (const r of rows) {
+      const ids = r.facts_json ? (JSON.parse(r.facts_json as string) as string[]) : r.accepted_fact ? [r.accepted_fact as string] : [];
+      for (const id of ids) landedIn.set(id, [...(landedIn.get(id) ?? []), r]);
+    }
+    const reverted = new Set(rows.map((r) => r.reverts).filter((x) => x !== null && x !== undefined));
+    const results = state.production?.results ?? {};
+    const features = this.rows(`SELECT * FROM facts ORDER BY created_at`).map(toFact).map((f) => this.redactFact(f)).map((f) => {
+      const claims = state.claims.filter((c) => c.factId === f.id).sort((a, b) => a.createdAt - b.createdAt);
+      const attempts = claims.map((c) => ({
+        claimId: c.id, agent: c.agent, status: c.status, at: c.createdAt,
+        reappliedFrom: c.refreshedFrom, after: c.after ?? [],
+        outcome: c.verdict?.outcome ?? null,
+        diagnosis: c.verdict?.diagnosis ? { kind: c.verdict.diagnosis.kind, why: c.verdict.diagnosis.why, next: c.verdict.diagnosis.next } : null,
+        waiting: c.autoWait,
+        mutation: c.mutation?.status === "done" ? `${c.mutation.caught}/${c.mutation.total} deliberate breaks caught` : null,
+        review: c.reviewer?.status === "done" ? `${c.reviewer.notes.length} note${c.reviewer.notes.length === 1 ? "" : "s"}${c.reviewer.notes.some((n) => n.kind === "risk") ? ", including a risk" : ""}` : c.reviewer?.status ?? null,
+      }));
+      const releases = (landedIn.get(f.id) ?? []).map((r) => {
+        const seq = r.seq as number;
+        const rec = this.acceptance(seq);
+        return {
+          seq, sha: String(r.sha).slice(0, 12), at: Number(r.at), versionId: (r.version_id as string | null) ?? null,
+          release: r.deployed === 1 ? "deployed" : r.deployed === -1 ? "not released" : "in progress",
+          health: (r.health as string | null) ?? null, detail: (r.health_detail as string | null) ?? null, reverted: reverted.has(seq),
+          authorizedBy: rec?.authorizedBy ?? null, exceptions: rec?.exceptions ?? [],
+          rehearsal: rec?.recovery?.rehearsal ? `${rec.recovery.rehearsal.state}: ${rec.recovery.rehearsal.detail.slice(0, 200)}` : null,
+          rollout: (rec?.exposure ?? []).map((e) => `${e.percent}%: ${e.verdict}`),
+          record: rec ? `/p/${project}/canon/${seq}/acceptance` : null,
+        };
+      });
+      const last = releases.at(-1);
+      const ready = attempts.filter((a) => a.status === "ready");
+      const working = attempts.some((a) => ["open", "checking", "unproven", "behind"].includes(a.status));
+      const check = f.heldOut ? "held out: the check is hidden from agents and the public" : f.check.kind === "probe" ? `${f.check.steps.length} HTTP step${f.check.steps.length === 1 ? "" : "s"} on a live preview${f.check.isolate === false ? ", sent as a visitor" : ""}` : `command: ${f.check.run.slice(0, 120)}`;
+      const prod = results[f.id];
+      let stage: string;
+      let detail = "";
+      if (f.status === "retired") (stage = "retired"), (detail = "replaced by a revision someone accepted");
+      else if (f.origin === "seed") (stage = "baseline"), (detail = "true since genesis");
+      else if (f.origin === "heldout" && f.status === "canon") (stage = "baseline"), (detail = "held out by the owner: enforced on every verdict and release since it was added");
+      else if (f.status === "canon") {
+        if (!last || last.release === "in progress") (stage = "accepted"), (detail = "accepted; its release is in progress");
+        else if (last.health === "broken") (stage = "broken in production"), (detail = last.detail ?? "");
+        else (stage = prod?.held ? "healthy in production" : "released"), (detail = `canon #${last.seq}${last.versionId ? `, Worker version ${last.versionId.slice(0, 8)}` : ""}`);
+      } else if (f.declinedAt) (stage = "declined"), (detail = f.declineReason ?? "");
+      else if (ready.length) {
+        const waiting = ready.find((a) => a.waiting);
+        if (waiting && ready.every((a) => a.waiting)) (stage = "waiting for a person or evidence"), (detail = waiting.waiting ?? "");
+        else (stage = "verified"), (detail = "Ready: every fact holds on its preview; landing next");
+      } else if (working) (stage = "in progress"), (detail = "being built or re-applied");
+      else if (last && (last.release === "not released" || last.reverted)) (stage = "held back at release"), (detail = last.detail ?? "production never served it");
+      else if (attempts.length) (stage = "attempts failed"), (detail = attempts.at(-1)?.diagnosis?.why ?? "");
+      else (stage = "requested"), (detail = "no attempt yet");
+      const needs = [
+        ...ready.filter((a) => a.waiting).map((a) => `${a.agent}'s attempt: ${a.waiting}`),
+        ...attempts.filter((a) => a.diagnosis && ["requirement", "unsupported-check"].includes(a.diagnosis.kind)).map((a) => `${a.diagnosis!.why}. Next: ${a.diagnosis!.next}`),
+      ];
+      return {
+        id: f.id, sentence: f.sentence, check, status: f.status, stage, detail,
+        requestedBy: f.origin === "backlog" ? "people (backlog)" : f.origin === "seed" ? "genesis" : f.origin === "heldout" ? "the owner (held out)" : `an agent (${claims[0]?.agent ?? "claim"})`,
+        after: [...new Set(attempts.flatMap((a) => a.after))],
+        attempts, releases,
+        production: f.status === "canon" && prod ? { held: prod.held, at: state.production?.at ?? null } : null,
+        needs,
+      };
+    });
+    const count = (stage: string) => features.filter((x) => x.stage === stage).length;
+    return {
+      project,
+      canon: state.canon ? { seq: state.canon.seq, sha: state.canon.sha.slice(0, 12) } : null,
+      production: state.production ? { at: state.production.at, url: state.production.url } : null,
+      summary: {
+        requested: features.filter((x) => x.stage !== "baseline").length,
+        released: count("released") + count("healthy in production"),
+        healthy: count("healthy in production"),
+        inProgress: count("in progress") + count("verified") + count("accepted"),
+        needsAPerson: features.filter((x) => x.needs.length).length,
+        heldBack: count("held back at release"),
+      },
+      features,
+    };
+  }
+
+  /**
+   * Before an attempt's preview is built with deploy credentials, the toolchain that runs with them must be canon's: the
+   * same package-lock.json (npm ci installs exactly that, integrity-checked, so every binary is canon's) and no custom
+   * build command in the Wrangler config (it would run with the credentials). Returns why not, or null. Genesis is the
+   * owner's own push; a charter with "toolchain": "open" turns the guard off, on the owner's authority.
+   */
+  async buildGuard(repo: string, sha: string): Promise<string | null> {
+    const attempt = this.attempt(repo);
+    if (!attempt?.claimId || !attempt.baseSha || this.charter()?.toolchain === "open") return null;
+    const read = (ref: string, path: string) => this.fileAtStrict(attempt.id, ref, path).then((t) => t ?? "", () => undefined);
+    const [head, base] = await Promise.all([read(sha, "package-lock.json"), read(attempt.baseSha, "package-lock.json")]);
+    if (head === undefined || base === undefined) return "the judge couldn't read package-lock.json to check the toolchain, so the attempt isn't built with deploy credentials; push again";
+    if (head !== base) return "it changes package-lock.json, and a preview is built with deploy credentials, so its toolchain must be canon's; revert the dependency change (the owner changes dependencies and build commands)";
+    for (const path of ["wrangler.jsonc", "wrangler.json", "wrangler.toml"]) {
+      const text = await read(sha, path);
+      if (text === undefined) return "the judge couldn't read the Wrangler config to check the build, so the attempt isn't built with deploy credentials; push again";
+      if (hasBuildCommand(path, text)) return `its ${path} has a custom build command, which would run with deploy credentials; remove it (the owner changes build commands)`;
+    }
+    return null;
+  }
+
   // ---- Move 2: declare --------------------------------------------------------------
 
   async declare(req: DeclareRequest): Promise<Declared> {
@@ -3486,3 +3601,31 @@ function shortId() {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Whether a Wrangler config declares a custom build command (top level or in an environment), which wrangler runs with
+ * whatever credentials it has. JSON/JSONC are read with comments stripped (strings respected); TOML by its [build]
+ * tables. A config that can't be parsed counts as having one: unknown is not safe.
+ */
+export function hasBuildCommand(path: string, text: string): boolean {
+  if (!text.trim()) return false;
+  if (path.endsWith(".toml")) return /^\s*\[(?:env\.[^\]]+\.)?build\]/m.test(text);
+  let out = "";
+  for (let i = 0, inString = false; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      out += c;
+      if (c === "\\") out += text[++i] ?? "";
+      else if (c === '"') inString = false;
+    } else if (c === '"') (inString = true), (out += c);
+    else if (c === "/" && text[i + 1] === "/") while (i < text.length && text[i] !== "\n") i++;
+    else if (c === "/" && text[i + 1] === "*") { i += 2; while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++; i++; }
+    else out += c;
+  }
+  try {
+    const config = JSON.parse(out.replace(/,(\s*[}\]])/g, "$1")) as { build?: unknown; env?: Record<string, { build?: unknown }> };
+    return config.build !== undefined || Object.values(config.env ?? {}).some((e) => e?.build !== undefined);
+  } catch {
+    return true;
+  }
+}

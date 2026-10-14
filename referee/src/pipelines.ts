@@ -17,6 +17,13 @@ export class VerifyAttempt extends CIWorkflow<CloudflareArtifacts, Env> {
     const referee = refereeForRepo(this.env, repo);
     const attemptId = await step.do("register push", () => referee.pushed(repo, sha));
     if (!attemptId) return;
+    // The preview is built with deploy credentials, so the toolchain that runs with them must be canon's (buildGuard):
+    // an attempt that changes it is refused before anything is installed or built.
+    const unsafe = await step.do("toolchain", () => referee.buildGuard(repo, sha));
+    if (unsafe) {
+      await step.do("toolchain refused", () => referee.buildFailed(repo, sha, `toolchain protected: ${unsafe}`));
+      return;
+    }
     // Admission: at most a few verifications per project build at once; this one waits its turn. A newer push of the
     // same attempt makes this one pointless: it stops here. Waiting never turns into permission: a commit that isn't
     // admitted in about three and a half hours is not verified at all; it gets a platform error the judge retries.

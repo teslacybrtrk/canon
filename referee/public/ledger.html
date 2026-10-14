@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feature ledger · Canon</title>
+<meta name="description" content="Every feature someone asked for, from the request to production: its requirement, the agents' attempts, the verdicts, who accepted it, how it was released and whether it holds in production.">
+<link rel="icon" href="/favicon-32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b1220; --bg-subtle: #0f1829; --bg-inset: #080e1a; --border: #26324a; --ink: #e6edf3; --ink-2: #b6c2d2;
+    --muted: #8592a6; --link: #5ea3ff; --brand: #fd6f16; --gold: #fdc86d;
+    --held: #3fb950; --held-bg: rgb(63 185 80 / 0.15); --broke: #f85149; --broke-bg: rgb(248 81 73 / 0.15);
+    --pending: #d29922; --pending-bg: rgb(210 153 34 / 0.15); --merged: #fd8a3c; --merged-bg: rgb(253 111 22 / 0.15);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #ffffff; --bg-subtle: #f6f8fa; --bg-inset: #eff2f5; --border: #d1d9e0; --ink: #1f2328; --ink-2: #3d444d;
+      --muted: #59636e; --link: #0969da; --brand: #ed5616; --gold: #9a6700;
+      --held: #1a7f37; --held-bg: rgb(26 127 55 / 0.1); --broke: #d1242f; --broke-bg: rgb(209 36 47 / 0.08);
+      --pending: #9a6700; --pending-bg: rgb(154 103 0 / 0.1); --merged: #c2410c; --merged-bg: rgb(194 65 12 / 0.1);
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header { border-bottom: 1px solid var(--border); background: var(--bg-inset); }
+  header .wrap { display: flex; align-items: center; gap: 12px; min-height: 60px; flex-wrap: wrap; }
+  .logo { display: flex; align-items: center; gap: 10px; color: var(--ink); font: 800 22px/1 "Big Shoulders Display", var(--sans); letter-spacing: 0.04em; text-transform: uppercase; }
+  .logo img { width: 30px; height: 30px; border-radius: 7px; }
+  header .crumb { color: var(--muted); }
+  header .right { margin-left: auto; display: flex; gap: 14px; font-size: 13px; }
+  h1 { margin: 26px 0 4px; font-size: 26px; }
+  .lede { margin: 0; color: var(--ink-2); max-width: 760px; }
+  .kinds { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 20px 0; }
+  .stat { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-subtle); }
+  .stat b { display: block; font-size: 24px; line-height: 1.1; }
+  .stat span { color: var(--muted); font-size: 12.5px; }
+  .group { margin: 26px 0 0; }
+  .group h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 8px; }
+  details.feature { border: 1px solid var(--border); border-radius: 8px; background: var(--bg-subtle); margin: 0 0 8px; overflow: hidden; }
+  details.feature > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 14px; }
+  details.feature > summary::-webkit-details-marker { display: none; }
+  .sentence { font-weight: 600; }
+  .sub { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+  .pill { align-self: start; white-space: nowrap; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid transparent; }
+  .s-good { color: var(--held); background: var(--held-bg); }
+  .s-bad { color: var(--broke); background: var(--broke-bg); }
+  .s-wait { color: var(--pending); background: var(--pending-bg); }
+  .s-move { color: var(--merged); background: var(--merged-bg); }
+  .s-quiet { color: var(--muted); border-color: var(--border); }
+  .body { border-top: 1px solid var(--border); padding: 12px 14px 14px; background: var(--bg); }
+  ol.timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--border); display: grid; gap: 10px; }
+  ol.timeline li { position: relative; }
+  ol.timeline li::before { content: ""; position: absolute; left: -20px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+  ol.timeline li.good::before { background: var(--held); }
+  ol.timeline li.bad::before { background: var(--broke); }
+  ol.timeline li.wait::before { background: var(--pending); }
+  .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .needs { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--pending); border-radius: 6px; background: var(--pending-bg); }
+  .needs ul { margin: 4px 0 0; padding-left: 18px; }
+  code { font-family: var(--mono); font-size: 12.5px; }
+  .empty, .err { padding: 24px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 8px; }
+  footer { margin: 40px 0 30px; color: var(--muted); font-size: 12.5px; }
+  @media (max-width: 560px) { h1 { font-size: 22px; } header .right { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="logo" href="/"><img src="/icon-96.png" alt="">Canon</a><span class="crumb">/ <span id="project">…</span> / feature ledger</span>
+  <span class="right"><a id="statslink" href="#">Run report</a><a href="/demo">Guided demo</a></span>
+</div></header>
+<main class="wrap">
+  <h1>Feature ledger</h1>
+  <p class="lede">Every feature someone asked for, from the request to production: its requirement (a fact and its check), the agents' attempts and verdicts, who accepted it and why, how it was released, and whether it holds in production. Built only from the judge's own records; nothing here is self-reported by an agent.</p>
+  <p class="kinds">This page reads a real project on canon.rodeo (deployed execution). Held-out checks stay hidden.</p>
+  <section class="summary" id="summary"></section>
+  <div id="groups"><div class="empty">Loading…</div></div>
+  <footer>Raw JSON: <a id="rawlink" href="#">/p/…/ledger</a> · each release links to its acceptance record (the exact commit, the evidence, the policy that allowed it, and how a failed release recovers).</footer>
+</main>
+<script>
+  const project = (new URLSearchParams(location.search).get("p") || "convoy").replace(/[^a-z0-9]/g, "");
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const ago = (t) => { if (!t) return ""; const s = Math.max(1, Math.round((Date.now() - t) / 1000)); return s < 90 ? `${s} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`; };
+  $("project").textContent = project;
+  $("statslink").href = `/p/${project}/stats`;
+  $("rawlink").href = `/p/${project}/ledger`;
+  $("rawlink").textContent = `/p/${project}/ledger`;
+  document.title = `Feature ledger · ${project} · Canon`;
+  const STAGE = {
+    "healthy in production": ["s-good", "Healthy in production"], released: ["s-good", "Released"], accepted: ["s-move", "Accepted, releasing"],
+    verified: ["s-move", "Verified (Ready)"], "in progress": ["s-move", "In progress"], "waiting for a person or evidence": ["s-wait", "Waiting for a person"],
+    "held back at release": ["s-bad", "Held back at release"], "broken in production": ["s-bad", "Broken in production"], "attempts failed": ["s-bad", "Attempts failed"],
+    requested: ["s-quiet", "Requested"], declined: ["s-quiet", "Declined"], retired: ["s-quiet", "Retired"], baseline: ["s-quiet", "Baseline"],
+  };
+  const GROUPS = [
+    ["Needs a person", (f) => f.needs.length > 0],
+    ["In flight", (f) => ["in progress", "verified", "accepted", "waiting for a person or evidence"].includes(f.stage)],
+    ["Released", (f) => ["released", "healthy in production"].includes(f.stage)],
+    ["Held back or failed", (f) => ["held back at release", "broken in production", "attempts failed"].includes(f.stage)],
+    ["Requested, not started", (f) => f.stage === "requested"],
+    ["Declined or retired", (f) => ["declined", "retired"].includes(f.stage)],
+    ["Baseline (true since genesis, or added by the owner)", (f) => f.stage === "baseline"],
+  ];
+  function attemptLine(a) {
+    const cls = a.status === "accepted" || a.status === "ready" ? "good" : ["contradicts", "error", "declined"].includes(a.status) ? "bad" : a.status === "superseded" ? "" : "wait";
+    const bits = [a.reappliedFrom ? "re-applied by the judge on a newer canon" : "", a.after.length ? `builds on ${a.after.map(esc).join(", ")}` : "", a.mutation ?? "", a.review ? `reviewer: ${esc(a.review)}` : ""].filter(Boolean);
+    return `<li class="${cls}"><span class="k">Attempt</span> <b>${esc(a.agent)}</b>: ${esc(a.status)}${a.outcome && a.outcome !== a.status ? ` (verdict: ${esc(a.outcome)})` : ""} <span class="k">${ago(a.at)}</span>
+      ${bits.length ? `<div>${bits.map(esc).join(" · ")}</div>` : ""}
+      ${a.waiting ? `<div>Autopilot is waiting: ${esc(a.waiting)}</div>` : ""}
+      ${a.diagnosis ? `<div><b>Diagnosis: ${esc(a.diagnosis.kind)}.</b> ${esc(a.diagnosis.why)} <i>Next: ${esc(a.diagnosis.next)}</i></div>` : ""}</li>`;
+  }
+  function releaseLine(r) {
+    const cls = r.release === "deployed" && !r.reverted && r.health !== "broken" ? "good" : r.release === "in progress" ? "wait" : "bad";
+    return `<li class="${cls}"><span class="k">Canon #${r.seq}</span> ${r.release === "deployed" ? "released" : esc(r.release)}${r.reverted ? ", then reverted" : ""}${r.versionId ? ` as Worker version <code>${esc(r.versionId.slice(0, 8))}</code>` : ""} (commit <code>${esc(r.sha)}</code>) <span class="k">${ago(r.at)}</span>
+      ${r.authorizedBy ? `<div>Accepted by ${esc(r.authorizedBy)}${r.exceptions.length ? `; accepted over: ${r.exceptions.map(esc).join("; ")}` : ""}</div>` : ""}
+      ${r.rehearsal ? `<div>Rollback rehearsal ${esc(r.rehearsal)}</div>` : ""}
+      ${r.rollout.length ? `<div>Rollout: ${r.rollout.map(esc).join(" → ")} → 100%</div>` : ""}
+      ${r.detail && cls !== "good" ? `<div>${esc(r.detail)}</div>` : ""}
+      ${r.record ? `<div><a href="${esc(r.record)}">Acceptance record</a></div>` : ""}</li>`;
+  }
+  function feature(f) {
+    const [cls, label] = STAGE[f.stage] ?? ["s-quiet", f.stage];
+    const prod = f.production ? `<li class="${f.production.held ? "good" : "bad"}"><span class="k">Production</span> ${f.production.held ? "holds on production" : "broken on production"} <span class="k">checked ${ago(f.production.at)}</span></li>` : "";
+    return `<details class="feature"><summary><span class="sentence">${esc(f.sentence)}</span><span class="pill ${cls}">${esc(label)}</span>
+      <span class="sub"><code>${esc(f.id)}</code> · requested by ${esc(f.requestedBy)}${f.detail ? ` · ${esc(f.detail)}` : ""}</span></summary>
+      <div class="body">
+        ${f.needs.length ? `<div class="needs"><b>Needs a person</b><ul>${f.needs.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></div>` : ""}
+        <ol class="timeline">
+          <li class="good"><span class="k">Requirement</span> ${esc(f.sentence)}<div>${esc(f.check)}</div></li>
+          ${f.attempts.map(attemptLine).join("")}
+          ${f.releases.map(releaseLine).join("")}
+          ${prod}
+        </ol>
+      </div></details>`;
+  }
+  fetch(`/p/${project}/ledger`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))).then((l) => {
+    const s = l.summary;
+    $("summary").innerHTML = [[s.requested, "features requested"], [s.released, "released"], [s.healthy, "healthy in production"], [s.inProgress, "in flight"], [s.needsAPerson, "need a person"], [s.heldBack, "held back at release"]]
+      .map(([n, t]) => `<div class="stat"><b>${n}</b><span>${t}</span></div>`).join("");
+    const seen = new Set();
+    const html = GROUPS.map(([title, test]) => {
+      const items = l.features.filter((f) => !seen.has(f.id) && test(f));
+      items.forEach((f) => seen.add(f.id));
+      return items.length ? `<section class="group"><h2>${esc(title)} · ${items.length}</h2>${items.map(feature).join("")}</section>` : "";
+    }).join("");
+    $("groups").innerHTML = html || `<div class="empty">No features yet.</div>`;
+  }).catch((e) => { $("groups").innerHTML = `<div class="err">Couldn't load the ledger for “${esc(project)}” (${esc(e.message)}). Is the project name right?</div>`; });
+</script>
+</body>
+</html>

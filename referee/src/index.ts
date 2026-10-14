@@ -62,6 +62,7 @@ export default {
       if (route === "GET /canon") return json(await referee.read());
       if (route === "GET /previews") return json(await referee.previews());
       if (route === "GET /stats") return json(await referee.stats());
+      if (route === "GET /ledger") return json(await referee.ledger());
       // Held-out facts: the owner writes them into the judge and reads them back; agents see only their sentences.
       if (route === "POST /repair") {
         const b = await request.json<{ path?: string; conflicted?: string; intents?: string[] }>().catch(() => ({}) as { path?: string; conflicted?: string; intents?: string[] });
