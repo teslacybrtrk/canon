@@ -135,6 +135,7 @@
     ["Baseline (true since genesis, or added by the owner)", (f) => f.stage === "baseline"],
   ];
   const short = (sha) => (sha ? String(sha).slice(0, 7) : "");
+  const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : "");
   const when = (t) => (t ? `${new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} (${ago(t)})` : "");
   // An exact revision: click to copy the Git commands that fetch it (attempts of a public project are served read-only).
   const rev = (attempt, sha) => sha ? `<span class="rev" title="Click to copy: git clone ${esc(location.origin)}/a/${esc(attempt)}.git, then git checkout ${esc(sha)}" data-copy="git clone ${esc(location.origin)}/a/${esc(attempt)}.git && git -C ${esc(attempt)} checkout ${esc(sha)}">${esc(short(sha))}</span>` : "";
@@ -148,7 +149,7 @@
     return `<div class="row ${cls}"><b>${esc(a.agent)}</b> ${rev(a.attempt, a.sha)} · ${esc(a.status)}${a.outcome && a.outcome !== a.status ? ` (verdict: ${esc(a.outcome)})` : ""}${a.canonSeq ? ` · judged against canon #${a.canonSeq}` : ""} <span class="k">${ago(a.judgedAt ?? a.at)}</span>
       ${a.why && !a.reappliedFrom ? `<div class="quote">“${esc(a.why)}”</div>` : ""}
       ${a.failure ? `<div><b>Observed:</b> ${esc(a.failure)}</div>` : ""}
-      ${a.diagnosis ? `<div><b>Diagnosis: ${esc(DIAG[a.diagnosis.kind] ?? a.diagnosis.kind)}.</b> ${esc(a.diagnosis.why)}. <i>Next: ${esc(a.diagnosis.next)}</i></div>${combo}` : ""}
+      ${a.diagnosis ? `<div><b>Diagnosis: ${esc(DIAG[a.diagnosis.kind] ?? a.diagnosis.kind)}.</b> ${esc(cap(a.diagnosis.why))}. <i>Next: ${esc(a.diagnosis.next)}</i></div>${combo}` : ""}
       ${a.waiting ? `<div><b>Autopilot is waiting:</b> ${esc(a.waiting)}</div>` : ""}
       ${extra.length ? `<div class="caveat">${extra.join(" · ")}</div>` : ""}
       <div class="links">${a.preview ? `<a href="${esc(a.preview)}" target="_blank" rel="noopener">Its preview ↗</a>` : ""}<a href="/p/${project}/attempts/${esc(a.attempt)}/verdict">Verdict record</a>${a.judge ? `<span class="k">judge ${esc(a.judge.slice(0, 8))}</span>` : ""}</div></div>`;
@@ -182,7 +183,7 @@
     while (wrote?.reappliedFrom && byAttempt.get(wrote.reappliedFrom)) { wrote = byAttempt.get(wrote.reappliedFrom); hops++; }
     const fixAfterFailure = wrote && wrote !== maker && /\(refreshed onto canon \d+\)$/.test(wrote.why ?? "");
     const resolution = !maker ? (f.stage === "requested" ? "No attempt yet." : "Not resolved yet: no attempt holds every fact.")
-      : fixAfterFailure ? `Resolved by ${esc(wrote.agent)}'s own fix (commit ${rev(wrote.attempt, wrote.sha)}, in a fresh attempt after the failure above). As canon moved, the judge re-applied it ${hops === 1 ? "once" : `${hops} times`} (finally commit ${rev(maker.attempt, maker.sha)}), and every fact held on the combined code.`
+      : fixAfterFailure ? `Resolved by ${esc(wrote.agent)}'s own fix (commit ${rev(wrote.attempt, wrote.sha)}, in a fresh attempt after the failure above). As canon moved, the judge re-applied it ${hops === 1 ? "once" : hops === 2 ? "twice" : `${hops} times`} (finally commit ${rev(maker.attempt, maker.sha)}), and every fact held on the combined code.`
       : maker.reappliedFrom ? `Resolved when the judge re-applied the change from ${esc(maker.reappliedFrom)} onto the newer canon (commit ${rev(maker.attempt, maker.sha)}) and every fact held on the combined code.`
       : failedBefore.length ? `Resolved by ${esc(maker.agent)}'s commit ${rev(maker.attempt, maker.sha)}, after ${failedBefore.length} attempt${failedBefore.length === 1 ? "" : "s"} that didn't hold; every fact held on its preview.`
       : `${esc(maker.agent)}'s commit ${rev(maker.attempt, maker.sha)} held every fact on its first verdict.`;
