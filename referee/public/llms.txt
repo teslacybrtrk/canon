@@ -50,6 +50,8 @@ Without MCP, the same moves are a one-file CLI: cli/canon.mjs (`canon read`, `ca
 - Using Canon on your own app: docs/USING.md in the source
 - Demo (in the browser, sample data, a three-step guided tour; you play the maintainer; its Autopilot switch has Backlog and Full, the charter): https://canon.rodeo/demo
 - Copyable facts (races, retries, authorization, data compatibility): docs/checks.md in the source
-- Feature ledger (every requested feature from the request to production, from the judge's records): GET /p/<project>/ledger, page /ledger?p=<project>
+- Feature ledger (every requested feature from the request to production, with each attempt's reason, exact commit, observed failure and the release evidence, from the judge's records): GET /p/<project>/ledger, page /ledger?p=<project>
+- A recorded run, event by event: GET /p/<project>/timeline, page /replay?p=<project>
+- A project is private until its owner publishes it: POST /p/<project>/visibility {"public": true} (owner key); until then every read needs a key
 - Don't change package-lock.json, .npmrc, the Wrangler config, .wrangler/, .env files or anything under node_modules in an attempt: the toolchain and deploy config are the owner's, and such an attempt is refused before it builds
 - Autonomy: "autoAccept" in canon.json is off (a person accepts), backlog (facts people wrote land on their own) or charter (no person: a second agent confirms what an agent proposes, locked rules stay locked, priorities settle clashes).

@@ -1,8 +1,8 @@
 {
- "revision": "b571d04c4729",
- "dirty": true,
- "date": "2026-10-14T03:02:39.006Z",
- "seconds": 62.1,
+ "revision": "5b57c34ad38e",
+ "dirty": false,
+ "date": "2026-10-14T04:30:01.619Z",
+ "seconds": 67.1,
  "conditions": {
   "machine": "darwin 27.0.0, Apple M3",
   "node": "v26.7.0",
@@ -11,37 +11,37 @@
   "runs": "one check run at a time (sequential), local wrangler dev"
  },
  "base": {
-  "startMs": 969,
+  "startMs": 1111,
   "results": {
    "code-typechecks": {
     "held": true,
     "detail": "ok",
-    "ms": 534
+    "ms": 848
    },
    "code-lints": {
     "held": true,
     "detail": "ok",
-    "ms": 287
+    "ms": 310
    },
    "shop-page-lists-prices": {
     "held": true,
     "detail": "ok",
-    "ms": 4
+    "ms": 5
    },
    "one-unit-at-list-price": {
     "held": true,
     "detail": "ok",
-    "ms": 7
+    "ms": 6
    },
    "vat-is-a-quarter": {
     "held": true,
     "detail": "ok",
-    "ms": 15
+    "ms": 19
    },
    "unknown-item-refused": {
     "held": true,
     "detail": "ok",
-    "ms": 3
+    "ms": 2
    },
    "cart-starts-empty": {
     "held": true,
@@ -51,12 +51,12 @@
    "cart-keeps-lines": {
     "held": true,
     "detail": "ok",
-    "ms": 8
+    "ms": 9
    },
    "unknown-product-refused": {
     "held": true,
     "detail": "ok",
-    "ms": 4
+    "ms": 5
    },
    "bulk-discount": {
     "held": false,
@@ -91,12 +91,12 @@
    "gift-note": {
     "held": false,
     "detail": "step 2: lines.0.note is undefined, expected \"For Ada\"",
-    "ms": 4
+    "ms": 5
    },
    "take-one-out": {
     "held": false,
     "detail": "step 2: POST /api/cart/eggs/take-one returned 404, expected 200",
-    "ms": 5
+    "ms": 6
    },
    "prices-in-dollars": {
     "held": false,
@@ -106,12 +106,12 @@
    "till-price-list": {
     "held": false,
     "detail": "step 1: GET /till returned 404, expected 200",
-    "ms": 2
+    "ms": 1
    },
    "warn-at-ten": {
     "held": false,
     "detail": "step 1: GET / body does not include \"only 8 left\"",
-    "ms": 1
+    "ms": 2
    },
    "restock-list": {
     "held": false,
@@ -121,22 +121,22 @@
    "no-unknown-fields": {
     "held": false,
     "detail": "step 1: POST /api/cart returned 200, expected 400",
-    "ms": 3
+    "ms": 4
    },
    "substitutes": {
     "held": false,
     "detail": "step 2: lines.0.substitute is undefined, expected true",
-    "ms": 4
+    "ms": 6
    },
    "empty-basket": {
     "held": false,
     "detail": "step 2: DELETE /api/cart returned 404, expected 200",
-    "ms": 4
+    "ms": 26
    },
    "low-stock-flag": {
     "held": false,
     "detail": "step 1: 0.low is undefined, expected false",
-    "ms": 1
+    "ms": 3
    }
   }
  },
@@ -216,7 +216,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.023
+    "seconds": 0.028
    },
    "expect": {
     "combinedFails": [
@@ -293,33 +293,33 @@
    },
    "trees": {
     "a": {
-     "sha": "c4ea58b4952b",
-     "startMs": 761,
+     "sha": "c9f6b3244107",
+     "startMs": 890,
      "results": {
       "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 235
+      },
+      "code-lints": {
        "held": true,
        "detail": "ok",
        "ms": 211
       },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 198
-      },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 4
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 11
+       "ms": 12
       },
       "unknown-item-refused": {
        "held": true,
@@ -329,48 +329,48 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
        "held": true,
        "detail": "ok",
        "ms": 6
       },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
       "bulk-discount": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 1
       },
       "vat-per-line": {
        "held": false,
        "detail": "step 1: lines.0.vat is undefined, expected 240",
-       "ms": 1
+       "ms": 2
       }
      }
     },
     "b": {
-     "sha": "ce5eb224bee1",
-     "startMs": 762,
+     "sha": "09a0e8f1192d",
+     "startMs": 865,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 224
+       "ms": 248
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 196
+       "ms": 207
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 4
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -380,7 +380,7 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 11
+       "ms": 13
       },
       "unknown-item-refused": {
        "held": true,
@@ -395,12 +395,12 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 7
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 6
       },
       "bulk-discount": {
        "held": false,
@@ -415,18 +415,18 @@
      }
     },
     "combined": {
-     "sha": "7789203fcd68",
-     "startMs": 804,
+     "sha": "1fc0d181fa65",
+     "startMs": 875,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 223
+       "ms": 241
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 210
+       "ms": 213
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -441,7 +441,7 @@
       "vat-is-a-quarter": {
        "held": false,
        "detail": "sample 1, step 2: vat is 2000, expected 1800 (with qty = 20, item = eggs)",
-       "ms": 3
+       "ms": 2
       },
       "unknown-item-refused": {
        "held": true,
@@ -471,28 +471,28 @@
       "vat-per-line": {
        "held": true,
        "detail": "ok",
-       "ms": 1
+       "ms": 2
       }
      }
     },
     "resolved": {
-     "sha": "fb3cab31c3eb",
-     "startMs": 802,
+     "sha": "4a90591e625c",
+     "startMs": 885,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 237
+       "ms": 242
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 231
+       "ms": 211
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -502,7 +502,7 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 10
+       "ms": 12
       },
       "unknown-item-refused": {
        "held": true,
@@ -522,12 +522,12 @@
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "bulk-discount": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "vat-per-line": {
        "held": true,
@@ -555,7 +555,7 @@
     "vat-per-line on A": {
      "held": false,
      "detail": "step 1: lines.0.vat is undefined, expected 240",
-     "ms": 1
+     "ms": 2
     },
     "bulk-discount on B": {
      "held": false,
@@ -579,11 +579,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "landed": true
     },
     "b": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "failing": [
       {
        "id": "vat-is-a-quarter",
@@ -599,21 +599,21 @@
     "bounces": [
      {
       "why": "failed vat-is-a-quarter, bulk-discount",
-      "seconds": 1.3
+      "seconds": 1.4
      }
     ],
     "fix": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
-    "detectSeconds": 1.3,
-    "resolveSeconds": 1.3,
+    "detectSeconds": 1.4,
+    "resolveSeconds": 1.4,
     "delivered": "the resolution",
     "broken": [],
     "interventions": 1
    },
-   "seconds": 5.7
+   "seconds": 6.2
   },
   {
    "id": "hidden-sold-out",
@@ -694,7 +694,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.022
+    "seconds": 0.025
    },
    "expect": {
     "combinedFails": [
@@ -776,18 +776,18 @@
    },
    "trees": {
     "a": {
-     "sha": "ca7c55914c84",
-     "startMs": 1016,
+     "sha": "90b3f6302fe4",
+     "startMs": 887,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 224
+       "ms": 235
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 197
+       "ms": 210
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -797,129 +797,7 @@
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 4
-      },
-      "vat-is-a-quarter": {
-       "held": true,
-       "detail": "ok",
-       "ms": 11
-      },
-      "unknown-item-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 1
-      },
-      "cart-starts-empty": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "cart-keeps-lines": {
-       "held": true,
-       "detail": "ok",
-       "ms": 10
-      },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 8
-      },
-      "sold-out-not-listed": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      },
-      "product-page": {
-       "held": false,
-       "detail": "step 1: GET /api/products/honey returned 404, expected 200",
-       "ms": 3
-      }
-     }
-    },
-    "b": {
-     "sha": "05cb71d7155f",
-     "startMs": 1127,
-     "results": {
-      "code-typechecks": {
-       "held": true,
-       "detail": "ok",
-       "ms": 575
-      },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 219
-      },
-      "shop-page-lists-prices": {
-       "held": true,
-       "detail": "ok",
-       "ms": 3
-      },
-      "one-unit-at-list-price": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "vat-is-a-quarter": {
-       "held": true,
-       "detail": "ok",
-       "ms": 10
-      },
-      "unknown-item-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 1
-      },
-      "cart-starts-empty": {
-       "held": true,
-       "detail": "ok",
-       "ms": 3
-      },
-      "cart-keeps-lines": {
-       "held": true,
-       "detail": "ok",
-       "ms": 6
-      },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "sold-out-not-listed": {
-       "held": false,
-       "detail": "step 1: length is 5, expected 4",
-       "ms": 1
-      },
-      "product-page": {
-       "held": true,
-       "detail": "ok",
-       "ms": 3
-      }
-     }
-    },
-    "combined": {
-     "sha": "c3f7400c5f00",
-     "startMs": 760,
-     "results": {
-      "code-typechecks": {
-       "held": true,
-       "detail": "ok",
-       "ms": 227
-      },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 197
-      },
-      "shop-page-lists-prices": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      },
-      "one-unit-at-list-price": {
-       "held": true,
-       "detail": "ok",
-       "ms": 3
+       "ms": 5
       },
       "vat-is-a-quarter": {
        "held": true,
@@ -934,22 +812,22 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 4
       },
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 7
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 6
       },
       "sold-out-not-listed": {
        "held": true,
        "detail": "ok",
-       "ms": 0
+       "ms": 1
       },
       "product-page": {
        "held": false,
@@ -958,24 +836,24 @@
       }
      }
     },
-    "resolved": {
-     "sha": "e76d6303e4ba",
-     "startMs": 836,
+    "b": {
+     "sha": "ade1ad77617c",
+     "startMs": 900,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 222
+       "ms": 244
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 197
+       "ms": 212
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -990,7 +868,7 @@
       "unknown-item-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 0
+       "ms": 1
       },
       "cart-starts-empty": {
        "held": true,
@@ -1005,17 +883,139 @@
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "sold-out-not-listed": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
+       "held": false,
+       "detail": "step 1: length is 5, expected 4",
+       "ms": 1
       },
       "product-page": {
        "held": true,
        "detail": "ok",
+       "ms": 4
+      }
+     }
+    },
+    "combined": {
+     "sha": "d687f5fd2afa",
+     "startMs": 883,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 244
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 215
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 14
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "sold-out-not-listed": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "product-page": {
+       "held": false,
+       "detail": "step 1: GET /api/products/honey returned 404, expected 200",
+       "ms": 1
+      }
+     }
+    },
+    "resolved": {
+     "sha": "15af96746202",
+     "startMs": 880,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 242
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 213
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 12
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
        "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "sold-out-not-listed": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "product-page": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
       }
      }
     }
@@ -1034,7 +1034,7 @@
     "product-page on A": {
      "held": false,
      "detail": "step 1: GET /api/products/honey returned 404, expected 200",
-     "ms": 3
+     "ms": 1
     },
     "sold-out-not-listed on B": {
      "held": false,
@@ -1057,11 +1057,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.5,
+     "seconds": 1.4,
      "landed": true
     },
     "b": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [
       {
        "id": "product-page",
@@ -1073,21 +1073,21 @@
     "bounces": [
      {
       "why": "failed product-page",
-      "seconds": 1.2
+      "seconds": 1.4
      }
     ],
     "fix": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
-    "detectSeconds": 1.2,
-    "resolveSeconds": 1.3,
+    "detectSeconds": 1.4,
+    "resolveSeconds": 1.4,
     "delivered": "the resolution",
     "broken": [],
     "interventions": 1
    },
-   "seconds": 6.7
+   "seconds": 6.3
   },
   {
    "id": "limit-lost-in-repair",
@@ -1195,7 +1195,7 @@
     "conflicted": [
      "src/cart.ts"
     ],
-    "seconds": 0.04,
+    "seconds": 0.044,
     "repaired": "seeded lossy repair: git merge -X theirs (B's side of each conflicting hunk)"
    },
    "repair": {
@@ -1307,28 +1307,28 @@
    },
    "trees": {
     "a": {
-     "sha": "7da000717fed",
-     "startMs": 806,
+     "sha": "b6078000884c",
+     "startMs": 880,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 224
+       "ms": 237
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 200
+       "ms": 210
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 4
       },
       "vat-is-a-quarter": {
        "held": true,
@@ -1343,22 +1343,22 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 9
+       "ms": 6
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 8
+       "ms": 4
       },
       "line-limit": {
        "held": true,
        "detail": "ok",
-       "ms": 8
+       "ms": 6
       },
       "stock-limit": {
        "held": false,
@@ -1368,23 +1368,23 @@
      }
     },
     "b": {
-     "sha": "76cae3900770",
-     "startMs": 774,
+     "sha": "b2462fe9cafd",
+     "startMs": 880,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 238
+       "ms": 250
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 202
+       "ms": 221
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 2
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -1404,7 +1404,7 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
@@ -1414,139 +1414,139 @@
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 5
-      },
-      "line-limit": {
-       "held": false,
-       "detail": "step 1: POST /api/cart returned 200, expected 400",
-       "ms": 4
-      },
-      "stock-limit": {
-       "held": true,
-       "detail": "ok",
-       "ms": 9
-      }
-     }
-    },
-    "combined": {
-     "sha": "a525c0771d00",
-     "startMs": 772,
-     "results": {
-      "code-typechecks": {
-       "held": true,
-       "detail": "ok",
-       "ms": 225
-      },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 213
-      },
-      "shop-page-lists-prices": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "one-unit-at-list-price": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "vat-is-a-quarter": {
-       "held": true,
-       "detail": "ok",
-       "ms": 10
-      },
-      "unknown-item-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 1
-      },
-      "cart-starts-empty": {
-       "held": true,
-       "detail": "ok",
-       "ms": 3
-      },
-      "cart-keeps-lines": {
-       "held": true,
-       "detail": "ok",
-       "ms": 9
-      },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
        "ms": 4
       },
       "line-limit": {
        "held": false,
        "detail": "step 1: POST /api/cart returned 200, expected 400",
-       "ms": 4
-      },
-      "stock-limit": {
-       "held": true,
-       "detail": "ok",
-       "ms": 6
-      }
-     }
-    },
-    "resolved": {
-     "sha": "796687cdbf20",
-     "startMs": 760,
-     "results": {
-      "code-typechecks": {
-       "held": true,
-       "detail": "ok",
-       "ms": 225
-      },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 203
-      },
-      "shop-page-lists-prices": {
-       "held": true,
-       "detail": "ok",
        "ms": 3
-      },
-      "one-unit-at-list-price": {
-       "held": true,
-       "detail": "ok",
-       "ms": 3
-      },
-      "vat-is-a-quarter": {
-       "held": true,
-       "detail": "ok",
-       "ms": 10
-      },
-      "unknown-item-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 1
-      },
-      "cart-starts-empty": {
-       "held": true,
-       "detail": "ok",
-       "ms": 3
-      },
-      "cart-keeps-lines": {
-       "held": true,
-       "detail": "ok",
-       "ms": 5
-      },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "line-limit": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
       },
       "stock-limit": {
        "held": true,
        "detail": "ok",
        "ms": 8
+      }
+     }
+    },
+    "combined": {
+     "sha": "8c9ed0024d2a",
+     "startMs": 879,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 245
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 214
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 8
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "line-limit": {
+       "held": false,
+       "detail": "step 1: POST /api/cart returned 200, expected 400",
+       "ms": 3
+      },
+      "stock-limit": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      }
+     }
+    },
+    "resolved": {
+     "sha": "2750ff6eb36c",
+     "startMs": 943,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 241
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 212
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 12
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
+      },
+      "line-limit": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "stock-limit": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
       }
      }
     }
@@ -1570,7 +1570,7 @@
     "line-limit on B": {
      "held": false,
      "detail": "step 1: POST /api/cart returned 200, expected 400",
-     "ms": 4
+     "ms": 3
     }
    },
    "notes": [],
@@ -1590,11 +1590,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "landed": true
     },
     "b": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "failing": [
       {
        "id": "line-limit",
@@ -1610,21 +1610,21 @@
      },
      {
       "why": "failed line-limit",
-      "seconds": 1.3
+      "seconds": 1.4
      }
     ],
     "fix": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
-    "detectSeconds": 1.3,
-    "resolveSeconds": 1.2,
+    "detectSeconds": 1.4,
+    "resolveSeconds": 1.4,
     "delivered": "the resolution",
     "broken": [],
     "interventions": 2
    },
-   "seconds": 5.8
+   "seconds": 6.4
   },
   {
    "id": "basket-shape",
@@ -1719,7 +1719,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.024
+    "seconds": 0.028
    },
    "expect": {
     "combinedFails": [
@@ -1813,84 +1813,23 @@
    },
    "trees": {
     "a": {
-     "sha": "75d69285b55e",
-     "startMs": 760,
+     "sha": "619c4d1beffe",
+     "startMs": 874,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 221
+       "ms": 238
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 199
+       "ms": 212
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
-      },
-      "one-unit-at-list-price": {
-       "held": true,
-       "detail": "ok",
        "ms": 4
-      },
-      "vat-is-a-quarter": {
-       "held": true,
-       "detail": "ok",
-       "ms": 10
-      },
-      "unknown-item-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 1
-      },
-      "cart-starts-empty": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      },
-      "cart-keeps-lines": {
-       "held": true,
-       "detail": "ok",
-       "ms": 5
-      },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "gift-note": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "take-one-out": {
-       "held": false,
-       "detail": "step 2: POST /api/cart/eggs/take-one returned 404, expected 200",
-       "ms": 5
-      }
-     }
-    },
-    "b": {
-     "sha": "a2e553305842",
-     "startMs": 761,
-     "results": {
-      "code-typechecks": {
-       "held": true,
-       "detail": "ok",
-       "ms": 228
-      },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 200
-      },
-      "shop-page-lists-prices": {
-       "held": true,
-       "detail": "ok",
-       "ms": 6
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -1915,7 +1854,68 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "gift-note": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "take-one-out": {
+       "held": false,
+       "detail": "step 2: POST /api/cart/eggs/take-one returned 404, expected 200",
+       "ms": 7
+      }
+     }
+    },
+    "b": {
+     "sha": "f8a6a4baa95a",
+     "startMs": 889,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 252
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 207
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 10
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 8
       },
       "unknown-product-refused": {
        "held": true,
@@ -1935,33 +1935,33 @@
      }
     },
     "combined": {
-     "sha": "9a9aa7878a7b",
-     "startMs": 759,
+     "sha": "86979a41e9d2",
+     "startMs": 881,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 221
+       "ms": 248
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 199
+       "ms": 205
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 4
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 13
+       "ms": 11
       },
       "unknown-item-refused": {
        "held": true,
@@ -1971,12 +1971,12 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 7
+       "ms": 6
       },
       "unknown-product-refused": {
        "held": true,
@@ -1991,23 +1991,23 @@
       "take-one-out": {
        "held": false,
        "detail": "step 3: lines.0.qty is undefined, expected 2",
-       "ms": 6
+       "ms": 7
       }
      }
     },
     "resolved": {
-     "sha": "8f2453adfc53",
-     "startMs": 760,
+     "sha": "218d8bae1af9",
+     "startMs": 884,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 227
+       "ms": 245
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 198
+       "ms": 207
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -2022,12 +2022,12 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 10
+       "ms": 11
       },
       "unknown-item-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 0
+       "ms": 1
       },
       "cart-starts-empty": {
        "held": true,
@@ -2037,22 +2037,22 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 7
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "gift-note": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 3
       },
       "take-one-out": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 7
       }
      }
     }
@@ -2071,7 +2071,7 @@
     "take-one-out on A": {
      "held": false,
      "detail": "step 2: POST /api/cart/eggs/take-one returned 404, expected 200",
-     "ms": 5
+     "ms": 7
     },
     "gift-note on B": {
      "held": false,
@@ -2094,11 +2094,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "landed": true
     },
     "b": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [
       {
        "id": "take-one-out",
@@ -2110,21 +2110,21 @@
     "bounces": [
      {
       "why": "failed take-one-out",
-      "seconds": 1.2
+      "seconds": 1.4
      }
     ],
     "fix": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
-    "detectSeconds": 1.2,
-    "resolveSeconds": 1.2,
+    "detectSeconds": 1.4,
+    "resolveSeconds": 1.4,
     "delivered": "the resolution",
     "broken": [],
     "interventions": 1
    },
-   "seconds": 5.6
+   "seconds": 6.3
   },
   {
    "id": "dollars-and-cents",
@@ -2198,7 +2198,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.022
+    "seconds": 0.027
    },
    "expect": {
     "combinedFails": [
@@ -2270,18 +2270,18 @@
    },
    "trees": {
     "a": {
-     "sha": "867e466693b6",
-     "startMs": 863,
+     "sha": "f7c72ba60a8c",
+     "startMs": 890,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 218
+       "ms": 229
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 203
+       "ms": 211
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -2296,17 +2296,17 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 13
+       "ms": 14
       },
       "unknown-item-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 1
       },
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
@@ -2331,18 +2331,18 @@
      }
     },
     "b": {
-     "sha": "ab79597dd3e3",
-     "startMs": 785,
+     "sha": "f7fba7a98441",
+     "startMs": 872,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 259
+       "ms": 244
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 218
+       "ms": 206
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -2377,7 +2377,7 @@
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 8
       },
       "prices-in-dollars": {
        "held": false,
@@ -2387,28 +2387,28 @@
       "till-price-list": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 2
       }
      }
     },
     "combined": {
-     "sha": "6edcc1efd1d2",
-     "startMs": 800,
+     "sha": "715fe08d5657",
+     "startMs": 874,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 227
+       "ms": 247
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 206
+       "ms": 209
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 4
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -2433,7 +2433,7 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 7
+       "ms": 8
       },
       "unknown-product-refused": {
        "held": true,
@@ -2453,13 +2453,13 @@
      }
     },
     "resolved": {
-     "sha": "ac40f533d081",
-     "startMs": 776,
+     "sha": "470267a030e6",
+     "startMs": 876,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 227
+       "ms": 246
       },
       "code-lints": {
        "held": true,
@@ -2479,7 +2479,7 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 9
+       "ms": 11
       },
       "unknown-item-refused": {
        "held": true,
@@ -2494,7 +2494,7 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 6
       },
       "unknown-product-refused": {
        "held": true,
@@ -2509,7 +2509,7 @@
       "till-price-list": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       }
      }
     }
@@ -2551,11 +2551,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "landed": true
     },
     "b": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "failing": [
       {
        "id": "till-price-list",
@@ -2567,21 +2567,21 @@
     "bounces": [
      {
       "why": "failed till-price-list",
-      "seconds": 1.3
+      "seconds": 1.4
      }
     ],
     "fix": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
-    "detectSeconds": 1.3,
-    "resolveSeconds": 1.2,
+    "detectSeconds": 1.4,
+    "resolveSeconds": 1.4,
     "delivered": "the resolution",
     "broken": [],
     "interventions": 1
    },
-   "seconds": 5.8
+   "seconds": 6.2
   },
   {
    "id": "shared-threshold",
@@ -2645,7 +2645,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.022
+    "seconds": 0.025
    },
    "expect": {
     "combinedFails": [
@@ -2710,84 +2710,23 @@
    },
    "trees": {
     "a": {
-     "sha": "e895642e7a33",
-     "startMs": 762,
+     "sha": "cd924eb61576",
+     "startMs": 1017,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 219
+       "ms": 235
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 197
+       "ms": 208
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
        "ms": 3
-      },
-      "one-unit-at-list-price": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "vat-is-a-quarter": {
-       "held": true,
-       "detail": "ok",
-       "ms": 10
-      },
-      "unknown-item-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 1
-      },
-      "cart-starts-empty": {
-       "held": true,
-       "detail": "ok",
-       "ms": 3
-      },
-      "cart-keeps-lines": {
-       "held": true,
-       "detail": "ok",
-       "ms": 5
-      },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "warn-at-ten": {
-       "held": true,
-       "detail": "ok",
-       "ms": 1
-      },
-      "restock-list": {
-       "held": false,
-       "detail": "step 1: GET /api/restock returned 404, expected 200",
-       "ms": 1
-      }
-     }
-    },
-    "b": {
-     "sha": "ab9903b996e9",
-     "startMs": 818,
-     "results": {
-      "code-typechecks": {
-       "held": true,
-       "detail": "ok",
-       "ms": 238
-      },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 205
-      },
-      "shop-page-lists-prices": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -2817,7 +2756,68 @@
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
+       "ms": 5
+      },
+      "warn-at-ten": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "restock-list": {
+       "held": false,
+       "detail": "step 1: GET /api/restock returned 404, expected 200",
+       "ms": 1
+      }
+     }
+    },
+    "b": {
+     "sha": "385ee06ef9fd",
+     "startMs": 879,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 252
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 208
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
        "ms": 4
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 14
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
       },
       "warn-at-ten": {
        "held": false,
@@ -2832,18 +2832,18 @@
      }
     },
     "combined": {
-     "sha": "88160f626aa4",
-     "startMs": 760,
+     "sha": "ebd578b55d0e",
+     "startMs": 868,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 230
+       "ms": 234
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 218
+       "ms": 213
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -2853,12 +2853,12 @@
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 11
+       "ms": 10
       },
       "unknown-item-refused": {
        "held": true,
@@ -2893,28 +2893,28 @@
      }
     },
     "resolved": {
-     "sha": "4e0f3b98e169",
-     "startMs": 764,
+     "sha": "1ced0586a197",
+     "startMs": 882,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 224
+       "ms": 241
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 204
+       "ms": 209
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "vat-is-a-quarter": {
        "held": true,
@@ -2929,7 +2929,7 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
@@ -2939,7 +2939,7 @@
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 5
       },
       "warn-at-ten": {
        "held": true,
@@ -2949,7 +2949,7 @@
       "restock-list": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 1
       }
      }
     }
@@ -2991,11 +2991,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.2,
+     "seconds": 1.5,
      "landed": true
     },
     "b": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "failing": [
       {
        "id": "restock-list",
@@ -3007,21 +3007,21 @@
     "bounces": [
      {
       "why": "failed restock-list",
-      "seconds": 1.3
+      "seconds": 1.4
      }
     ],
     "fix": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
-    "detectSeconds": 1.3,
-    "resolveSeconds": 1.2,
+    "detectSeconds": 1.4,
+    "resolveSeconds": 1.4,
     "delivered": "the resolution",
     "broken": [],
     "interventions": 1
    },
-   "seconds": 5.7
+   "seconds": 6.3
   },
   {
    "id": "strict-fields",
@@ -3108,7 +3108,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.024
+    "seconds": 0.025
    },
    "expect": {
     "combinedFails": [
@@ -3195,43 +3195,43 @@
    },
    "trees": {
     "a": {
-     "sha": "f820ea055f34",
-     "startMs": 759,
+     "sha": "8d31dbb14e46",
+     "startMs": 898,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 222
+       "ms": 240
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 199
+       "ms": 240
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 2
       },
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 10
+       "ms": 11
       },
       "unknown-item-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 0
+       "ms": 1
       },
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 4
       },
       "cart-keeps-lines": {
        "held": true,
@@ -3241,53 +3241,53 @@
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "no-unknown-fields": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "substitutes": {
        "held": false,
        "detail": "step 1: POST /api/cart returned 400, expected 200",
-       "ms": 1
+       "ms": 2
       }
      }
     },
     "b": {
-     "sha": "d8d2d6b3343a",
-     "startMs": 768,
+     "sha": "324dc55a70ef",
+     "startMs": 883,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 233
+       "ms": 261
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 204
+       "ms": 215
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 8
       },
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 12
+       "ms": 5
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 10
+       "ms": 12
       },
       "unknown-item-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 1
+       "ms": 2
       },
       "cart-starts-empty": {
        "held": true,
@@ -3297,7 +3297,7 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 8
       },
       "unknown-product-refused": {
        "held": true,
@@ -3307,33 +3307,33 @@
       "no-unknown-fields": {
        "held": false,
        "detail": "step 1: POST /api/cart returned 200, expected 400",
-       "ms": 2
+       "ms": 5
       },
       "substitutes": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       }
      }
     },
     "combined": {
-     "sha": "b3ad1d049239",
-     "startMs": 758,
+     "sha": "429f694d341b",
+     "startMs": 879,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 224
+       "ms": 253
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 203
+       "ms": 209
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 4
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -3343,7 +3343,7 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 10
+       "ms": 12
       },
       "unknown-item-refused": {
        "held": true,
@@ -3353,12 +3353,12 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 5
       },
       "unknown-product-refused": {
        "held": true,
@@ -3368,7 +3368,7 @@
       "no-unknown-fields": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "substitutes": {
        "held": false,
@@ -3378,18 +3378,18 @@
      }
     },
     "resolved": {
-     "sha": "e226aef16c93",
-     "startMs": 761,
+     "sha": "3a5b27533b55",
+     "startMs": 872,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 228
+       "ms": 246
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 202
+       "ms": 208
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -3404,7 +3404,7 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 10
+       "ms": 13
       },
       "unknown-item-refused": {
        "held": true,
@@ -3419,22 +3419,22 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 6
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 6
       },
       "no-unknown-fields": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 4
       },
       "substitutes": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 3
       }
      }
     }
@@ -3453,12 +3453,12 @@
     "substitutes on A": {
      "held": false,
      "detail": "step 1: POST /api/cart returned 400, expected 200",
-     "ms": 1
+     "ms": 2
     },
     "no-unknown-fields on B": {
      "held": false,
      "detail": "step 1: POST /api/cart returned 200, expected 400",
-     "ms": 2
+     "ms": 5
     }
    },
    "notes": [],
@@ -3476,11 +3476,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "landed": true
     },
     "b": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [
       {
        "id": "substitutes",
@@ -3492,21 +3492,21 @@
     "bounces": [
      {
       "why": "failed substitutes",
-      "seconds": 1.2
+      "seconds": 1.4
      }
     ],
     "fix": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
-    "detectSeconds": 1.2,
-    "resolveSeconds": 1.2,
+    "detectSeconds": 1.4,
+    "resolveSeconds": 1.4,
     "delivered": "the resolution",
     "broken": [],
     "interventions": 1
    },
-   "seconds": 5.6
+   "seconds": 6.3
   },
   {
    "id": "double-discount",
@@ -3563,7 +3563,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.022
+    "seconds": 0.027
    },
    "expect": {
     "combinedFails": [
@@ -3650,23 +3650,79 @@
    },
    "trees": {
     "a": {
-     "sha": "4ff8578b117b",
-     "startMs": 761,
+     "sha": "5333bccfc1c5",
+     "startMs": 866,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 220
+       "ms": 229
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 203
+       "ms": 205
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
+       "ms": 3
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 15
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
        "ms": 2
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 7
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "bulk-discount": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      }
+     }
+    },
+    "b": {
+     "sha": "fbf4e72e2681",
+     "startMs": 867,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 254
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 209
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -3691,89 +3747,33 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 8
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "bulk-discount": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      }
-     }
-    },
-    "b": {
-     "sha": "745259b7595b",
-     "startMs": 761,
-     "results": {
-      "code-typechecks": {
-       "held": true,
-       "detail": "ok",
-       "ms": 229
-      },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 201
-      },
-      "shop-page-lists-prices": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      },
-      "one-unit-at-list-price": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "vat-is-a-quarter": {
-       "held": true,
-       "detail": "ok",
-       "ms": 11
-      },
-      "unknown-item-refused": {
        "held": true,
        "detail": "ok",
        "ms": 1
-      },
-      "cart-starts-empty": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      },
-      "cart-keeps-lines": {
-       "held": true,
-       "detail": "ok",
-       "ms": 6
-      },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "bulk-discount": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
       }
      }
     },
     "combined": {
-     "sha": "533a5fa24940",
-     "startMs": 1013,
+     "sha": "c2c96afdd7cb",
+     "startMs": 864,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 235
+       "ms": 246
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 209
+       "ms": 203
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -3788,7 +3788,7 @@
       "vat-is-a-quarter": {
        "held": false,
        "detail": "sample 3, step 2: vat is 1069, expected 1069.25 (with qty = 11, item = greens)",
-       "ms": 8
+       "ms": 6
       },
       "unknown-item-refused": {
        "held": true,
@@ -3818,33 +3818,33 @@
      }
     },
     "resolved": {
-     "sha": "6be079344c1d",
-     "startMs": 781,
+     "sha": "c85f49d906d7",
+     "startMs": 865,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 236
+       "ms": 248
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 199
+       "ms": 204
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 2
       },
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 5
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 10
+       "ms": 11
       },
       "unknown-item-refused": {
        "held": true,
@@ -3859,17 +3859,17 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 7
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "bulk-discount": {
        "held": true,
        "detail": "ok",
-       "ms": 1
+       "ms": 2
       }
      }
     }
@@ -3897,7 +3897,7 @@
     "bulk-discount on B": {
      "held": true,
      "detail": "ok",
-     "ms": 2
+     "ms": 1
     }
    },
    "notes": [],
@@ -3916,11 +3916,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.2,
+     "seconds": 1.3,
      "landed": true
     },
     "b": {
-     "seconds": 1.5,
+     "seconds": 1.4,
      "failing": [
       {
        "id": "vat-is-a-quarter",
@@ -3936,21 +3936,21 @@
     "bounces": [
      {
       "why": "failed vat-is-a-quarter, bulk-discount",
-      "seconds": 1.5
+      "seconds": 1.4
      }
     ],
     "fix": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
-    "detectSeconds": 1.5,
-    "resolveSeconds": 1.2,
+    "detectSeconds": 1.4,
+    "resolveSeconds": 1.4,
     "delivered": "the resolution",
     "broken": [],
     "interventions": 1
    },
-   "seconds": 5.9
+   "seconds": 6.1
   },
   {
    "id": "control-vat-per-line",
@@ -4027,7 +4027,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.024
+    "seconds": 0.025
    },
    "expect": {
     "combinedFails": []
@@ -4097,74 +4097,13 @@
    },
    "trees": {
     "a": {
-     "sha": "b41fbb89758c",
-     "startMs": 772,
+     "sha": "62f986a8be33",
+     "startMs": 856,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 221
-      },
-      "code-lints": {
-       "held": true,
-       "detail": "ok",
-       "ms": 197
-      },
-      "shop-page-lists-prices": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      },
-      "one-unit-at-list-price": {
-       "held": true,
-       "detail": "ok",
-       "ms": 5
-      },
-      "vat-is-a-quarter": {
-       "held": true,
-       "detail": "ok",
-       "ms": 9
-      },
-      "unknown-item-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      },
-      "cart-starts-empty": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "cart-keeps-lines": {
-       "held": true,
-       "detail": "ok",
-       "ms": 7
-      },
-      "unknown-product-refused": {
-       "held": true,
-       "detail": "ok",
-       "ms": 4
-      },
-      "bulk-discount": {
-       "held": true,
-       "detail": "ok",
-       "ms": 2
-      },
-      "vat-per-line": {
-       "held": false,
-       "detail": "step 1: lines.0.vat is undefined, expected 240",
-       "ms": 1
-      }
-     }
-    },
-    "b": {
-     "sha": "e19bc7adc2fd",
-     "startMs": 770,
-     "results": {
-      "code-typechecks": {
-       "held": true,
-       "detail": "ok",
-       "ms": 240
+       "ms": 226
       },
       "code-lints": {
        "held": true,
@@ -4174,7 +4113,7 @@
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -4189,7 +4128,7 @@
       "unknown-item-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 0
+       "ms": 1
       },
       "cart-starts-empty": {
        "held": true,
@@ -4207,35 +4146,35 @@
        "ms": 4
       },
       "bulk-discount": {
-       "held": false,
-       "detail": "step 1: subtotal is 4000, expected 3600",
-       "ms": 1
-      },
-      "vat-per-line": {
        "held": true,
        "detail": "ok",
+       "ms": 6
+      },
+      "vat-per-line": {
+       "held": false,
+       "detail": "step 1: lines.0.vat is undefined, expected 240",
        "ms": 1
       }
      }
     },
-    "combined": {
-     "sha": "cbfd2ad3f16d",
-     "startMs": 764,
+    "b": {
+     "sha": "f1e9f9d97d44",
+     "startMs": 874,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 221
+       "ms": 245
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 199
+       "ms": 207
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 5
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -4245,7 +4184,7 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 17
+       "ms": 11
       },
       "unknown-item-refused": {
        "held": true,
@@ -4260,12 +4199,73 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 6
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
        "ms": 4
+      },
+      "bulk-discount": {
+       "held": false,
+       "detail": "step 1: subtotal is 4000, expected 3600",
+       "ms": 2
+      },
+      "vat-per-line": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      }
+     }
+    },
+    "combined": {
+     "sha": "bd687a206ba2",
+     "startMs": 863,
+     "results": {
+      "code-typechecks": {
+       "held": true,
+       "detail": "ok",
+       "ms": 248
+      },
+      "code-lints": {
+       "held": true,
+       "detail": "ok",
+       "ms": 206
+      },
+      "shop-page-lists-prices": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "one-unit-at-list-price": {
+       "held": true,
+       "detail": "ok",
+       "ms": 4
+      },
+      "vat-is-a-quarter": {
+       "held": true,
+       "detail": "ok",
+       "ms": 11
+      },
+      "unknown-item-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 1
+      },
+      "cart-starts-empty": {
+       "held": true,
+       "detail": "ok",
+       "ms": 2
+      },
+      "cart-keeps-lines": {
+       "held": true,
+       "detail": "ok",
+       "ms": 6
+      },
+      "unknown-product-refused": {
+       "held": true,
+       "detail": "ok",
+       "ms": 5
       },
       "bulk-discount": {
        "held": true,
@@ -4275,7 +4275,7 @@
       "vat-per-line": {
        "held": true,
        "detail": "ok",
-       "ms": 0
+       "ms": 1
       }
      }
     }
@@ -4294,7 +4294,7 @@
     "bulk-discount on B": {
      "held": false,
      "detail": "step 1: subtotal is 4000, expected 3600",
-     "ms": 1
+     "ms": 2
     }
    },
    "notes": [],
@@ -4310,11 +4310,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.2,
+     "seconds": 1.3,
      "landed": true
     },
     "b": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
@@ -4326,7 +4326,7 @@
     "broken": [],
     "interventions": 0
    },
-   "seconds": 4.2
+   "seconds": 4.6
   },
   {
    "id": "control-basket-shape",
@@ -4421,7 +4421,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.022
+    "seconds": 0.027
    },
    "expect": {
     "combinedFails": []
@@ -4508,18 +4508,18 @@
    },
    "trees": {
     "a": {
-     "sha": "d16abaf534b1",
-     "startMs": 1012,
+     "sha": "6e93c8426a1c",
+     "startMs": 895,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 214
+       "ms": 231
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 223
+       "ms": 211
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -4529,12 +4529,12 @@
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 4
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 12
+       "ms": 10
       },
       "unknown-item-refused": {
        "held": true,
@@ -4549,38 +4549,38 @@
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 8
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "gift-note": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 5
       },
       "empty-basket": {
        "held": false,
        "detail": "step 2: DELETE /api/cart returned 404, expected 200",
-       "ms": 5
+       "ms": 3
       }
      }
     },
     "b": {
-     "sha": "6d49134f8e8e",
-     "startMs": 760,
+     "sha": "95f2dd4ea78f",
+     "startMs": 876,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 218
+       "ms": 243
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 197
+       "ms": 214
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -4590,12 +4590,12 @@
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 5
+       "ms": 4
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 13
+       "ms": 11
       },
       "unknown-item-refused": {
        "held": true,
@@ -4620,7 +4620,7 @@
       "gift-note": {
        "held": false,
        "detail": "step 2: lines.0.note is undefined, expected \"For Ada\"",
-       "ms": 4
+       "ms": 5
       },
       "empty-basket": {
        "held": true,
@@ -4630,63 +4630,63 @@
      }
     },
     "combined": {
-     "sha": "cd323174a763",
-     "startMs": 761,
+     "sha": "b200513c40d3",
+     "startMs": 883,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 222
+       "ms": 241
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 195
+       "ms": 205
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 12
+       "ms": 10
       },
       "unknown-item-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 1
       },
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 8
+       "ms": 4
       },
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 11
+       "ms": 6
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 4
       },
       "gift-note": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 4
       },
       "empty-basket": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 9
       }
      }
     }
@@ -4700,12 +4700,12 @@
     "empty-basket on A": {
      "held": false,
      "detail": "step 2: DELETE /api/cart returned 404, expected 200",
-     "ms": 5
+     "ms": 3
     },
     "gift-note on B": {
      "held": false,
      "detail": "step 2: lines.0.note is undefined, expected \"For Ada\"",
-     "ms": 4
+     "ms": 5
     }
    },
    "notes": [],
@@ -4721,11 +4721,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.5,
+     "seconds": 1.4,
      "landed": true
     },
     "b": {
-     "seconds": 1.3,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
@@ -4737,7 +4737,7 @@
     "broken": [],
     "interventions": 0
    },
-   "seconds": 4.5
+   "seconds": 4.7
   },
   {
    "id": "control-threshold",
@@ -4800,7 +4800,7 @@
    "merge": {
     "clean": true,
     "conflicted": [],
-    "seconds": 0.021
+    "seconds": 0.026
    },
    "expect": {
     "combinedFails": []
@@ -4857,23 +4857,23 @@
    },
    "trees": {
     "a": {
-     "sha": "501fc95afb21",
-     "startMs": 759,
+     "sha": "ee44d80d4387",
+     "startMs": 872,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 215
+       "ms": 233
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 204
+       "ms": 205
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 4
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -4883,17 +4883,17 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 9
+       "ms": 10
       },
       "unknown-item-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 1
+       "ms": 6
       },
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
@@ -4903,7 +4903,7 @@
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 4
+       "ms": 5
       },
       "warn-at-ten": {
        "held": true,
@@ -4918,18 +4918,18 @@
      }
     },
     "b": {
-     "sha": "30c0b6915ae9",
-     "startMs": 759,
+     "sha": "9f89adfd7e0d",
+     "startMs": 876,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 219
+       "ms": 237
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 198
+       "ms": 206
       },
       "shop-page-lists-prices": {
        "held": true,
@@ -4939,7 +4939,7 @@
       "one-unit-at-list-price": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 4
       },
       "vat-is-a-quarter": {
        "held": true,
@@ -4954,17 +4954,17 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
        "detail": "ok",
-       "ms": 6
+       "ms": 7
       },
       "unknown-product-refused": {
        "held": true,
        "detail": "ok",
-       "ms": 3
+       "ms": 4
       },
       "warn-at-ten": {
        "held": false,
@@ -4979,23 +4979,23 @@
      }
     },
     "combined": {
-     "sha": "078f3cd709b8",
-     "startMs": 761,
+     "sha": "04098bd293a7",
+     "startMs": 880,
      "results": {
       "code-typechecks": {
        "held": true,
        "detail": "ok",
-       "ms": 221
+       "ms": 246
       },
       "code-lints": {
        "held": true,
        "detail": "ok",
-       "ms": 195
+       "ms": 208
       },
       "shop-page-lists-prices": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 4
       },
       "one-unit-at-list-price": {
        "held": true,
@@ -5005,7 +5005,7 @@
       "vat-is-a-quarter": {
        "held": true,
        "detail": "ok",
-       "ms": 9
+       "ms": 10
       },
       "unknown-item-refused": {
        "held": true,
@@ -5015,7 +5015,7 @@
       "cart-starts-empty": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 3
       },
       "cart-keeps-lines": {
        "held": true,
@@ -5030,12 +5030,12 @@
       "warn-at-ten": {
        "held": true,
        "detail": "ok",
-       "ms": 1
+       "ms": 2
       },
       "low-stock-flag": {
        "held": true,
        "detail": "ok",
-       "ms": 2
+       "ms": 1
       }
      }
     }
@@ -5070,11 +5070,11 @@
    },
    "queue": {
     "a": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "landed": true
     },
     "b": {
-     "seconds": 1.2,
+     "seconds": 1.4,
      "failing": [],
      "landed": true
     },
@@ -5086,7 +5086,7 @@
     "broken": [],
     "interventions": 0
    },
-   "seconds": 4.1
+   "seconds": 4.7
   }
  ]
 }
