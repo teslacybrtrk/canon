@@ -4,7 +4,7 @@
 
 Agents propose changes with plain Git. Protected facts (plain sentences, each with an automated check) govern what
 integrates, judged on the combined code on a live preview of every commit. Release evidence decides what reaches
-production. Built on Cloudflare Workers, Artifacts, Durable Objects and Workflows.
+production. Built on Cloudflare Workers, Artifacts, Durable Objects, Workflows and Containers.
 
 | | |
 |---|---|
@@ -14,7 +14,7 @@ production. Built on Cloudflare Workers, Artifacts, Durable Objects and Workflow
 | **Check the claims** | The [evidence map](#evidence-map): each claim in this README with its record, test or reproduction command. [Designed conflict cases](docs/conflicts.md): clean Git merges that break a requirement, plain Git against a merge queue with the same checks and Canon. |
 | **Run your own** | Needs a Cloudflare Workers Paid account with Containers, R2 and Artifacts (open beta), Node 22.18+ and `npx wrangler login`. Then three commands: `git clone https://github.com/teslacybrtrk/canon && cd canon`, `./scripts/doctor.sh` (checks all of that, changes nothing), `./scripts/setup.sh` (asks for your account, deploys the judge, makes the keys). [Run it](#run-it), [docs/USING.md](docs/USING.md). |
 
-![The feature ledger of a project four autonomous agents worked on: four features healthy in production, a revision of a locked rule waiting for a person, a schema change still being fixed after two releases were held back](docs/img/ledger-final.png)
+![The feature ledger of the run on the submitted judge, one feature opened: its trail shows agent-2's order discount failing the bulk-discount rule on the combined code (the discounts stacked), agent-2's own fix, the judge carrying it across two canon moves, the release with its rollback rehearsal passed, and production holding; one of two deliberate breaks went unnoticed, so it says partially verified](docs/img/ledger-trio2.png)
 
 **What's different**
 
@@ -132,6 +132,7 @@ version (Cloudflare Worker version) that produced it and the commit it was deplo
 | [split](https://canon.rodeo/ledger?p=split) (the first run on the build/publish split, scripted) | `c362c14e`, Oct 14 02:38 UTC | the working tree committed as `b571d04` |
 | [trio](https://canon.rodeo/ledger?p=trio) (the first attempt at the final run; it surfaced the retried-rehearsal bug) | `94ad0669`, Oct 14 03:13 UTC | `568e829` |
 | **[trio2](https://canon.rodeo/ledger?p=trio2) (the autonomous run on the submitted judge) and the designed conflict cases on deployed Canon ([docs/conflicts.md](docs/conflicts.md))** | **`00c761d1`, Oct 14 03:25 UTC** | **`dcac7ae`** |
+| Everything served since Oct 14 04:31 UTC: the same judging as `00c761d1`; the ledger and replay display, and the address the hourly production check uses by default (now the Worker's own workers.dev address) | `b6147630`, then `fde80ebe`, `ff6d29db`, **`c20fcaf7`** (Oct 14 04:39 UTC) | `b897fdd`, `2a35c07`, `4d98cff`, **`8048f50`** |
 | earlier records (Oct 12–13: farmstand, rodeo, evid #2–3, rehearse #2–12, canary) | earlier versions | before `b9f3a2c` |
 
 Two rules changed after the convoy run, so a stateless release judged today would differ: a zero-comparison

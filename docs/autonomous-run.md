@@ -55,6 +55,12 @@ time limit (`ONLY=stall-hours ./agents/trio.sh`). That second session claimed th
 wrote the same unmigrated change, which was held again, and ended its session meaning to check back later, which a
 non-interactive session can't. Nobody accepted, declined or edited anything.
 
+**A setup gap, found afterwards:** trio2's canon file named no production URL, so the judge's hourly production check
+went to `trio2.canon.rodeo`, which doesn't exist (HTTP 530). The releases themselves went to the right Worker
+(`trio2.canon-rodeo.workers.dev`, which serves them); the judge read the 530s as "the app wasn't reached", marked the
+release unverified after ten minutes and rolled nothing back, as designed. The default address is now the Worker's own
+workers.dev address (commit `2a35c07`, a configuration change), so later checks reach it.
+
 **What it doesn't show:** one run, three agents, a scenario designed to interact. Stall hours is still unresolved: no
 agent wrote the migration after a hold (the Oct 13 run ended the same way). The combined failure's diagnosis says "the
 code" rather than "two changes that fail together", because agent-2's first verdict came back "behind" (canon moved
