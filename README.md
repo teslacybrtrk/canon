@@ -105,7 +105,7 @@ change yourself, then 40 the Canon way.
 
 ## Evidence map
 
-**Submission: tag [`submission`](https://github.com/teslacybrtrk/canon/tree/submission)** (code revision `b7e5c7b`; the tagged commit only changes this line; earlier pins were `79ddce9`, `51f62c5`, `b2d97d8` and `4aea875`). Every claim in this README, with where to check it.
+**Submission: tag [`submission`](https://github.com/teslacybrtrk/canon/tree/submission)** (code revision `b6bc631`; the tagged commit only changes this line; earlier pins were `79ddce9`, `51f62c5`, `b2d97d8`, `4aea875` and `bd0669c`). Every claim in this README, with where to check it.
 Three kinds of execution are kept apart: **autonomous agents** (the Oct 12 run: Claude Code agents writing their own
 changes), **deployed scripted execution** (the real system on canon.rodeo driven by predefined patches under
 agent names: the convoy run and most live tests; the ones with a real Claude Code session say so), and the **browser simulation** (the demo). **Recorded** links are real
