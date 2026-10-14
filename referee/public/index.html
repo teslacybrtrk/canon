@@ -292,6 +292,9 @@
     .ride-text { margin-bottom: 18px; padding: 8px 12px 7px; }
     .ride-text b { font-size: 19px; }
   }
+  .drive-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+  .drive-alt { color: var(--ink-2, #b6c2d2); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+  .drive-alt:hover { color: var(--gold, #fdc86d); }
 </style>
 </head>
 <body>
@@ -419,7 +422,8 @@
   <div class="drive-card reveal">
     <div><p class="kicker">Demo · farmstand</p><h2>Be the maintainer. <em>Take the wheel.</em></h2>
       <p class="sub">A two-minute guided tour with three outcomes: overlapping changes settled on the combined code, a change that passes its preview but is held back on real data before release, and changes that land together with a record of what was checked. It runs in your browser on sample data, so nothing deploys; links marked recorded open real records.</p></div>
-    <a class="btn primary big" href="/demo">Test drive the next Git platform →</a>
+    <div class="drive-actions"><a class="btn primary big" href="/demo">Test drive the next Git platform →</a>
+      <a class="drive-alt" href="/ledger?p=final">Or inspect a real project: every feature from request to production →</a></div>
   </div>
 </section>
 

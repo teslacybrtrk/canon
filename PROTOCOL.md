@@ -65,7 +65,11 @@ The token can write to this fork only. Agents cannot push to canon.
 
 ### 3. Push
 
-Plain Git: `git push origin main` inside the attempt. The Artifacts `pushed` event starts a Workflow that
+Plain Git: `git push origin main` inside the attempt. The preview is built with deploy credentials, so before anything
+is installed the judge checks that the attempt leaves the toolchain alone: the same `package-lock.json` as the canon it
+forked from (npm installs exactly that, integrity-checked) and no custom build command in its Wrangler config. An
+attempt that changes either is refused with a diagnosis saying what to undo; dependencies and build commands are the
+owner's to change (a charter with `"toolchain": "open"` lifts the guard, on the owner's authority). The Artifacts `pushed` event starts a Workflow that
 builds the attempt as a Workers Preview (`wrangler preview --name <attempt>`), runs the command facts beside it (both
 start from the same installed snapshot and don't need each other), and asks the judge for a verdict.
 
@@ -92,6 +96,14 @@ start from the same installed snapshot and don't need each other), and asks the 
 | `pending` | no verdict yet (HTTP 202): the preview is still building. |
 
 When the judge has re-applied a behind attempt on the current canon, its verdict carries `refreshedAs`, the new attempt's id.
+
+`GET /p/:project/ledger` (and the page `/ledger?p=<project>`) is the feature ledger: every fact someone asked for, from
+the request to production, built from the judge's records alone. For each feature: its requirement and check (hidden
+if held out), who asked for it, the facts it builds on, every attempt with its status, diagnosis and evidence, each
+release (canon number, commit, Worker version, who accepted it and over what, the rollback rehearsal, the rollout, the
+acceptance record) and its last production check, plus what still needs a person. Stages are kept apart: requested,
+in progress, verified, waiting for a person or evidence, accepted, released, healthy in production, held back at
+release, declined, retired, baseline.
 
 A verdict that isn't Ready carries a `diagnosis`: what kind of failure it is and what would resolve it.
 `implementation` (the change breaks a canon fact, or its own fact doesn't hold yet), `combination` (it held on its own

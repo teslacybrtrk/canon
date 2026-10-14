@@ -31,6 +31,9 @@ Stop at any step. Every decision, automatic or not, leaves an acceptance record 
 
 ## 1. Deploy your own Canon
 
+Run `./scripts/doctor.sh` first: it checks Node, git, your wrangler login and account, R2, Artifacts, the referee's
+secrets and Canon's keys, changes nothing, and prints the exact fix for anything missing.
+
 From a clone of this repo:
 
 ```sh
@@ -174,6 +177,8 @@ routes would move with it: remove them, and attach your domain to that Worker on
 
 ## Limits today
 
+- **Toolchain:** an agent's attempt can't change `package-lock.json` or add a Wrangler build command (previews are built
+  with deploy credentials); the owner changes dependencies, or sets `"toolchain": "open"` in the charter.
 - **Apps:** only Workers apps built with npm, from the repo root. An attempt's own build runs in CI with your
   `CF_TOKEN` available to wrangler, so give the agent key only to agents you run.
 - **Pace:** one release at a time. Each accept sends the attempts in flight to refresh; on autopilot, merge trains let

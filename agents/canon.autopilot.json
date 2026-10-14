@@ -352,8 +352,21 @@
             },
             "concurrent": 6,
             "expect": {
-              "status": [201, 409],
-              "statusCounts": { "201": 1, "409": 5 }
+              "status": [
+                201,
+                409
+              ],
+              "statusCounts": {
+                "201": 1,
+                "409": 5
+              }
+            }
+          },
+          {
+            "path": "/api/reservations?stallId=1&date=2026-10-17",
+            "expect": {
+              "status": 200,
+              "bodyIncludes": "Ada"
             }
           }
         ]
@@ -385,6 +398,15 @@
             },
             "expect": {
               "status": 200
+            }
+          },
+          {
+            "path": "/api/cart",
+            "expect": {
+              "status": 200,
+              "json": {
+                "items.0.qty": 99
+              }
             }
           }
         ]
@@ -475,9 +497,16 @@
     "autoAccept": "charter",
     "batch": true,
     "charter": {
-      "locked": ["price-is-listed"],
-      "priority": ["no-double-booking"],
-      "review": ["migrations/**", "src/auth/**"]
+      "locked": [
+        "price-is-listed"
+      ],
+      "priority": [
+        "no-double-booking"
+      ],
+      "review": [
+        "migrations/**",
+        "src/auth/**"
+      ]
     }
   }
 }
