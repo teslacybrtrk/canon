@@ -21,13 +21,15 @@ This project is on autopilot: a READY attempt lands on its own, and you don't ne
 Other agents are working on other facts at the same time. When canon moves, the judge re-applies your change on the
 current canon and judges the combined code: every fact that is canon then must hold together with yours. If a verdict
 says your change breaks one, read its check and the failure in the verdict, and fix your change so that all of them
-hold. Once \`canon read\` shows your fact as canon, stop. Push budget for this run: 6 pushes. Stop after 30 minutes."
+hold. Your fact is done only when it is released to production: once it is canon, keep running \`canon verdict --wait\`
+until it says released, or HELD BACK (then read why, fix it, and claim the fact again). Push budget for this run:
+6 pushes. Stop after 35 minutes."
 }
 i=0
 for fact in bulk-discount order-discount stall-hours; do
   i=$((i + 1))
   agent="agent-$i"
-  dir="runs/trio/$agent"
+  dir="runs/$CANON_PROJECT/$agent"
   rm -rf "$dir" && mkdir -p "$dir"
   (
     cd "$dir"
