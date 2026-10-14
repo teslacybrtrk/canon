@@ -8,7 +8,7 @@
 //
 //   source scripts/env.sh && node scripts/conflicts-deployed.mjs [--cases id,id] [--prefix cs]
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -26,6 +26,7 @@ const base = JSON.parse(readFileSync(join(ROOT, "conflicts/app/canon.json"), "ut
 const chosen = (args.cases ? String(args.cases).split(",") : readdirSync(CASES_DIR)).filter((id) => existsSync(join(CASES_DIR, id, "case.json")));
 const short = (id) => (args.prefix ?? "cs") + id.replace(/^control-/, "ctl").replace(/[^a-z]/g, "").slice(0, 14);
 const work = mkdtempSync(join(tmpdir(), "canon-conflicts-"));
+process.on("exit", () => rmSync(work, { recursive: true, force: true }));
 const t0 = Date.now();
 const log = (p, line) => process.stderr.write(`${Math.round((Date.now() - t0) / 1000)}s ${p}: ${line}\n`);
 

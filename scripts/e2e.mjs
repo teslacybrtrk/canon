@@ -8,7 +8,7 @@
 //
 // The project is left up afterwards, so every record the report links to can be inspected.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -39,6 +39,7 @@ const canonFile = {
   production: `https://${PROJECT}.canon-rodeo.workers.dev`,
 };
 const work = mkdtempSync(join(tmpdir(), "canon-e2e-"));
+process.on("exit", () => rmSync(work, { recursive: true, force: true }));
 writeFileSync(join(work, "canon.json"), JSON.stringify(canonFile, null, 2));
 const revision = sh("git rev-parse --short=12 HEAD").trim();
 

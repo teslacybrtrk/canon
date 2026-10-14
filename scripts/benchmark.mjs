@@ -34,6 +34,11 @@ const sh = (cwd, cmd) => execFileSync("bash", ["-c", cmd], { cwd, stdio: "pipe" 
 const git = (cwd, ...a) => execFileSync("git", a, { cwd, stdio: "pipe" }).toString().trim();
 let nextPort = Number(args.port ?? 8820);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Every checkout and data copy lives under one temp directory, removed when the run ends (a run makes thousands).
+const TMP = mkdtempSync(join(tmpdir(), "bench-"));
+const scratch = (prefix) => mkdtempSync(join(TMP, prefix));
+process.on("exit", () => rmSync(TMP, { recursive: true, force: true }));
+for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(130));
 
 // ---- Workloads --------------------------------------------------------------------------------------------------
 
@@ -139,7 +144,7 @@ async function serve(dir, state) {
 }
 
 function checkout(repo, sha, app) {
-  const dir = mkdtempSync(join(tmpdir(), "bench-code-"));
+  const dir = scratch("code-");
   sh(repo, `git archive ${sha} | tar -x -C ${dir}`);
   symlinkSync(join(ROOT, "demo-app/node_modules"), join(dir, "node_modules"));
   return dir;
@@ -193,7 +198,7 @@ async function run(workloadName, systemName, order = 1, repeat = 1) {
   const sys = { safeguards: true, candidate: true, rehearsal: true, canary: true, dataGate: true, repair: true, ...SYSTEMS[systemName] };
   const t0 = Date.now();
   const m = { landed: [], landedUnsafe: [], wrongAccepts: [], unrecoverable: 0, unsafeShipped: [], peopleNeeded: [], reworks: [], resubmits: 0, held: [], checks: 0, releases: 0, repairs: 0, repairFailures: 0, redundant: { attempts: 0, checks: 0, releases: 0 }, deferred: 0, order, repeat };
-  const repo = mkdtempSync(join(tmpdir(), "bench-repo-"));
+  const repo = scratch("repo-");
   cpSync(join(ROOT, w.app), repo, { recursive: true, filter: (p) => !p.includes("node_modules") && !p.includes(".wrangler") });
   writeFileSync(join(repo, "canon.json"), JSON.stringify({ ...w.canon, backlog: [] }, null, 2));
   git(repo, "init", "-q", "-b", "main");
@@ -209,7 +214,7 @@ async function run(workloadName, systemName, order = 1, repeat = 1) {
   git(repo, "checkout", "-q", "main");
   const canonFacts = [...w.canon.facts];
   // Production: genesis, live, with users.
-  const prodState = mkdtempSync(join(tmpdir(), "bench-prod-"));
+  const prodState = scratch("prod-");
   let prodSha = genesis;
   let prodDir = checkout(repo, prodSha);
   let prod = await serve(prodDir, prodState);
@@ -267,7 +272,7 @@ async function run(workloadName, systemName, order = 1, repeat = 1) {
       const before = m.checks;
       const ci = commandsHold(own, [...w.canon.facts, fact], m);
       if (ci.held) {
-        const pv = await serve(own, mkdtempSync(join(tmpdir(), "bench-fresh-")));
+        const pv = await serve(own, scratch("fresh-"));
         await factsHold(pv.url, [...w.canon.facts, fact], `own:${i}`, m);
         await pv.stop();
       }
@@ -307,7 +312,7 @@ async function run(workloadName, systemName, order = 1, repeat = 1) {
     const code = checkout(repo, sha);
     const cmd = commandsHold(code, [...canonFacts, fact], m);
     if (!cmd.held) { reject(`CI: ${cmd.fact.id}`); continue; }
-    const preview = await serve(code, mkdtempSync(join(tmpdir(), "bench-fresh-")));
+    const preview = await serve(code, scratch("fresh-"));
     const verdict = await factsHold(preview.url, [...canonFacts, fact], `verdict:${i}`, m);
     await preview.stop();
     if (!verdict.held) { reject(verdict.fact.id === factId ? `its own fact failed (${String(verdict.detail).slice(0, 80)})` : `broke ${verdict.fact.id} (${String(verdict.detail).slice(0, 80)})`, verdict.fact.id === factId); continue; }
@@ -325,7 +330,7 @@ async function run(workloadName, systemName, order = 1, repeat = 1) {
     // Release.
     if (sys.safeguards) {
       // The release candidate: a copy of production's data, the new code, every fact.
-      const candState = mkdtempSync(join(tmpdir(), "bench-cand-"));
+      const candState = scratch("cand-");
       copyState(prodState, candState);
       if (sys.candidate) {
         const cand = await serve(code, candState);
@@ -366,7 +371,7 @@ async function run(workloadName, systemName, order = 1, repeat = 1) {
       if (errs / 60 > 0.05) live = { held: false, fact: { id: "users' error rate" }, detail: `${errs}/60 requests failed` };
     }
     // After the fact: could this release be rolled back safely? (the old code on a copy of production's data)
-    const after = mkdtempSync(join(tmpdir(), "bench-after-"));
+    const after = scratch("after-");
     copyState(prodState, after);
     const back = await serve(oldDir, after);
     const rollbackOk = (await factsHold(back.url, canonFacts.filter((f) => f !== fact), `after:${i}`, m)).held;

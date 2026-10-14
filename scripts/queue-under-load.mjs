@@ -4,7 +4,7 @@
 // its author's own test (its claimed fact's probe) pass on the merged tree. Everything else bounces to a person.
 //   node scripts/queue-under-load.mjs
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, cpSync, symlinkSync } from "node:fs";
+import { mkdtempSync, readFileSync, cpSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCheck } from "../referee/src/probe.ts";
@@ -15,6 +15,7 @@ const features = ["line-limit", "sold-out-refused", "search-by-name", "product-p
 const patchOf = { "no-double-booking": "no-double-booking2", "remove-from-basket": "remove-from-basket2" };
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
 const work = mkdtempSync(join(tmpdir(), "canon-qload-"));
+process.on("exit", () => rmSync(work, { recursive: true, force: true }));
 const main = join(work, "main");
 cpSync(join(ROOT, "demo-app"), main, { recursive: true, filter: (p) => !p.includes("node_modules") && !p.includes(".wrangler") });
 symlinkSync(join(ROOT, "demo-app/node_modules"), join(main, "node_modules"));

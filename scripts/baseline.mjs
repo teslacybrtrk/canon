@@ -5,7 +5,7 @@
 // (type-check, lint) and the author's own test pass on the merged tree. Prints a Markdown report. Needs no keys.
 //   node scripts/baseline.mjs [project] [port]
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCheck } from "../referee/src/probe.ts";
@@ -19,6 +19,8 @@ const state = await (await fetch(`${origin}/p/${project}/canon`)).json();
 // The run's first-generation attempts (not the judge's re-applies), oldest claim first.
 const firsts = state.claims.filter((c) => !c.refreshedFrom && c.verdict?.sha).sort((a, b) => a.createdAt - b.createdAt);
 const work = mkdtempSync(join(tmpdir(), "canon-baseline-"));
+const temps = [work];
+process.on("exit", () => temps.forEach((d) => rmSync(d, { recursive: true, force: true })));
 const genesis = state.facts.length ? `${project}-genesis` : null;
 git(tmpdir(), "clone", "-q", `${origin}/a/${genesis}.git`, work);
 git(work, "config", "user.email", "baseline@canon.local");
@@ -70,6 +72,7 @@ try { process.kill(-dev.pid); } catch {}
 // A conventional merge queue: one attempt at a time, gated on the repo's CI and the author's own test on the merged tree.
 const ci = seedCanon.facts.filter((f) => f.check.kind === "command" && ["code-typechecks", "code-lints"].includes(f.id));
 const qwork = mkdtempSync(join(tmpdir(), "canon-queue-"));
+temps.push(qwork);
 git(tmpdir(), "clone", "-q", `${origin}/a/${genesis}.git`, qwork);
 git(qwork, "config", "user.email", "baseline@canon.local");
 git(qwork, "config", "user.name", "baseline");

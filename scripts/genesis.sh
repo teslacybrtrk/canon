@@ -33,6 +33,7 @@ fi
 remote="$(node -e 'const r=JSON.parse(process.argv[1]); const u=new URL(r.remote); u.username="x"; u.password=r.token; console.log(u.toString())' "$resp")"
 
 work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
 cp -R "${DEMO_DIR:-demo-app}/." "$work/"
 rm -rf "$work/node_modules" "$work/.wrangler"
 [ -n "${CANON_FILE:-}" ] && cp "$CANON_FILE" "$work/canon.json"

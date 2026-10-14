@@ -33,6 +33,8 @@ for i in $(seq 1 "$N"); do
 $GOAL" \
       --model haiku --allowedTools "${TOOLS[@]}" --strict-mcp-config --disable-slash-commands \
       --output-format stream-json --verbose > agent.log 2>&1 && echo "$agent done" || echo "$agent exited non-zero"
+    # The attempts' installed dependencies are hundreds of MB each and come back with npm ci: keep the transcript and the code.
+    find . -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true
   ) &
   sleep 4
 done

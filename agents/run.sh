@@ -53,6 +53,8 @@ for prompt in $(ls agents/prompts/*.md | sort -V); do # agent-2 before agent-10
         --output-format stream-json --verbose \
         > agent.log 2>&1 && echo "$agent done" || echo "$agent exited non-zero (see $dir/agent.log)"
     fi
+    # The attempts' installed dependencies are hundreds of MB each and come back with npm ci: keep the transcript and the code.
+    find . -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true
   ) &
   sleep 3 # stagger so claims land on the board one at a time
 done
