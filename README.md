@@ -140,7 +140,7 @@ version (Cloudflare Worker version) that produced it and the commit it was deplo
 | [split](https://canon.rodeo/ledger?p=split) (the first run on the build/publish split, scripted) | `c362c14e`, Oct 14 02:38 UTC | the working tree committed as `b571d04` |
 | [trio](https://canon.rodeo/ledger?p=trio) (the first attempt at trio2; it surfaced the retried-rehearsal bug. Its genesis ran on `0f6ef6a1` (`b571d04`), its canon #5 on `00c761d1`) | `94ad0669`, Oct 14 03:13 UTC | `568e829` |
 | **[trio2](https://canon.rodeo/ledger?p=trio2) (the autonomous run on the submitted judge) and the designed conflict cases on deployed Canon ([docs/conflicts.md](docs/conflicts.md))** | **`00c761d1`, Oct 14 03:25 UTC** | **`dcac7ae`** |
-| Everything served since Oct 14 04:31 UTC: the same judging as `00c761d1`; the ledger and replay display, and the address the hourly production check uses by default (now the Worker's own workers.dev address) | `b6147630`, then `fde80ebe`, `ff6d29db`, **`c20fcaf7`** (Oct 14 04:39 UTC) | `b897fdd`, `2a35c07`, `4d98cff`, **`8048f50`** |
+| Everything served since Oct 14 04:31 UTC: the same judging as `00c761d1`; the ledger and replay display, the site's wording, and the address the hourly production check uses by default (now the Worker's own workers.dev address) | `b6147630`, then `fde80ebe`, `ff6d29db`, `c20fcaf7`, **`9707abc9`** (Oct 14 05:07 UTC) | `b897fdd`, `2a35c07`, `4d98cff`, `8048f50`, **`1ca1a34`** |
 | earlier records (Oct 12–13: farmstand, rodeo, evid #2–3, rehearse #2–12, canary) | earlier versions | before `b9f3a2c` |
 
 Two rules changed after the convoy run, so a stateless release judged today would differ: a zero-comparison
