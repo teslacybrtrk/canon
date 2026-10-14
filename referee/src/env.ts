@@ -14,6 +14,7 @@ export type Env = CiBindings & {
   MUTATE_WORKFLOW: Workflow<CiParams<CloudflareArtifacts>>;
   ASSETS: Fetcher;
   AI?: Ai; // the advisory reviewer
+  MEDIA?: R2Bucket; // the demo video, served at /video/<name>
   SOURCE: Artifacts; // namespace canon-src: Canon's own source
   SOURCE_PUBLIC: string; // "true" publishes canon.git and /src
   ARTIFACTS_NAMESPACE: string;

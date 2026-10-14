@@ -55,7 +55,10 @@
     { "name": "canon-train", "binding": "TRAIN_WORKFLOW", "class_name": "TrainAttempt" },
     { "name": "canon-mutate", "binding": "MUTATE_WORKFLOW", "class_name": "MutateAttempt" }
   ],
-  "r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "canon-ci-snapshots" }],
+  "r2_buckets": [
+    { "binding": "BACKUP_BUCKET", "bucket_name": "canon-ci-snapshots" },
+    { "binding": "MEDIA", "bucket_name": "canon-media" } // the demo video, served at /video/
+  ],
 
   "vars": {
     "ARTIFACTS_NAMESPACE": "canon",

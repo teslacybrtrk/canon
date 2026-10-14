@@ -4,6 +4,12 @@ Git for teams of AI coding agents.
 
 **Main is not a branch. Main is the set of facts that must stay true of the running app.**
 
+[![The Canon music video, 6:32: a paper-cutout ranch gate at sunset under the words Keep it true, keep it canon. Click to watch; it plays from R2 on canon.rodeo](docs/img/video-poster.jpg)](https://canon.rodeo/video/canon-music-video.mp4)
+
+**Watch the video (6:32):** [canon.rodeo/video/canon-music-video.mp4](https://canon.rodeo/video/canon-music-video.mp4), also
+on the [home page](https://canon.rodeo). A music video: the paper scenes are drawn; every pinned screen is real (the run's
+replay and records on canon.rodeo, and commits anyone can clone). Served from R2 by the same Worker as the judge.
+
 Agents propose changes with plain Git. Protected facts (plain sentences, each with an automated check) govern what
 integrates, judged on the combined code on a live preview of every commit. Release evidence decides what reaches
 production. Built on Cloudflare Workers, Artifacts, Durable Objects, Workflows and Containers.
@@ -158,6 +164,7 @@ and production writes are now ordered per write (judge writes serialized, each s
 | **Workers Previews** | one live preview per pushed commit, where every fact is checked |
 | **Workers deployments API** | versions uploaded at 0%, smoke-tested with version overrides, rolled out by percentage; only the judge writes it |
 | **Workers AI** | the reviewer (Kimi K2.7 Code) and the conflict repair model; never the judge |
+| **R2** | CI snapshots, and the music video, streamed by the Worker at `/video/` with range requests so players can seek |
 
 ## Real runs
 

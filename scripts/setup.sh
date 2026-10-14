@@ -2,7 +2,7 @@
 # Your own Canon referee on your Cloudflare account, in one go. Run it once from a fresh clone:
 #   ./scripts/setup.sh
 # You need Workers Paid with Artifacts (open beta), R2 and Containers enabled, Node 22.18+, and `npx wrangler login` done.
-# It writes your account into referee/wrangler.jsonc, creates the CI snapshot bucket, deploys the referee,
+# It writes your account into referee/wrangler.jsonc, creates the CI snapshot and media buckets, deploys the referee,
 # asks for three Cloudflare secrets, and makes Canon's two keys (scripts/keys.sh).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -40,6 +40,7 @@ echo "Wrote your account into referee/wrangler.jsonc."
 
 cd referee
 npx wrangler r2 bucket create canon-ci-snapshots >/dev/null 2>&1 && echo "Created the R2 bucket canon-ci-snapshots." || echo "R2 bucket canon-ci-snapshots is already there."
+npx wrangler r2 bucket create canon-media >/dev/null 2>&1 && echo "Created the R2 bucket canon-media (for a demo video at /video/)." || echo "R2 bucket canon-media is already there."
 npx wrangler deploy
 echo
 echo "Three secrets for CI. CF_TOKEN is an API token that can edit Workers scripts on this account"

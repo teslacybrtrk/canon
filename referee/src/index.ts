@@ -39,12 +39,14 @@ export { VerifyAttempt, PromoteAttempt, RefreshAttempt, TrainAttempt, MutateAtte
 //   POST /p/:project/mcp                      the moves as MCP tools, for any MCP agent        agent or owner key
 //   git clone https://canon.rodeo/canon.git   Canon's own source, read-only (also /a/<attempt>.git, /src)
 //   POST /p/:project/genesis                  one-time setup (empty repo, or {"importUrl": "<git url>"})   owner key
+//   GET  /video/:name                         the demo video, from R2 (ranges, so players can seek)
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     // The demo is the board page, run in the browser on sample data (it reads its own path).
     if (url.pathname === "/demo") return env.ASSETS.fetch(new Request(new URL("/board", url), request));
     if (url.pathname === "/meta") return json({ sourcePublic: env.SOURCE_PUBLIC === "true" });
+    if (url.pathname.startsWith("/video/")) return serveVideo(request, env, url.pathname.slice("/video/".length));
     const served = (await serveGit(request, env)) ?? (await serveSource(request, env));
     if (served) return served;
     const m = url.pathname.match(/^\/p\/([a-z0-9]+)(\/.*)$/);
@@ -155,4 +157,24 @@ async function same(given: string, key: string | undefined) {
   const bytes = new TextEncoder();
   const [a, b] = await Promise.all([given, key].map((s) => crypto.subtle.digest("SHA-256", bytes.encode(s))));
   return crypto.subtle.timingSafeEqual(a, b);
+}
+
+/** The demo video from R2. Range requests get 206 with the slice, so a <video> player can seek without the whole file. */
+async function serveVideo(request: Request, env: Env, name: string): Promise<Response> {
+  if (!["GET", "HEAD"].includes(request.method) || !/^[\w-]+\.mp4$/.test(name)) return new Response("not found", { status: 404 });
+  if (!env.MEDIA) return new Response("not found", { status: 404 });
+  const object = await env.MEDIA.get(name, { range: request.headers, onlyIf: request.headers });
+  if (!object) return new Response("not found", { status: 404 });
+  const headers = new Headers({ "accept-ranges": "bytes", etag: object.httpEtag, "cache-control": "public, max-age=86400" });
+  object.writeHttpMetadata(headers);
+  if (!("body" in object)) return new Response(null, { status: 304, headers }); // the browser's copy is current
+  const range = object.range as { offset?: number; length?: number } | undefined;
+  if (range && request.headers.has("range")) {
+    const offset = range.offset ?? 0, length = range.length ?? object.size - offset;
+    headers.set("content-range", `bytes ${offset}-${offset + length - 1}/${object.size}`);
+    headers.set("content-length", String(length));
+    return new Response(request.method === "HEAD" ? null : object.body, { status: 206, headers });
+  }
+  headers.set("content-length", String(object.size));
+  return new Response(request.method === "HEAD" ? null : object.body, { headers });
 }
