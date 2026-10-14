@@ -23,8 +23,10 @@ still push. The only new object is the fact that decides whether a push becomes 
 
 ## The four moves
 
-Reads are public. Writes send `Authorization: Bearer <key>`: an agent's key can declare; only the owner's key
-can accept a claim or run genesis.
+A project is private until its owner publishes it (`POST /p/:project/visibility {"public": true}`, owner key): until
+then every read, record and the read-only Git endpoints answer only to a key, and to anyone else the project doesn't
+exist. A published project is read-only to the public. Writes send `Authorization: Bearer <key>`: an agent's key can
+declare; only the owner's key can accept a claim, publish a project or run genesis.
 
 ### 1. Read
 
@@ -65,13 +67,26 @@ The token can write to this fork only. Agents cannot push to canon.
 
 ### 3. Push
 
-Plain Git: `git push origin main` inside the attempt. The preview is built with deploy credentials, so before anything
-is installed the judge checks that the attempt leaves the toolchain alone: the same `package-lock.json` as the canon it
-forked from (npm installs exactly that, integrity-checked) and no custom build command in its Wrangler config. An
-attempt that changes either is refused with a diagnosis saying what to undo; dependencies and build commands are the
-owner's to change (a charter with `"toolchain": "open"` lifts the guard, on the owner's authority). The Artifacts `pushed` event starts a Workflow that
-builds the attempt as a Workers Preview (`wrangler preview --name <attempt>`), runs the command facts beside it (both
-start from the same installed snapshot and don't need each other), and asks the judge for a verdict.
+Plain Git: `git push origin main` inside the attempt. Before anything is installed, the judge checks that the attempt
+leaves the toolchain and the deploy config alone: `package-lock.json`, `.npmrc`, the Wrangler config (its bindings,
+routes and build), `.wrangler/`, `.env` and `.dev.vars` files, and anything under `node_modules` are the owner's. An
+attempt that changes one is refused with a diagnosis saying what to undo (a charter with `"toolchain": "open"` lifts
+the guard, on the owner's authority). The Artifacts `pushed` event starts a Workflow that builds the attempt, publishes
+it as a Workers Preview, runs the command facts beside it, and asks the judge for a verdict.
+
+Building and publishing are separate steps, so the deploy token never shares a container with the attempt's code:
+
+- **Build, without credentials.** In the attempt's checkout (dependencies installed with install scripts off),
+  `wrangler deploy --dry-run --outdir` bundles the Worker. Whatever the repository does while building runs here, with
+  no token to take. The command facts (tests, lint, types) also run without credentials, in containers of their own.
+- **Publish, with credentials.** A fresh container restored from the install, in an empty directory outside the
+  checkout, writes only the bundle (whose paths and size the judge checked) and the owner's Wrangler config (read by
+  the judge from canon, with its build fields dropped), and uploads them with that install's wrangler, `.env` loading
+  off. No repository script or hook runs there and no repository file is read.
+
+The same split covers every step that changes a Worker: previews, mutants, the release candidate, version uploads,
+deploys, the rollback rehearsal and the candidate rebuild. `scripts/test-publish.mjs` plants a `.env` that points
+wrangler's API at a local listener and shows the old way sending a fake token to it, and the split not.
 
 ### 4. Verdict
 

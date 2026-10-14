@@ -177,10 +177,12 @@ routes would move with it: remove them, and attach your domain to that Worker on
 
 ## Limits today
 
-- **Toolchain:** an agent's attempt can't change `package-lock.json` or add a Wrangler build command (previews are built
-  with deploy credentials); the owner changes dependencies, or sets `"toolchain": "open"` in the charter.
-- **Apps:** only Workers apps built with npm, from the repo root. An attempt's own build runs in CI with your
-  `CF_TOKEN` available to wrangler, so give the agent key only to agents you run.
+- **Toolchain:** an agent's attempt can't change `package-lock.json`, `.npmrc`, the Wrangler config, `.wrangler/`,
+  `.env` files or anything under `node_modules`; the owner changes them, or sets `"toolchain": "open"` in the charter.
+- **Apps:** only Workers apps built with npm, from the repo root, with a `wrangler.jsonc` or `wrangler.json` (not TOML)
+  and no static assets; a bundle up to 280 KB packed. Builds run without credentials; your `CF_TOKEN` is used only by
+  the publish step, on the built bundle and your own config (README: Execution and trust).
+- **Visibility:** a project is private until you publish it (`POST /p/<project>/visibility {"public": true}`).
 - **Pace:** one release at a time. Each accept sends the attempts in flight to refresh; on autopilot, merge trains let
   what queued behind a release leave together, built and checked while that release is still going out.
 - **Previews:** Workers keep the newest 500 per Worker. Older attempts stay clonable from Artifacts.

@@ -56,6 +56,7 @@ const LIVE_CHECK_TTL_MS = 30_000;
 const BOARDING_MS = 60_000;
 // Canon accepted before this moment has no acceptance record (they were added then); anything later must have one.
 const ACCEPTANCE_RECORDS_SINCE = Date.parse("2026-10-13T00:00:00Z");
+const BOARDING = /boarding the next merge train/;
 const HELD_OUT_DETAIL = "a held-out fact broke (the owner keeps its check out of the repo; it can't be shown)";
 const VERIFY_SLOTS = 6;
 const DATA_MAX_FILES = 60; // changed files the data inspection reads; more makes it incomplete (unavailable)
@@ -282,15 +283,16 @@ export class Referee extends DurableObject<Env> {
         else (stage = prod?.held ? "healthy in production" : "released"), (detail = `canon #${last.seq}${last.versionId ? `, Worker version ${last.versionId.slice(0, 8)}` : ""}`);
       } else if (f.declinedAt) (stage = "declined"), (detail = f.declineReason ?? "");
       else if (ready.length) {
-        const waiting = ready.find((a) => a.waiting);
-        if (waiting && ready.every((a) => a.waiting)) (stage = "waiting for a person or evidence"), (detail = waiting.waiting ?? "");
-        else (stage = "verified"), (detail = "Ready: every fact holds on its preview; landing next");
+        // Boarding a merge train is a wait for the train, not for a person.
+        const waiting = ready.find((a) => a.waiting && !BOARDING.test(a.waiting));
+        if (waiting && ready.every((a) => a.waiting && !BOARDING.test(a.waiting))) (stage = "waiting for a person or evidence"), (detail = waiting.waiting ?? "");
+        else (stage = "verified"), (detail = ready.find((a) => a.waiting)?.waiting ?? "Ready: every fact holds on its preview; landing next");
       } else if (working) (stage = "in progress"), (detail = "being built or re-applied");
       else if (last && (last.release === "not released" || last.reverted)) (stage = "held back at release"), (detail = last.detail ?? "production never served it");
       else if (attempts.length) (stage = "attempts failed"), (detail = attempts.at(-1)?.diagnosis?.why ?? "");
       else (stage = "requested"), (detail = "no attempt yet");
       const needs = [
-        ...ready.filter((a) => a.waiting).map((a) => `${a.agent}'s attempt: ${a.waiting}`),
+        ...ready.filter((a) => a.waiting && !BOARDING.test(a.waiting)).map((a) => `${a.agent}'s attempt: ${a.waiting}`),
         ...attempts.filter((a) => a.diagnosis && ["requirement", "unsupported-check"].includes(a.diagnosis.kind)).map((a) => `${a.diagnosis!.why}. Next: ${a.diagnosis!.next}`),
       ];
       // The evidence behind the stage, each item with its state and when it was observed: what passed, what's missing,

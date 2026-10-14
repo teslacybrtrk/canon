@@ -8,10 +8,11 @@ production. Built on Cloudflare Workers, Artifacts, Durable Objects and Workflow
 
 | | |
 |---|---|
-| **Try it in two minutes** | [canon.rodeo/demo](https://canon.rodeo/demo): a guided tour in your browser, on sample data (a simulation). Overlapping changes settled on the combined code, a change held back on real data before release, a merge train and its record. |
-| **Inspect real projects** | Feature ledgers, every feature from the request to production: [final](https://canon.rodeo/ledger?p=final) (autonomous agents, on the submitted code), [convoy](https://canon.rodeo/ledger?p=convoy) (scripted agent attempts), [rehearse](https://canon.rodeo/ledger?p=rehearse) (release holds). The [Oct 12 run report](https://canon.rodeo/p/farmstand/stats): twelve autonomous agents. |
-| **Check the claims** | The [evidence map](#evidence-map): each claim in this README with its record, test or reproduction command. |
-| **Run your own** | `./scripts/doctor.sh` checks the prerequisites, then `./scripts/setup.sh` ([Run it](#run-it), [docs/USING.md](docs/USING.md)). |
+| **Live** | [canon.rodeo](https://canon.rodeo), running the judge this repository deploys. |
+| **Try it in two minutes** | [canon.rodeo/demo](https://canon.rodeo/demo): a guided tour in your browser, on sample data (a simulation; nothing deploys). Overlapping changes settled on the combined code, a change held back on real data before release, a merge train and its record. |
+| **Inspect real projects** | Feature ledgers, every feature from the request to production; open one for its trail (origin, the agents' reasons, every attempt at the exact commit, what failed, how it was resolved, the release evidence): [final](https://canon.rodeo/ledger?p=final) (four autonomous agents, Oct 13), [convoy](https://canon.rodeo/ledger?p=convoy) (scripted agent attempts), [rehearse](https://canon.rodeo/ledger?p=rehearse) (release holds). Replay a recorded run step by step: [Oct 12, twelve autonomous agents](https://canon.rodeo/replay?p=farmstand) (historical judge version). |
+| **Check the claims** | The [evidence map](#evidence-map): each claim in this README with its record, test or reproduction command. [Designed conflict cases](docs/conflicts.md): clean Git merges that break a requirement, plain Git against a merge queue with the same checks and Canon. |
+| **Run your own** | Needs a Cloudflare Workers Paid account with Containers, R2 and Artifacts (open beta), Node 22.18+ and `npx wrangler login`. Then three commands: `git clone https://github.com/teslacybrtrk/canon && cd canon`, `./scripts/doctor.sh` (checks all of that, changes nothing), `./scripts/setup.sh` (asks for your account, deploys the judge, makes the keys). [Run it](#run-it), [docs/USING.md](docs/USING.md). |
 
 ![The feature ledger of a project four autonomous agents worked on: four features healthy in production, a revision of a locked rule waiting for a person, a schema change still being fixed after two releases were held back](docs/img/ledger-final.png)
 
@@ -20,8 +21,9 @@ production. Built on Cloudflare Workers, Artifacts, Durable Objects and Workflow
 - **Facts, not diffs.** People review changes to plain-sentence facts; the judge checks every fact on a live preview of
   every commit, with inputs it draws after the push. Agents can't edit the checks that judge them.
 - **Conflicts are behaviour on the combined code.** Clean text merges that break a fact are rejected; overlapping edits
-  that keep every fact are fine. Clashes are flagged before anyone accepts either side, and the loser is re-applied on
-  the winner and judged again.
+  that keep every fact are fine. Clashes are flagged before anyone accepts either side; when one lands, the judge
+  re-applies the other on top and judges the combined code (a text conflict goes to its repair model, and back to the
+  agent if that can't settle it).
 - **Coordination without locks.** Agents claim facts, see who else is building what, and the judge supersedes
   duplicates, holds a change until the facts it builds on land, and sends what queues up as one merge train.
 - **Canon always equals production.** Every release runs all facts on a release candidate with long-lived data,
@@ -29,6 +31,9 @@ production. Built on Cloudflare Workers, Artifacts, Durable Objects and Workflow
   Missing evidence holds an autonomous release; a person can override, and the record says so.
 - **Every decision is a record.** Each canon has an acceptance record (the exact commit, each fact's evidence, who or
   what authorized it, how a failed release recovers), also kept as Git notes.
+- **Agents' code never meets the deploy token.** Each push is built in a container with no credentials; only the built
+  bundle, the owner's Wrangler config and canon's own toolchain reach the step that publishes, from an empty directory.
+  A project stays private until its owner publishes it. [Execution and trust](#execution-and-trust).
 
 ## How it works, in brief
 
@@ -312,6 +317,33 @@ Producing evidence, approving it and releasing code are separate steps, and each
 - **Adopt it in steps**: your CI as facts first, behaviour facts beside them, review routing, then autonomy
   ([docs/USING.md](docs/USING.md#adopt-it-in-steps)).
 
+## Execution and trust
+
+What runs where, and with which credentials:
+
+| Step | Runs | Credentials |
+|---|---|---|
+| Install | `npm ci --ignore-scripts` from canon's lockfile, in a container | none |
+| Build | `wrangler deploy --dry-run --outdir` in the attempt's checkout: whatever the repository does while building runs here | none |
+| Command facts | the owner's commands (tests, lint, types) on the attempt's code, in a container of their own | none |
+| Publish | a fresh container from the install, an empty directory: the bundle (paths and size checked by the judge) and the owner's Wrangler config from canon, uploaded with canon's wrangler, `.env` loading off | the deploy token, used by wrangler only |
+| Probes | the judge's Durable Object sends each fact's requests to the preview | none |
+| Release | the same publish step, for the release candidate, the rollback rehearsal and production; the judge alone moves production's traffic, under a lease | the deploy token (publish), the judge's API calls |
+
+What an attempt can't change: `package-lock.json`, `.npmrc`, the Wrangler config (bindings, routes, build), `.wrangler/`,
+`.env` and `.dev.vars` files, anything under `node_modules`. An attempt that touches one is refused before it's
+installed; a charter with `"toolchain": "open"` hands those to agents, on the owner's authority (builds still run
+without the token). Who can do what: the owner's key accepts, publishes projects and keeps held-out facts; an agent's key
+claims; the public reads a published project and nothing else. Tested by `scripts/test-publish.mjs` (a planted `.env`
+redirects wrangler's API to a local listener: the old single step sends a fake token to it, the split doesn't),
+`scripts/test-judge-guard.ts` (what the guard refuses, what the publish step is given) and `scripts/test-access.ts`
+(private and public projects through the real router).
+
+Limits, stated: the attempt's Worker runs with the bindings the owner's config gives it (each preview gets Durable
+Objects of its own; any other binding is shared as configured). The publish step takes `wrangler.jsonc` or
+`wrangler.json` (not TOML), no static assets, and bundles up to 280 KB packed. A Canon deployment trusts its owner and
+the Cloudflare account it runs on; the judge's reviewer and repair models read the code they're given.
+
 ## Run it
 
 Requirements: a Workers Paid account with Artifacts (open beta), R2 and Containers (CI runs in up to 40
@@ -353,11 +385,10 @@ cd demo-app && npm install && npx wrangler dev
 node scripts/check-local.ts http://localhost:8787   # canon.json facts hold; demo claims must not hold yet
 ```
 
-Reads are public; every write needs a key. Agents get `CANON_AGENT_KEY`, which can claim but never accept;
-genesis and accepting take `CANON_KEY`. An attempt's preview is built with your `CF_TOKEN` available to wrangler, so
-the toolchain that runs with it is canon's: an attempt that changes `package-lock.json` or adds a Wrangler build
-command is refused before anything is installed. The attempt's own source is bundled, not run, during the build; still,
-give the agent key only to agents you run.
+A new project is private: its board, ledger, records and repository answer only to a key until you publish it
+(`CANON_PUBLIC=1 ./scripts/genesis.sh`, or `POST /p/<project>/visibility {"public": true}` with the owner key). Every
+write needs a key. Agents get `CANON_AGENT_KEY`, which can claim but never accept; genesis, accepting and publishing
+take `CANON_KEY`. See [Execution and trust](#execution-and-trust) for what runs where, with which credentials.
 
 ## Notes for Cloudflare
 
@@ -405,8 +436,8 @@ held-out facts, specialist review with a track record, prerequisites, account-wi
   the combined-code checks run afterwards.
 - **Budgets enforced before work starts**, with capacity kept back so a release is never stranded halfway, and the full
   delivery cost (model calls included) attributed to attempts and features.
-- **Scoped agent identities** and preparation, verification and publishing separated, so project commands never
-  inherit publishing credentials; preview data isolation made explicit for external state.
+- **Scoped agent identities** (per-agent keys and budgets), and preview data isolation made explicit for external
+  state. (Building and publishing are already separate: see [Execution and trust](#execution-and-trust).)
 - **The coordination protocol exercised under failure** (crash and restart, duplicate requests, lost acknowledgements,
   delayed operations), extending the method-level ordering tests.
 - **Comparative runs** on fresh applications and stateful maintenance against other approaches, with real agents,
