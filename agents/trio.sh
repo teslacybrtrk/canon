@@ -23,13 +23,15 @@ current canon and judges the combined code: every fact that is canon then must h
 says your change breaks one, read its check and the failure in the verdict, and fix your change so that all of them
 hold. Your fact is done only when it is released to production: once it is canon, keep running \`canon verdict --wait\`
 until it says released, or HELD BACK (then read why, fix it, and claim the fact again). Push budget for this run:
-6 pushes. Stop after 35 minutes."
+6 pushes. Stop when your fact is released, or when the budget is used up."
 }
+# ONLY=<fact> starts just that agent again (same name), e.g. after its session stopped early.
 i=0
 for fact in bulk-discount order-discount stall-hours; do
   i=$((i + 1))
   agent="agent-$i"
-  dir="runs/$CANON_PROJECT/$agent"
+  [ -n "${ONLY:-}" ] && [ "$ONLY" != "$fact" ] && continue
+  dir="runs/$CANON_PROJECT/$agent${ONLY:+-again}"
   rm -rf "$dir" && mkdir -p "$dir"
   (
     cd "$dir"
